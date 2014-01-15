@@ -24,14 +24,16 @@ instance GNUPlottable Body where
   gnuplot (Body (V3 x y z)) = unwords . map show $ [x,y,z]
 
 main :: IO ()
-main = writeFile "out/planets.dat" $ unlines logs
+main = do
+    writeFile "out/planets_newton.dat" $ unlines (logs newton)
+    writeFile "out/planets_verlet.dat" $ unlines (logs verlet)
   where
-    logs = execWriter logWriter
-    logWriter = testWireRight
+    logs i = execWriter $ logWriter i
+    logWriter i = testWireRight
       10000
-      (0.005 :: Double)
+      (0.01 :: Double)
       (tell . return)
-      (gnuplot <$> body x0 v0 xa
+      (gnuplot <$> body x0 v0 xa i
           :: (Monad m, HasTime t s, MonadFix m, Fractional t)
               => Wire s String m () String)
     x0 = zero
@@ -66,13 +68,23 @@ body :: (MonadFix m, Monoid e, HasTime t s, Fractional t)
     => V3D  -- initial position
     -> V3D  -- initial velocity
     -> V3D  -- position of attractor
+    -> Integrator -- integrator
     -> Wire s e m () Body
-body x0 v0 xa = Body <$> proc _ -> do
+body x0 v0 xa igr = Body <$> proc _ -> do
   rec
     acc <- arr (gravity 1 xa 1) -< pos
-    -- pos <- integrator newton x0 v0 -< acc
-    pos <- integrator verlet x0 v0 -< acc
+    -- pos <- delay x0 . integrator newton x0 v0 -< acc
+    pos <- delay x0 . integrator igr x0 v0 -< acc
+    -- pos <- integrator verlet x0 v0 -< acc
+    -- pos <- integrator verlet x0 v0 -< pure 0.01
   returnA -< pos
+
+-- testDerivative :: Wire s e m () Double
+-- testDerivative = proc _ -> do
+--   rec
+--     acc <- integral 0 -< pure 0.1
+--     pos <- derivative -< acc
+--   returnA -< pos
 
 -- | Force of gravity
 --
@@ -116,17 +128,17 @@ verlet = Integrator vVel
     vVel x0 v0 = snd <$> vInt
       where
         vInt = mkPure wpure
-        tup = (x0 ^-^ v0, x0)
         wpure ds _ = (Right tup, loop' ds tup)
-        loop' ds1 (x1, x2) = mkPure wpure'
           where
-            wpure' ds2 a =
-              let dt1 = realToFrac $ dtime ds1
-                  dt2 = realToFrac $ dtime ds2
-                  dtr = dt1 / dt2
-                  x3  = (x2 ^+^ (x2 ^-^ x1) ^* dtr) ^+^ (a ^* (dt2 * dt2))
-                  tup' = (x2, x3)
-              in  (Right tup', loop' ds1 tup')
+            tup = (x0 ^-^ (v0 ^* dt), x0)
+            dt = realToFrac $ dtime ds
+        loop' ds1 (x1, x2) = mkPure $ \ds2 a ->
+            let dt1 = realToFrac $ dtime ds1
+                dt2 = realToFrac $ dtime ds2
+                dtr = dt2 / dt1
+                x3  = (x2 ^+^ (x2 ^-^ x1) ^* dtr) ^+^ (a ^* (dt2 * dt2))
+                tup' = (x2, x3)
+            in  (Right tup', loop' ds1 tup')
 
 
 
