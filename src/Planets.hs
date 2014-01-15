@@ -25,20 +25,30 @@ instance GNUPlottable Body where
 
 main :: IO ()
 main = do
-    writeFile "out/planets_newton.dat" $ unlines (logs euler)
-    writeFile "out/planets_verlet.dat" $ unlines (logs verlet)
+  writeFile "out/planets_b1.dat" . unlines . map (gnuplot . fst) $ logs
+  writeFile "out/planets_b2.dat" . unlines . map (gnuplot . snd) $ logs
   where
-    logs i = execWriter $ logWriter i
-    logWriter i = testWireRight
+    logs = execWriter logWriter
+    logWriter = testWireRight
       10000
       (0.01 :: Double)
       (tell . return)
-      (gnuplot <$> body x0 v0 xa i
-          :: (Monad m, HasTime t s, MonadFix m)
-              => Wire s String m () String)
-    x0 = zero
-    v0 = V3 1   0 0.05
-    xa = V3 0.2 1 0
+      (twoBody verlet :: (MonadFix m, HasTime t s) => Wire s String m () (Body, Body))
+
+    -- writeFile "out/planets_newton.dat" $ unlines (logs euler)
+    -- writeFile "out/planets_verlet.dat" $ unlines (logs verlet)
+  -- where
+    -- logs i = execWriter $ logWriter i
+    -- logWriter i = testWireRight
+    --   10000
+    --   (0.01 :: Double)
+    --   (tell . return)
+    --   (gnuplot <$> body x0 v0 xa i
+    --       :: (HasTime t s, MonadFix m)
+    --           => Wire s String m () String)
+    -- x0 = zero
+    -- v0 = V3 1   0 0.05
+    -- xa = V3 0.2 1 0
 
 -- main :: IO ()
 -- main = SDL.withInit [SDL.InitEverything] $ do
@@ -98,8 +108,8 @@ twoBody igr = proc _ -> do
     b2 <- body2 -< b1
   returnA -< (b1,b2)
   where
-    body1 = bodyG zero       (V3 0 1 0)     igr
-    body2 = bodyG (V3 1 0 0) (V3 0 (-1) 0)  igr
+    body1 = bodyG zero         (V3 0 1 (-0.5))     igr
+    body2 = bodyG (V3 0.5 0 0) (V3 0 (-1) 0.2)  igr
 
 
 
