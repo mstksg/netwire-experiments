@@ -1,19 +1,19 @@
-{-# LANGUAGE Arrows, RankNTypes, ScopedTypeVariables #-}
+{-# LANGUAGE Arrows #-}
 
-import Prelude hiding ((.), id)
--- import Control.Monad (void)
-import Control.Monad.Writer.Strict
+-- import Control.Monad             (void)
+-- import Data.Traversable
+-- import Utils.Wire.LogWire
+-- import qualified Graphics.UI.SDL as SDL
 import Control.Category
+import Control.Monad.Writer.Strict
 import Control.Wire
 import FRP.Netwire
--- import qualified Graphics.UI.SDL as SDL
--- import Data.Traversable
-import Linear.V3
-import Utils.Output.GNUPlot
--- import Utils.Wire.LogWire
-import Utils.Wire.TestWire
 import Linear.Metric
+import Linear.V3
 import Linear.Vector
+import Prelude hiding               ((.), id)
+import Utils.Output.GNUPlot
+import Utils.Wire.TestWire
 
 type V3D = V3 Double
 
@@ -34,7 +34,7 @@ main = do
       (0.01 :: Double)
       (tell . return)
       (gnuplot <$> body x0 v0 xa i
-          :: (Monad m, HasTime t s, MonadFix m, Fractional t)
+          :: (Monad m, HasTime t s, MonadFix m)
               => Wire s String m () String)
     x0 = zero
     v0 = V3 1   0 0.05
@@ -64,7 +64,7 @@ main = do
 
 -- | Wire of a simple body under gravity
 --
-body :: (MonadFix m, Monoid e, HasTime t s, Fractional t)
+body :: (MonadFix m, Monoid e, HasTime t s)
     => V3D  -- initial position
     -> V3D  -- initial velocity
     -> V3D  -- position of attractor
@@ -73,18 +73,8 @@ body :: (MonadFix m, Monoid e, HasTime t s, Fractional t)
 body x0 v0 xa igr = Body <$> proc _ -> do
   rec
     acc <- arr (gravity 1 xa 1) -< pos
-    -- pos <- delay x0 . integrator newton x0 v0 -< acc
     pos <- delay x0 . integrator igr x0 v0 -< acc
-    -- pos <- integrator verlet x0 v0 -< acc
-    -- pos <- integrator verlet x0 v0 -< pure 0.01
   returnA -< pos
-
--- testDerivative :: Wire s e m () Double
--- testDerivative = proc _ -> do
---   rec
---     acc <- integral 0 -< pure 0.1
---     pos <- derivative -< acc
---   returnA -< pos
 
 -- | Force of gravity
 --
@@ -106,7 +96,7 @@ gravity m1 r1 m2 r2 = mag *^ signorm r
 --
 newtype Integrator =
   Integrator { integrator :: forall m e t s v a.
-    (Monad m, Monoid e, HasTime t s, Additive v, Fractional (v a), Fractional a, Fractional t)
+    (Monad m, Monoid e, HasTime t s, Additive v, Fractional (v a), Fractional a)
     => v a                    -- Initial position
     -> v a                    -- Initial velocity
     -> Wire s e m (v a) (v a)
@@ -139,20 +129,4 @@ verlet = Integrator vVel
                 x3  = (x2 ^+^ (x2 ^-^ x1) ^* dtr) ^+^ (a ^* (dt2 * dt2))
                 tup' = (x2, x3)
             in  (Right tup', loop' ds1 tup')
-
-
-
--- derivative ::
---     (RealFloat a, HasTime t s, Monoid e)
---     => Wire s e m a a
--- derivative = mkPure $ \_ x -> (Left mempty, loop x)
---     where
---     loop x' =
---         mkPure $ \ds x ->
---             let dt  = realToFrac (dtime ds)
---                 dx  = (x - x') / dt
---                 mdx | isNaN dx      = Right 0
---                     | isInfinite dx = Left mempty
---                     | otherwise     = Right dx
---             in mdx `seq` (mdx, loop x)
 

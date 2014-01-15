@@ -1,5 +1,3 @@
-{-# LANGUAGE ScopedTypeVariables #-}
-
 module Utils.Wire.TestWire (testWireRight) where
 
 import Prelude hiding              ((.), id)
@@ -20,11 +18,6 @@ testWire' :: forall e t m b. (Monoid e, Real t, Monad m, Applicative m)
     -> m ()
 testWire' n dt action = go n (countSession dt <*> pure ())
   where
-    go ::
-           Int
-        -> Session m (Timed t ())
-        -> Wire (Timed t ()) e m () b
-        -> m ()
     go i s' w'  | i <= 0 = return ()
                 | otherwise = do
       (ds, s) <- stepSession s'

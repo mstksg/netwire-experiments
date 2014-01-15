@@ -3,7 +3,6 @@ module Utils.Wire.LogWire (logWire) where
 import Prelude hiding              ((.), id)
 import Control.Monad.Writer.Strict
 import Control.Wire
--- import FRP.Netwire
 
 logWire :: (Monoid e, Real t) => Int -> t -> Wire (Timed t ()) e (Writer [b]) () b -> [b]
 logWire n dt w0 = execWriter $ go n (countSession dt <*> pure ()) w0
