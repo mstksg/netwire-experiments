@@ -10,7 +10,8 @@ import FRP.Netwire
 -- import Data.Traversable
 import Linear.V3
 import Utils.Output.GNUPlot
-import Utils.Wire.LogWire
+-- import Utils.Wire.LogWire
+import Utils.Wire.TestWire
 import Linear.Metric
 import Linear.Vector
 
@@ -25,10 +26,19 @@ instance GNUPlottable Body where
 main :: IO ()
 main = writeFile "out/planets.dat" $ unlines logs
   where
-    logs :: [String]
-    logs = logWire 10000
+    logs = execWriter logWriter
+    logWriter = testWireRight
+      10000
       (0.005 :: Double)
-      (gnuplot <$> body :: (HasTime t s, MonadFix m, Show t) => Wire s String m () String)
+      (tell . return)
+      (gnuplot <$> body
+          :: (Monad m, HasTime t s, MonadFix m)
+              => Wire s String m () String)
+
+
+-- logWire 10000
+--       (0.005 :: Double)
+--       (gnuplot <$> body :: (HasTime t s, MonadFix m, Show t) => Wire s String m () String)
 
 -- plotOutput :: (Monad m, HasTime t s, Show t) => Wire s e m a Body -> Wire s e m a String
 -- plotOutput = gnuplot
