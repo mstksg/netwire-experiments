@@ -1,7 +1,6 @@
 {-# LANGUAGE Arrows #-}
 
 -- import Control.Monad             (void)
--- import Data.Traversable
 -- import Utils.Wire.LogWire
 -- import qualified Graphics.UI.SDL as SDL
 import Control.Category
@@ -14,10 +13,11 @@ import Linear.Vector
 import Prelude hiding               ((.), id)
 import Utils.Output.GNUPlot
 import Utils.Wire.TestWire
+import qualified Data.Traversable   as Tr
 
 type V3D = V3 Double
 
-data Body = Body Double V3D
+data Body = Body Double !V3D
   deriving (Show)
 
 instance GNUPlottable Body where
@@ -25,15 +25,16 @@ instance GNUPlottable Body where
 
 main :: IO ()
 main = do
-  writeFile "out/planets_b1.dat" . unlines . map (gnuplot . fst) $ logs
-  writeFile "out/planets_b2.dat" . unlines . map (gnuplot . snd) $ logs
+  writeFile "out/planets_b0.dat" . unlines . map (gnuplot . (!! 0)) $ logs
+  writeFile "out/planets_b1.dat" . unlines . map (gnuplot . (!! 1)) $ logs
+  writeFile "out/planets_b2.dat" . unlines . map (gnuplot . (!! 2)) $ logs
   where
     logs = execWriter logWriter
     logWriter = testWireRight
-      10000
-      (0.003 :: Double)
+      20000
+      (0.02 :: Double)
       (tell . return)
-      (twoBody verlet :: (MonadFix m, HasTime t s) => Wire s String m () (Body, Body))
+      (threeBody verlet :: (MonadFix m, HasTime t s) => Wire s String m () [Body])
 
     -- writeFile "out/planets_newton.dat" $ unlines (logs euler)
     -- writeFile "out/planets_verlet.dat" $ unlines (logs verlet)
@@ -75,41 +76,38 @@ main = do
 -- | Wire of a simple body under a single varying gravity source
 --
 bodyG :: (MonadFix m, Monoid e, HasTime t s)
-    => Double     -- mass
-    -> V3D        -- initial position
+    => Body       -- initial body state
     -> V3D        -- initial velocity
     -> Integrator -- integrator
     -> Wire s e m Body Body
-bodyG m x0 v0 igr = bGs . arr return
+bodyG b0 v0 igr = bGs . arr return
   where
-    bGs = bodyGs m x0 v0 igr
+    bGs = bodyGs b0 v0 igr
 
 
 -- | Wire of a simple body under many gravitational sources
 --
 bodyGs :: (MonadFix m, Monoid e, HasTime t s)
-    => Double     -- mass
-    -> V3D        -- initial position
+    => Body       -- initial body state
     -> V3D        -- initial velocity
     -> Integrator -- integrator
     -> Wire s e m [Body] Body
-bodyGs m x0 v0 igr = proc others -> do
+bodyGs b0 v0 igr = proc others -> do
   rec
     let gravs = map (`bodyGravity` b) others
     b <- bF -< gravs
   returnA -< b
   where
-    bF = bodyF m x0 v0 igr
+    bF = bodyF b0 v0 igr
 
 -- | Wire of a simple body under various forces
 --
 bodyF :: (MonadFix m, Monoid e, HasTime t s)
-    => Double
-    -> V3D
+    => Body
     -> V3D
     -> Integrator
     -> Wire s e m [V3D] Body
-bodyF m x0 v0 igr = thisBody <$>
+bodyF (Body m x0) v0 igr = thisBody <$>
     delay x0 . integrator igr x0 v0 . arr ((^/ m) . sum)
   where
     thisBody = Body m
@@ -125,28 +123,34 @@ twoBody igr = proc _ -> do
     b2 <- body2 -< b1
   returnA -< (b1,b2)
   where
-    body1 = bodyG 1000 zero         zero             igr
-    body2 = bodyG 1    (V3 50 0 0)  (V3 0.1 1 0.1)   igr
+    body1 = bodyG (Body 1000 zero)      zero             igr
+    body2 = bodyG (Body 1 (V3 50 0 0))  (V3 0.1 1 0.1)   igr
 
--- manyBodies :: (MonadFix m, Monoid e, HasTime t s)
---     => Integrator
---     -> Wire s e m () [Body]
--- manyBodies igr = proc _ -> do
---   rec
---     bInteracts -<
---     bList <-
---   where
---     body1 = bodyGs 1000 zero zero igr
---     body2 = bodyGs 1 (V3 50 0 0) (V3 0.1 1 0.1) igr
---     body3 = bodyGs 1 (V3 0 50 0) (V3 0.9 0.1 0.5) igr
---     bodyList = [body1,body2,body3]
---     bodyInteractions = selects bodyList
+manyBody :: (MonadFix m, Monoid e, HasTime t s)
+    => [(Body, V3D)]          -- Initial body states and initial velocities
+    -> Integrator             -- Integrator
+    -> Wire s e m () [Body]
+manyBody bodyList igr = Tr.sequenceA wireList
+  where
+    bSelects = selects bodyList
+    toWire ((b0, v0), others) = bodyGs b0 v0 igr . pure (map fst others)
+    wireList = map toWire bSelects
 
--- selects :: [a] -> [(a,[a])]
--- selects xs0 = go [] xs0
---   where
---    go xs [] = []
---    go xs (y:ys) = (y,xs++ys) : go (y:xs) ys
+threeBody :: (MonadFix m, Monoid e, HasTime t s)
+    => Integrator
+    -> Wire s e m () [Body]
+threeBody = manyBody bodyList
+  where
+    body1 = (Body 1000 zero, zero)
+    body2 = (Body 0.9 (V3 50 0 0), V3 0.1 1 0.1)
+    body3 = (Body 1 (V3 0 60 0), V3 0.9 0.1 0.4)
+    bodyList = [body1,body2,body3]
+
+selects :: [a] -> [(a,[a])]
+selects = go []
+  where
+   go xs [] = []
+   go xs (y:ys) = (y,xs++ys) : go (y:xs) ys
 
 -- | Force of gravity between bodies
 --
