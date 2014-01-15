@@ -31,27 +31,12 @@ main = writeFile "out/planets.dat" $ unlines logs
       10000
       (0.005 :: Double)
       (tell . return)
-      (gnuplot <$> body
+      (gnuplot <$> body x0 v0 xa
           :: (Monad m, HasTime t s, MonadFix m)
               => Wire s String m () String)
-
-
--- logWire 10000
---       (0.005 :: Double)
---       (gnuplot <$> body :: (HasTime t s, MonadFix m, Show t) => Wire s String m () String)
-
--- plotOutput :: (Monad m, HasTime t s, Show t) => Wire s e m a Body -> Wire s e m a String
--- plotOutput = gnuplot
---   where
---     format t (Body (V2 x y)) = unwords [show x, show y]
-
--- plotOutput :: (Monad m, HasTime t s, Show t) => Wire s e m a Body -> Wire s e m a String
--- plotOutput b = format <$> time <*> b
---   where
---     format t (Body (V2 x y)) = unwords [show x, show y]
-
--- addTime :: (Monad m, HasTime t s) => Wire s e m a b -> Wire s e m a (t,b)
--- addTime w = (,) <$> time <*> w
+    x0 = zero
+    v0 = V3 1   0 0.05
+    xa = V3 0.2 1 0
 
 -- main :: IO ()
 -- main = SDL.withInit [SDL.InitEverything] $ do
@@ -75,46 +60,41 @@ main = writeFile "out/planets.dat" $ unlines logs
   --   SDL.flip screen
   --   go keysDown' screen s' w'
 
--- planets :: (Monad m, Monoid e) => Wire s e m () [Body]
--- planets = proc _ -> do
---   rec
---     bodies <- body
---   returnA undefined
-
-
--- stepWires :: Monad m => Wire e m [Wire e m () b] [(b, Wire e m () b)]
--- stepWires = mkFixM $ \dt objects -> do
---   stepped <- mapM (\o -> stepWire o dt ()) objects
---   return $ Right [ (o, w') | (Right o, w') <- stepped ]
-
-body :: (MonadFix m, Monoid e, HasTime t s) => Wire s e m () Body
-body = Body <$> proc _ -> do
+-- | Wire of a simple body under gravity
+body :: (MonadFix m, Monoid e, HasTime t s)
+    => V3D  -- initial position
+    -> V3D  -- initial velocity
+    -> V3D  -- position of attractor
+    -> Wire s e m () Body
+body x0 v0 xa = Body <$> proc _ -> do
   rec
-    acc <- acceleration -< pos
-    vel <- velocity (V3 1 0 0.01) -< acc
-    pos <- position zero -< vel
+    acc <- arr (gravity 1 xa 1) -< pos
+    pos <- newton x0 v0 -< acc
   returnA -< pos
 
-
-
--- position zero . velocity zero . acceleration . pure (pure 1)
-
--- largeUfo = proc _ -> do
---   pos <- require onScreen . ufoPos -< ()
---   shotsFired <- shoot <|> pure [] -< pos
-
-  -- returnA -< (UFO pos Small, shotsFired)
-position :: (Monad m, Monoid e, HasTime t s) => V3D -> Wire s e m V3D V3D
-position = integral
-
-velocity :: (Monad m, Monoid e, HasTime t s) => V3D -> Wire s e m V3D V3D
-velocity = integral
-
-acceleration :: (Monad m, Monoid e) => Wire s e m V3D V3D
-acceleration = arr gravity
+-- | Force of gravity
+--
+gravity ::
+    (Fractional (v a), Floating a, Metric v, Additive v)
+    => a    -- mass of attractor
+    -> v a  -- position of attractor
+    -> a    -- mass of object
+    -> v a  -- position of self
+    -> v a  -- magnitude of graviational force
+gravity m1 r1 m2 r2 = mag *^ signorm r
   where
-    gravity v = mag *^ signorm r
-      where
-        mag = 1 / (norm r ** 2)
-        r = V3 0.2 1 0 ^-^ v
+    r = r1 ^-^ r2
+    mag = m1 * m2 / (norm r ** 2)
+
+
+-- | Newton integrator
+--
+newton ::
+    (Monad m, Monoid e, HasTime t s, Additive v, Fractional (v a))
+    => v a                    -- Initial position
+    -> v a                    -- Initial velocity
+    -> Wire s e m (v a) (v a)
+newton x0 v0 = proc acc -> do
+    vel <- integral v0 -< acc
+    integral x0 -< vel
 
