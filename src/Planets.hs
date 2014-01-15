@@ -72,38 +72,7 @@ main = do
   --   SDL.flip screen
   --   go keysDown' screen s' w'
 
--- | Wire of a simple body under gravity
---
-body :: (MonadFix m, Monoid e, HasTime t s)
-    => Double     -- mass
-    -> V3D        -- initial position
-    -> V3D        -- initial velocity
-    -> V3D        -- position of attractor
-    -> Integrator -- integrator
-    -> Wire s e m () Body
-body m x0 v0 xa igr = Body m <$> proc _ -> do
-  rec
-    acc <- arr (gravity 1 xa 1) -< pos
-    pos <- delay x0 . integrator igr x0 v0 -< acc
-  returnA -< pos
-
--- -- | Wire of a simple body under varying gravity
--- --
--- bodyG :: (MonadFix m, Monoid e, HasTime t s)
---     => Double     -- mass
---     -> V3D        -- initial position
---     -> V3D        -- initial velocity
---     -> Integrator -- integrator
---     -> Wire s e m Body Body
--- bodyG m x0 v0 igr = thisBody <$> proc other -> do
---   rec
---     let acc = bodyGravity other (thisBody pos) ^/ m
---     pos <- delay x0 . integrator igr x0 v0 -< acc
---   returnA -< pos
---   where
---     thisBody = Body m
-
--- | Wire of a simple body under varying gravity
+-- | Wire of a simple body under a single varying gravity source
 --
 bodyG :: (MonadFix m, Monoid e, HasTime t s)
     => Double     -- mass
@@ -111,26 +80,28 @@ bodyG :: (MonadFix m, Monoid e, HasTime t s)
     -> V3D        -- initial velocity
     -> Integrator -- integrator
     -> Wire s e m Body Body
-bodyG m x0 v0 igr = thisBody <$> proc other -> do
+bodyG m x0 v0 igr = bGs . arr return
+  where
+    bGs = bodyGs m x0 v0 igr
+
+
+-- | Wire of a simple body under many gravitational sources
+--
+bodyGs :: (MonadFix m, Monoid e, HasTime t s)
+    => Double     -- mass
+    -> V3D        -- initial position
+    -> V3D        -- initial velocity
+    -> Integrator -- integrator
+    -> Wire s e m [Body] Body
+bodyGs m x0 v0 igr = proc others -> do
   rec
-    let grav = bodyGravity other (thisBody pos)
-    (Body _ pos) <- bF -< [grav]
-  returnA -< pos
+    let gravs = map (`bodyGravity` b) others
+    b <- bF -< gravs
+  returnA -< b
   where
     bF = bodyF m x0 v0 igr
-    thisBody = Body m
 
 -- | Wire of a simple body under various forces
---
--- Note to self:
---    proc x ->
---      y <- f . g -< h x
---      returnA y
--- is equivalent to
---    proc x ->
---      f . g -< h x
--- is equivalent to
---    f . g . arr h
 --
 bodyF :: (MonadFix m, Monoid e, HasTime t s)
     => Double
@@ -155,7 +126,27 @@ twoBody igr = proc _ -> do
   returnA -< (b1,b2)
   where
     body1 = bodyG 1000 zero         zero             igr
-    body2 = bodyG 1 (V3 50 0 0) (V3 0.1 1 0.1)  igr
+    body2 = bodyG 1    (V3 50 0 0)  (V3 0.1 1 0.1)   igr
+
+-- manyBodies :: (MonadFix m, Monoid e, HasTime t s)
+--     => Integrator
+--     -> Wire s e m () [Body]
+-- manyBodies igr = proc _ -> do
+--   rec
+--     bInteracts -<
+--     bList <-
+--   where
+--     body1 = bodyGs 1000 zero zero igr
+--     body2 = bodyGs 1 (V3 50 0 0) (V3 0.1 1 0.1) igr
+--     body3 = bodyGs 1 (V3 0 50 0) (V3 0.9 0.1 0.5) igr
+--     bodyList = [body1,body2,body3]
+--     bodyInteractions = selects bodyList
+
+-- selects :: [a] -> [(a,[a])]
+-- selects xs0 = go [] xs0
+--   where
+--    go xs [] = []
+--    go xs (y:ys) = (y,xs++ys) : go (y:xs) ys
 
 -- | Force of gravity between bodies
 --
