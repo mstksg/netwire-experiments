@@ -25,7 +25,7 @@ instance GNUPlottable Body where
 
 main :: IO ()
 main = do
-    writeFile "out/planets_newton.dat" $ unlines (logs newton)
+    writeFile "out/planets_newton.dat" $ unlines (logs euler)
     writeFile "out/planets_verlet.dat" $ unlines (logs verlet)
   where
     logs i = execWriter $ logWriter i
@@ -76,6 +76,33 @@ body x0 v0 xa igr = Body <$> proc _ -> do
     pos <- delay x0 . integrator igr x0 v0 -< acc
   returnA -< pos
 
+-- | Wire of a simple body under varying gravity
+--
+bodyG :: (MonadFix m, Monoid e, HasTime t s)
+    => V3D  -- initial position
+    -> V3D  -- initial velocity
+    -> Integrator -- integrator
+    -> Wire s e m Body Body
+bodyG x0 v0 igr = Body <$> proc (Body xa) -> do
+  rec
+    acc <- arr (\(a,p) -> gravity 1 a 1 p) -< (xa, pos)
+    pos <- delay x0 . integrator igr x0 v0 -< acc
+  returnA -< pos
+
+twoBody :: (MonadFix m, Monoid e, HasTime t s)
+    => Integrator
+    -> Wire s e m () (Body,Body)
+twoBody igr = proc _ -> do
+  rec
+    b1 <- body1 -< b2
+    b2 <- body2 -< b1
+  returnA -< (b1,b2)
+  where
+    body1 = bodyG zero       (V3 0 1 0)     igr
+    body2 = bodyG (V3 1 0 0) (V3 0 (-1) 0)  igr
+
+
+
 -- | Force of gravity
 --
 gravity ::
@@ -95,17 +122,17 @@ gravity m1 r1 m2 r2 = mag *^ signorm r
 -- vector integrated from the given initial position and velocity.
 --
 newtype Integrator =
-  Integrator { integrator :: forall m e t s v a.
+  Integrator { integrator :: forall v t e a m s.
     (Monad m, Monoid e, HasTime t s, Additive v, Fractional (v a), Fractional a)
     => v a                    -- Initial position
     -> v a                    -- Initial velocity
     -> Wire s e m (v a) (v a)
   }
 
--- | Newtonian integrator
+-- | Euler integrator
 --
-newton :: Integrator
-newton = Integrator $
+euler :: Integrator
+euler = Integrator $
   \x0 v0 -> proc acc -> do
     vel <- integral v0 -< acc
     integral x0 -< vel
@@ -130,3 +157,7 @@ verlet = Integrator vVel
                 tup' = (x2, x3)
             in  (Right tup', loop' ds1 tup')
 
+-- | Runge-Kutta (RK4) integrator
+--
+rk4 :: Integrator
+rk4 = undefined
