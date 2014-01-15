@@ -113,7 +113,7 @@ bodyG :: (MonadFix m, Monoid e, HasTime t s)
     -> Wire s e m Body Body
 bodyG m x0 v0 igr = thisBody <$> proc other -> do
   rec
-    let grav = bodyGravity other (thisBody pos) ^/ m
+    let grav = bodyGravity other (thisBody pos)
     (Body _ pos) <- bF -< [grav]
   returnA -< pos
   where
@@ -139,7 +139,7 @@ bodyF :: (MonadFix m, Monoid e, HasTime t s)
     -> Integrator
     -> Wire s e m [V3D] Body
 bodyF m x0 v0 igr = thisBody <$>
-    delay x0 . integrator igr x0 v0 . arr sum
+    delay x0 . integrator igr x0 v0 . arr ((^/ m) . sum)
   where
     thisBody = Body m
 
