@@ -8,7 +8,6 @@ import Control.Wire
 import FRP.Netwire
 -- import qualified Graphics.UI.SDL as SDL
 -- import Data.Traversable
-import Linear.V2
 import Linear.V3
 import Utils.Output.GNUPlot
 import Utils.Wire.LogWire
@@ -17,7 +16,7 @@ import Linear.Vector
 
 type V3D = V3 Double
 
-data Body = Body { bodyPosition :: V3D }
+data Body = Body V3D
   deriving (Show)
 
 instance GNUPlottable Body where
@@ -41,8 +40,8 @@ main = writeFile "out/planets.dat" $ unlines logs
 --   where
 --     format t (Body (V2 x y)) = unwords [show x, show y]
 
-addTime :: (Monad m, HasTime t s) => Wire s e m a b -> Wire s e m a (t,b)
-addTime w = (,) <$> time <*> w
+-- addTime :: (Monad m, HasTime t s) => Wire s e m a b -> Wire s e m a (t,b)
+-- addTime w = (,) <$> time <*> w
 
 -- main :: IO ()
 -- main = SDL.withInit [SDL.InitEverything] $ do
