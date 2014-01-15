@@ -69,7 +69,7 @@ body :: (MonadFix m, Monoid e, HasTime t s)
 body x0 v0 xa = Body <$> proc _ -> do
   rec
     acc <- arr (gravity 1 xa 1) -< pos
-    pos <- newton x0 v0 -< acc
+    pos <- integrator newton x0 v0 -< acc
   returnA -< pos
 
 -- | Force of gravity
@@ -86,15 +86,20 @@ gravity m1 r1 m2 r2 = mag *^ signorm r
     r = r1 ^-^ r2
     mag = m1 * m2 / (norm r ** 2)
 
-
--- | Newton integrator
---
-newton ::
+-- | Integrator newtype, wrapping around integrator functions.
+newtype Integrator =
+  Integrator { integrator ::
     (Monad m, Monoid e, HasTime t s, Additive v, Fractional (v a))
     => v a                    -- Initial position
     -> v a                    -- Initial velocity
     -> Wire s e m (v a) (v a)
-newton x0 v0 = proc acc -> do
+  }
+
+-- | Newtonian integrator
+--
+newton :: Integrator
+newton = Integrator $
+  \x0 v0 -> proc acc -> do
     vel <- integral v0 -< acc
     integral x0 -< vel
 
