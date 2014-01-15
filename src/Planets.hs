@@ -17,11 +17,11 @@ import Utils.Wire.TestWire
 
 type V3D = V3 Double
 
-data Body = Body V3D
+data Body = Body Double V3D
   deriving (Show)
 
 instance GNUPlottable Body where
-  gnuplot (Body (V3 x y z)) = unwords . map show $ [x,y,z]
+  gnuplot (Body _ (V3 x y z)) = unwords . map show $ [x,y,z]
 
 main :: IO ()
 main = do
@@ -31,7 +31,7 @@ main = do
     logs = execWriter logWriter
     logWriter = testWireRight
       10000
-      (0.01 :: Double)
+      (0.003 :: Double)
       (tell . return)
       (twoBody verlet :: (MonadFix m, HasTime t s) => Wire s String m () (Body, Body))
 
@@ -75,30 +75,76 @@ main = do
 -- | Wire of a simple body under gravity
 --
 body :: (MonadFix m, Monoid e, HasTime t s)
-    => V3D  -- initial position
-    -> V3D  -- initial velocity
-    -> V3D  -- position of attractor
+    => Double     -- mass
+    -> V3D        -- initial position
+    -> V3D        -- initial velocity
+    -> V3D        -- position of attractor
     -> Integrator -- integrator
     -> Wire s e m () Body
-body x0 v0 xa igr = Body <$> proc _ -> do
+body m x0 v0 xa igr = Body m <$> proc _ -> do
   rec
     acc <- arr (gravity 1 xa 1) -< pos
     pos <- delay x0 . integrator igr x0 v0 -< acc
   returnA -< pos
 
+-- -- | Wire of a simple body under varying gravity
+-- --
+-- bodyG :: (MonadFix m, Monoid e, HasTime t s)
+--     => Double     -- mass
+--     -> V3D        -- initial position
+--     -> V3D        -- initial velocity
+--     -> Integrator -- integrator
+--     -> Wire s e m Body Body
+-- bodyG m x0 v0 igr = thisBody <$> proc other -> do
+--   rec
+--     let acc = bodyGravity other (thisBody pos) ^/ m
+--     pos <- delay x0 . integrator igr x0 v0 -< acc
+--   returnA -< pos
+--   where
+--     thisBody = Body m
+
 -- | Wire of a simple body under varying gravity
 --
 bodyG :: (MonadFix m, Monoid e, HasTime t s)
-    => V3D  -- initial position
-    -> V3D  -- initial velocity
+    => Double     -- mass
+    -> V3D        -- initial position
+    -> V3D        -- initial velocity
     -> Integrator -- integrator
     -> Wire s e m Body Body
-bodyG x0 v0 igr = Body <$> proc (Body xa) -> do
+bodyG m x0 v0 igr = thisBody <$> proc other -> do
   rec
-    acc <- arr (\(a,p) -> gravity 1 a 1 p) -< (xa, pos)
-    pos <- delay x0 . integrator igr x0 v0 -< acc
+    let grav = bodyGravity other (thisBody pos) ^/ m
+    (Body _ pos) <- bF -< [grav]
   returnA -< pos
+  where
+    bF = bodyF m x0 v0 igr
+    thisBody = Body m
 
+-- | Wire of a simple body under various forces
+--
+-- Note to self:
+--    proc x ->
+--      y <- f . g -< h x
+--      returnA y
+-- is equivalent to
+--    proc x ->
+--      f . g -< h x
+-- is equivalent to
+--    f . g . arr h
+--
+bodyF :: (MonadFix m, Monoid e, HasTime t s)
+    => Double
+    -> V3D
+    -> V3D
+    -> Integrator
+    -> Wire s e m [V3D] Body
+bodyF m x0 v0 igr = thisBody <$>
+    delay x0 . integrator igr x0 v0 . arr sum
+  where
+    thisBody = Body m
+
+-- | Two body system
+--
 twoBody :: (MonadFix m, Monoid e, HasTime t s)
     => Integrator
     -> Wire s e m () (Body,Body)
@@ -108,10 +154,16 @@ twoBody igr = proc _ -> do
     b2 <- body2 -< b1
   returnA -< (b1,b2)
   where
-    body1 = bodyG zero         (V3 0 1 (-0.5))     igr
-    body2 = bodyG (V3 0.5 0 0) (V3 0 (-1) 0.2)  igr
+    body1 = bodyG 1000 zero         zero             igr
+    body2 = bodyG 1 (V3 50 0 0) (V3 0.1 1 0.1)  igr
 
-
+-- | Force of gravity between bodies
+--
+bodyGravity ::
+       Body -- attractor
+    -> Body -- self
+    -> V3D  -- gravitational force
+bodyGravity (Body m1 r1) (Body m2 r2) = gravity m1 r1 m2 r2
 
 -- | Force of gravity
 --
@@ -121,7 +173,7 @@ gravity ::
     -> v a  -- position of attractor
     -> a    -- mass of object
     -> v a  -- position of self
-    -> v a  -- magnitude of graviational force
+    -> v a  -- graviational force
 gravity m1 r1 m2 r2 = mag *^ signorm r
   where
     r = r1 ^-^ r2

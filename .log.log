@@ -1,0 +1,2 @@
+[Wed Jan 15 04:51:39 PST 2014]	in loop ... right is fed back, left is result
+[Wed Jan 15 04:52:39 PST 2014]	proc x -> f . g -< h x is equivalent to f . g . arr h
