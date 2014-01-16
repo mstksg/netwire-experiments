@@ -23,18 +23,41 @@ data Body = Body Double !V3D
 instance GNUPlottable Body where
   gnuplot (Body _ (V3 x y z)) = unwords . map show $ [x,y,z]
 
+processPlanetData :: String -> [(Body, V3D)]
+processPlanetData = map processLine . lines
+  where
+    processLine = makeData . map read . drop 1 . words
+    makeData (m:px:py:pz:vx:vy:vz:_) = (Body m (V3 py px pz), V3 vx vy vz)
+
 main :: IO ()
 main = do
-  writeFile "out/planets_b0.dat" . unlines . map (gnuplot . (!! 0)) $ logs
-  writeFile "out/planets_b1.dat" . unlines . map (gnuplot . (!! 1)) $ logs
-  writeFile "out/planets_b2.dat" . unlines . map (gnuplot . (!! 2)) $ logs
-  where
-    logs = execWriter logWriter
-    logWriter = testWireRight
-      20000
+  planetData <- processPlanetData <$> readFile "data/planet_data.dat"
+  let
+    logs = execWriter $ testWireRight
+      100
       (0.02 :: Double)
       (tell . return)
-      (threeBody verlet :: (MonadFix m, HasTime t s) => Wire s String m () [Body])
+      (manyBody planetData verlet :: (MonadFix m, HasTime t s) => Wire s String m () [Body])
+  writeLogs logs 10
+
+writeLogs :: [[Body]] -> Int -> IO ()
+writeLogs logs n = forM_ [0..(n-1)] $ \i ->
+  writeFile
+    ("out/planets_b" ++ show i ++ ".dat")
+    (unlines . map (gnuplot . (!! i)) $ logs)
+
+
+
+  -- writeFile "out/planets_b0.dat" . unlines . map (gnuplot . (!! 0)) $ logs
+  -- writeFile "out/planets_b1.dat" . unlines . map (gnuplot . (!! 1)) $ logs
+  -- writeFile "out/planets_b2.dat" . unlines . map (gnuplot . (!! 2)) $ logs
+  -- where
+  --   logs = execWriter logWriter
+  --   logWriter = testWireRight
+  --     50000
+  --     (0.02 :: Double)
+  --     (tell . return)
+  --     (threeBody verlet :: (MonadFix m, HasTime t s) => Wire s String m () [Body])
 
     -- writeFile "out/planets_newton.dat" $ unlines (logs euler)
     -- writeFile "out/planets_verlet.dat" $ unlines (logs verlet)
