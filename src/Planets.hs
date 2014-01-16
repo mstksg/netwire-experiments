@@ -29,22 +29,38 @@ processPlanetData = map processLine . lines
     processLine = makeData . map read . drop 1 . words
     makeData (m:px:py:pz:vx:vy:vz:_) = (Body m (V3 py px pz), V3 vx vy vz)
 
+numPlans :: Int
+numPlans = 10
+
 main :: IO ()
 main = do
-  planetData <- processPlanetData <$> readFile "data/planet_data.dat"
-  let
-    logs = execWriter $ testWireRight
-      100
-      (0.02 :: Double)
-      (tell . return)
-      (manyBody planetData verlet :: (MonadFix m, HasTime t s) => Wire s String m () [Body])
-  writeLogs logs 10
+  planetData <- take numPlans . processPlanetData <$> readFile "data/planet_data.dat"
+  clearLogs 10
+  testWireRight
+    5000
+    (0.02 :: Double)
+    (writeLog numPlans)
+    (manyBody planetData verlet :: (MonadFix m, HasTime t s) => Wire s String m () [Body])
 
-writeLogs :: [[Body]] -> Int -> IO ()
-writeLogs logs n = forM_ [0..(n-1)] $ \i ->
+
+clearLogs :: Int -> IO ()
+clearLogs n = forM_ [0..(n-1)] $ \i ->
   writeFile
     ("out/planets_b" ++ show i ++ ".dat")
-    (unlines . map (gnuplot . (!! i)) $ logs)
+    ""
+
+writeLog :: Int -> [Body] -> IO ()
+writeLog n bodies = forM_ [0..(n-1)] $ \i ->
+  appendFile
+    ("out/planets_b" ++ show i ++ ".dat")
+    ((++ "\n") . gnuplot $ bodies !! i)
+--     (unlines . map (gnuplot . (!! i)) $ logs)
+
+-- writeLogs :: [[Body]] -> Int -> IO ()
+-- writeLogs logs n = forM_ [0..(n-1)] $ \i ->
+--   writeFile
+--     ("out/planets_b" ++ show i ++ ".dat")
+--     (unlines . map (gnuplot . (!! i)) $ logs)
 
 
 
@@ -118,7 +134,7 @@ bodyGs :: (MonadFix m, Monoid e, HasTime t s)
 bodyGs b0 v0 igr = proc others -> do
   rec
     let gravs = map (`bodyGravity` b) others
-    b <- bF -< gravs
+    b <- bF . delay [] -< gravs
   returnA -< b
   where
     bF = bodyF b0 v0 igr
@@ -131,7 +147,7 @@ bodyF :: (MonadFix m, Monoid e, HasTime t s)
     -> Integrator
     -> Wire s e m [V3D] Body
 bodyF (Body m x0) v0 igr = thisBody <$>
-    delay x0 . integrator igr x0 v0 . arr ((^/ m) . sum)
+    integrator igr x0 v0 . arr ((^/ m) . sum)
   where
     thisBody = Body m
 
@@ -183,6 +199,9 @@ bodyGravity ::
     -> V3D  -- gravitational force
 bodyGravity (Body m1 r1) (Body m2 r2) = gravity m1 r1 m2 r2
 
+g :: Floating a => a
+g = 0.0002959 * 0
+
 -- | Force of gravity
 --
 gravity ::
@@ -195,7 +214,7 @@ gravity ::
 gravity m1 r1 m2 r2 = mag *^ signorm r
   where
     r = r1 ^-^ r2
-    mag = m1 * m2 / (norm r ** 2)
+    mag = g * m1 * m2 / (norm r ** 2)
 
 -- | Integrator newtype, wrapping around integrator functions.  Integrator
 -- functions in general take an acceleration vector and return a position
