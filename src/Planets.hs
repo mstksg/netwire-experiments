@@ -27,20 +27,20 @@ processPlanetData :: String -> [(Body, V3D)]
 processPlanetData = map processLine . lines
   where
     processLine = makeData . map read . drop 1 . words
-    makeData (m:px:py:pz:vx:vy:vz:_) = (Body m (V3 py px pz), V3 vx vy vz)
+    makeData (m:px:py:pz:vx:vy:vz:_) = (Body m (V3 py px pz), 700 *^ V3 vx vy vz)
 
 numPlans :: Int
-numPlans = 10
+numPlans = 9
 
 main :: IO ()
 main = do
-  planetData <- take numPlans . processPlanetData <$> readFile "data/planet_data.dat"
+  ((sun,_):planets) <- take (numPlans+1) . processPlanetData <$> readFile "data/planet_data.dat"
   clearLogs 10
   testWireRight
     5000
-    (0.02 :: Double)
+    (0.002 :: Double)
     (writeLog numPlans)
-    (manyBody planetData verlet :: (MonadFix m, HasTime t s) => Wire s String m () [Body])
+    (manyOneBody sun planets verlet :: (MonadFix m, HasTime t s) => Wire s String m () [Body])
 
 
 clearLogs :: Int -> IO ()
@@ -165,6 +165,16 @@ twoBody igr = proc _ -> do
     body1 = bodyG (Body 1000 zero)      zero             igr
     body2 = bodyG (Body 1 (V3 50 0 0))  (V3 0.1 1 0.1)   igr
 
+manyOneBody :: (MonadFix m, Monoid e, HasTime t s)
+    => Body
+    -> [(Body, V3D)]
+    -> Integrator
+    -> Wire s e m () [Body]
+manyOneBody source bodyList igr = Tr.sequenceA wireList
+  where
+    toWire (b0, v0)= bodyGs b0 v0 igr . pure [source]
+    wireList = map toWire bodyList
+
 manyBody :: (MonadFix m, Monoid e, HasTime t s)
     => [(Body, V3D)]          -- Initial body states and initial velocities
     -> Integrator             -- Integrator
@@ -200,7 +210,7 @@ bodyGravity ::
 bodyGravity (Body m1 r1) (Body m2 r2) = gravity m1 r1 m2 r2
 
 g :: Floating a => a
-g = 0.0002959 * 0
+g = 0.0002959 * 0.000000000000000000001
 
 -- | Force of gravity
 --
