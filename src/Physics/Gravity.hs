@@ -5,6 +5,7 @@ module Physics.Gravity
   , bodyGs
   , twoBody
   , manyFixedBody
+  , manyBody
   ) where
 
 import Control.Category
@@ -68,6 +69,14 @@ manyFixedBody sources bodyList igr = sequenceA wireList
   where
     toWire (b0, v0) = bodyGs b0 v0 igr . pure sources
     wireList = map toWire bodyList
+
+-- | Many bodies undergoing mutual self-interaction
+--
+manyBody :: (MonadFix m, Monoid e, HasTime t s)
+    => [(Body, V3D)]
+    -> Integrator
+    -> Wire s e m () [Body]
+manyBody _ _ = undefined
 
 -- manyBody :: (MonadFix m, Monoid e, HasTime t s)
 --     => [(Body, V3D)]          -- Initial body states and initial velocities

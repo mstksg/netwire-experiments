@@ -1,5 +1,3 @@
--- {-# LANGUAGE Arrows #-}
-
 -- import Control.Monad             (void)
 -- import Data.Traversable
 -- import FRP.Netwire
@@ -22,27 +20,33 @@ processPlanetData = map processLine . lines
     processLine = makeData . map read . drop 1 . words
     makeData (m:px:py:pz:vx:vy:vz:_) = (Body m (V3 py px pz), 700 *^ V3 vx vy vz)
 
-numPlans :: Int
-numPlans = 9
-
 main :: IO ()
 main = do
-  -- planets <- take (numPlans+1) . processPlanetData <$> readFile "data/planet_data.dat"
-  -- clearLogs 10
-  -- testWireRight
-  --   5000
-  --   ((1/60) :: Double)
-  --   (writeLog numPlans)
-  --   (manyBody planets verlet :: (MonadFix m, HasTime t s) => Wire s String m () [Body])
+  pData <- processPlanetData <$> readFile "data/planet_data.dat"
+  -- runMany pData
+  runFixed pData
+  return ()
 
-  ((sun,_):planets) <- take (numPlans+1) . processPlanetData <$> readFile "data/planet_data.dat"
+runMany :: [(Body, V3D)] -> IO ()
+runMany planets = do
+  clearLogs 10
+  testWireRight
+    5000
+    ((1/60) :: Double)
+    (writeLog 10)
+    (manyBody planets verlet :: (MonadFix m, HasTime t s) => Wire s String m () [Body])
+
+runFixed :: [(Body, V3D)] -> IO ()
+runFixed pData = do
+  let
+    ((sun,_):planets) = pData
   clearLogs 10
   testWireRight
     5000
     (0.002 :: Double)
-    (writeLog numPlans)
+    (writeLog 9)
     (manyFixedBody [sun] planets verlet :: (MonadFix m, HasTime t s) => Wire s String m () [Body])
-
+  
 
 clearLogs :: Int -> IO ()
 clearLogs n = forM_ [0..(n-1)] $ \i ->
