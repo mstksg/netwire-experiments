@@ -1,4 +1,4 @@
-module Utils.Wire.TestWire (testWireRight) where
+module Utils.Wire.TestWire (testWire', testWireRight) where
 
 import Prelude hiding              ((.), id)
 import Control.Monad.Writer.Strict
