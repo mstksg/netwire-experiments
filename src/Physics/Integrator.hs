@@ -17,7 +17,7 @@ import Prelude hiding               ((.), id)
 
 -- | Integrator newtype, wrapping around integrator functions.  Integrator
 -- functions in general take an acceleration vector and return a position
--- vector and velocity vector integrated from the given initial position 
+-- vector and velocity vector integrated from the given initial position
 -- and velocity.
 --
 newtype Integrator =
@@ -28,12 +28,13 @@ newtype Integrator =
     -> Wire s e m (v a) (v a, v a)
   }
 
-runIntegratorPos :: (Monad m, Monoid e, HasTime t s, Additive v, Fractional (v a), Fractional a)
+runIntegratorPos ::
+    (Monad m, Monoid e, HasTime t s, Additive v, Fractional (v a), Fractional a)
     => Integrator
     -> v a
     -> v a
     -> Wire s e m (v a) (v a)
-runIntegratorPos (Integrator igr) x0 v0 = fst <$> igr x0 v0
+runIntegratorPos igr x0 v0 = fst <$> runIntegrator igr x0 v0
 
 -- | Euler integrator
 --
@@ -54,14 +55,15 @@ verlet = Integrator vVel
         vInt = mkSF wpure
         wpure ds _ = (tup, loop' ds tup)
           where
-            tup = (x0 ^-^ (v0 ^* dt), (x0, zero))
+            tup = (x0 ^-^ (v0 ^* dt), (x0, v0))
             dt = realToFrac $ dtime ds
         loop' ds1 (x1, (x2, _)) = mkSF $ \ds2 a ->
             let dt1 = realToFrac $ dtime ds1
                 dt2 = realToFrac $ dtime ds2
                 dtr = dt2 / dt1
                 x3  = (x2 ^+^ (x2 ^-^ x1) ^* dtr) ^+^ (a ^* (dt2 * dt2))
-                tup' = (x2, (x3, zero))
+                v   = x3 ^-^ x2
+                tup' = (x2, (x3, v))
             in  (tup', loop' ds1 tup')
 
 -- -- | Runge-Kutta (RK4) integrator
