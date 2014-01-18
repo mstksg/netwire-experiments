@@ -14,7 +14,7 @@ import Utils.Output.GNUPlot
 import Utils.Wire.TestWire
 
 fr :: Double
-fr = 1000
+fr = 60
 
 main :: IO ()
 main = do

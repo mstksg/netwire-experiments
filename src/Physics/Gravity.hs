@@ -40,7 +40,7 @@ bodyGs :: (MonadFix m, Monoid e, HasTime t s)
 bodyGs b0 v0 igr = proc others -> do
   rec
     let gravs = map (`bodyGravity` b) others
-    b <- bF . delay [] -< gravs
+    b <- delay b0 . bF -< gravs
   returnA -< b
   where
     bF = bodyF b0 v0 igr
