@@ -11,6 +11,7 @@ import Control.Category
 import Control.Monad.Writer.Strict
 import Control.Wire
 import Linear.Metric
+import Utils.Wire.Interval
 import Data.Maybe                  (mapMaybe, isJust, fromMaybe)
 import Linear.V3
 import Linear.Vector
@@ -71,7 +72,7 @@ bodyFConstrained :: (MonadFix m, Monoid e, HasTime Double s)
     -> V3D
     -> Integrator
     -> Wire s e m [V3D] Body
-bodyFConstrained c (Body m x0) v0 igr = proc fs -> do
+bodyFConstrained c b0@(Body m _) v0 igr = proc fs -> do
   rec
     let
       -- allfs = fs
@@ -83,8 +84,17 @@ bodyFConstrained c (Body m x0) v0 igr = proc fs -> do
     -- collisions <- hold . accumE (flip (:)) [] . became (isJust . c) -< x
 
     delayedX <- delay zero -< x
-    imp <- (^* 60) . posToImp <$> holdFor (1/60) . became (isJust . c) <|> pure zero -< delayedX
-    (b@(Body _ x), vel) <- delay (Body m x0, v0) . bodyFVel (Body m x0) v0 igr -< allfs
+
+    imp <- holdTickAndAmplify . arr (posToImp <$>) . became (isJust . c) <|> pure zero -< delayedX
+    -- ix' <- holdTickAndAmplify -< ix
+
+    -- imp <-
+    --   (^* 60) . posToImp <$> holdFor (1/60) . became (isJust . c) <|>
+    --   pure zero
+    --     -< delayedX
+
+    -- (b@(Body _ x), vel) <- delay (b0, v0) . bodyFVel b0 v0 igr -< allfs
+    (b@(Body _ x), vel) <- delay (b0, v0) . bodyFVel b0 v0 igr -< allfs
   returnA -< b
   where
     posToImp x = fromMaybe zero (c x)

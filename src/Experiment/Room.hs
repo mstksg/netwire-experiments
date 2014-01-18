@@ -13,6 +13,9 @@ import Prelude hiding       ((.), id)
 import Utils.Output.GNUPlot
 import Utils.Wire.TestWire
 
+fr :: Double
+fr = 1000
+
 main :: IO ()
 main = do
   clearLogs bCount
@@ -27,8 +30,8 @@ main = do
 runTest :: Int -> Wire (Timed Double ()) String IO () [Body] -> IO ()
 runTest n =
   testWire'
-    (60*6)
-    ((1/60) :: Double)
+    (round $ fr*6)
+    (1/fr)
     -- (writeLog n)
     (either print (writeLog n))
 
@@ -52,5 +55,8 @@ roomBodies :: (MonadFix m, Monoid e, HasTime Double s)
 roomBodies grav bodies igr = sequenceA $ map makeWire bodies
   where
     makeWire (b0, v0) = bodyFConstrained wall b0 v0 igr . pure [grav]
-    wall (V3 _ _ z) | z < 0     = Just (V3 0 0 1)
+    wall (V3 x _ z) | z < 0     = Just (V3 0 0 1)
+                    | z > 1     = Just (V3 0 0 (-1))
+                    | x < 0     = Just (V3 1 0 0)
+                    | x > 1.5   = Just (V3 (-1) 0 0)
                     | otherwise = Nothing
