@@ -41,18 +41,18 @@ verlet = Integrator vVel
   where
     vVel x0 v0 = snd <$> vInt
       where
-        vInt = mkPure wpure
-        wpure ds _ = (Right tup, loop' ds tup)
+        vInt = mkSF wpure
+        wpure ds _ = (tup, loop' ds tup)
           where
             tup = (x0 ^-^ (v0 ^* dt), x0)
             dt = realToFrac $ dtime ds
-        loop' ds1 (x1, x2) = mkPure $ \ds2 a ->
+        loop' ds1 (x1, x2) = mkSF $ \ds2 a ->
             let dt1 = realToFrac $ dtime ds1
                 dt2 = realToFrac $ dtime ds2
                 dtr = dt2 / dt1
                 x3  = (x2 ^+^ (x2 ^-^ x1) ^* dtr) ^+^ (a ^* (dt2 * dt2))
                 tup' = (x2, x3)
-            in  (Right tup', loop' ds1 tup')
+            in  (tup', loop' ds1 tup')
 
 -- -- | Runge-Kutta (RK4) integrator
 -- --

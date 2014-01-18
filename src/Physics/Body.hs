@@ -88,10 +88,10 @@ impulses c = proc x -> undefined -< undefined
 impulses' :: forall m e s. (MonadFix m, Monoid e, HasTime Double s)
     => (V3D -> Maybe V3D)
     -> Wire s e m V3D [V3D]
-impulses' c = mkPure (p [])
+impulses' c = mkSF (p [])
   where
     -- impulse magnitude, impulse direction, impulse duration
-    p :: [(V3D, (V3D, Double))] -> s -> V3D -> (Either e [V3D], Wire s e m V3D [V3D])
+    p :: [(V3D, (V3D, Double))] -> s -> V3D -> ([V3D], Wire s e m V3D [V3D])
     p ps ds x =
       let dt  = dtime ds
           downed  = mapMaybe (countdown dt) ps
@@ -99,7 +99,7 @@ impulses' c = mkPure (p [])
             Just iunit | not . any ((== iunit) . fst . snd) $ ps
               -> (iunit ^* 50, (iunit, dt)) : downed
             _ -> downed
-      in (Right (map fst downed'), mkPure (p downed'))
+      in (map fst downed', mkSF (p downed'))
 
     countdown dt (ivec, (iunit, idur)) =
       let down = idur - dt
