@@ -10,7 +10,7 @@ module Physics.Body
 import Control.Category
 import Control.Monad.Writer.Strict
 import Control.Wire
-import Data.Maybe                  (mapMaybe)
+import Data.Maybe                  (mapMaybe, isJust, fromMaybe)
 import Linear.V3
 import Linear.Vector
 import Physics.Integrator
@@ -62,10 +62,20 @@ bodyFConstrained :: (MonadFix m, Monoid e, HasTime Double s)
 bodyFConstrained c (Body m x0) v0 igr = proc fs -> do
   rec
     let
-      allfs = imps ++ fs
-    imps <- delay [] . impulses' c -< x
+      -- allfs = fs
+      allfs = imp:fs
+    -- imps <- delay [] . impulses c -< x
+
+    -- collisions <- hold . accumE (flip (:)) [] . became (isJust . c) -< x
+
+    delayedX <- delay zero -< x
+
+    imp <- ((^* 10) . posToImp <$> holdFor (1/60) . became (isJust . c) <|> pure zero) -< delayedX
+    -- imp <- pure zero -< x
     b@(Body _ x) <- delay (Body m x0) . bodyF (Body m x0) v0 igr -< allfs
   returnA -< b
+  where
+    posToImp x = fromMaybe zero (c x)
   -- where
     -- newImpulse x = case c x of
     --                  Just _   -> undefined
@@ -75,20 +85,20 @@ bodyFConstrained c (Body m x0) v0 igr = proc fs -> do
     -- addImp (imps,Just cv0) = impulse' cv0 1 : imps
 
 
-testCollide :: (MonadFix m, Monoid e, HasTime Double s)
-    => (V3D -> Maybe V3D)
-    -> Wire s e m Body (Body, Maybe V3D)
-testCollide c = proc b@(Body _ x) -> returnA -< (b, c x)
+-- testCollide :: (MonadFix m, Monoid e, HasTime Double s)
+--     => (V3D -> Maybe V3D)
+--     -> Wire s e m Body (Body, Maybe V3D)
+-- testCollide c = proc b@(Body _ x) -> returnA -< (b, c x)
 
-impulses :: (MonadFix m, Monoid e, HasTime Double s)
+-- impulses :: (MonadFix m, Monoid e, HasTime Double s)
+--     => (V3D -> Maybe V3D)
+--     -> Wire s e m V3D [V3D]
+-- impulses c = proc x -> undefined -< undefined
+
+impulses :: forall m e s. (MonadFix m, Monoid e, HasTime Double s)
     => (V3D -> Maybe V3D)
     -> Wire s e m V3D [V3D]
-impulses c = proc x -> undefined -< undefined
-
-impulses' :: forall m e s. (MonadFix m, Monoid e, HasTime Double s)
-    => (V3D -> Maybe V3D)
-    -> Wire s e m V3D [V3D]
-impulses' c = mkSF (p [])
+impulses c = mkSF (p [])
   where
     -- impulse magnitude, impulse direction, impulse duration
     p :: [(V3D, (V3D, Double))] -> s -> V3D -> ([V3D], Wire s e m V3D [V3D])
@@ -107,6 +117,9 @@ impulses' c = mkSF (p [])
             then Just (ivec, (iunit, down))
             else Nothing
 
+impulses' :: (MonadFix m, Monoid e, HasTime Double s)
+    => Wire s e m (Event ()) ()
+impulses' = undefined
 
 -- impulse' :: (MonadFix m, Monoid e, HasTime Double s)
 --     => V3D
