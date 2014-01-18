@@ -27,7 +27,7 @@ main = do
 runTest :: Int -> Wire (Timed Double ()) String IO () [Body] -> IO ()
 runTest n =
   testWire'
-    (60*2)
+    (60*6)
     ((1/60) :: Double)
     -- (writeLog n)
     (either print (writeLog n))

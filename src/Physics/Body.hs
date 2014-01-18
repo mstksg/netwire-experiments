@@ -28,6 +28,19 @@ data Body = Body Double !V3D
 instance GNUPlottable Body where
   gnuplot (Body _ (V3 x y z)) = unwords . map show $ [x,y,z]
 
+-- | Wire of a simple body and its velocity under a collection of forces
+--
+bodyFVel :: (MonadFix m, Monoid e, HasTime t s)
+    => Body
+    -> V3D
+    -> Integrator
+    -> Wire s e m [V3D] (Body, V3D)
+bodyFVel (Body m x0) v0 igr = pairUp <$>
+    runIntegrator igr x0 v0 . arr ((^/ m) . sum)
+  where
+    pairUp (x,v) = (Body m x, v)
+
+
 -- | Wire of a simple body under a collection of forces
 --
 bodyF :: (MonadFix m, Monoid e, HasTime t s)
@@ -35,10 +48,7 @@ bodyF :: (MonadFix m, Monoid e, HasTime t s)
     -> V3D
     -> Integrator
     -> Wire s e m [V3D] Body
-bodyF (Body m x0) v0 igr = thisBody <$>
-    runIntegratorPos igr x0 v0 . arr ((^/ m) . sum)
-  where
-    thisBody = Body m
+bodyF b0 v0 igr = fst <$> bodyFVel b0 v0 igr
 
 -- | Wire of a simple body under a constant set of forces
 --
@@ -66,21 +76,15 @@ bodyFConstrained c (Body m x0) v0 igr = proc fs -> do
     let
       -- allfs = fs
       allfs    = impmag:fs
-      vel      = V3 vx vy vz
       momentum = m *^ vel
-      impmag   = (imp `dot` (momentum * 2)) *^ imp
+      impmag   = (imp `dot` (momentum * (-2))) *^ imp
     -- imps <- delay [] . impulses c -< x
 
     -- collisions <- hold . accumE (flip (:)) [] . became (isJust . c) -< x
 
-    delayedX@(V3 xx xy xz) <- delay zero -< x
-
-    vx <- derivative . delay 0 -< xx
-    vy <- derivative . delay 0 -< xy
-    vz <- derivative . delay 0 -< xz
-
+    delayedX <- delay zero -< x
     imp <- (^* 60) . posToImp <$> holdFor (1/60) . became (isJust . c) <|> pure zero -< delayedX
-    b@(Body _ x) <- delay (Body m x0) . bodyF (Body m x0) v0 igr -< allfs
+    (b@(Body _ x), vel) <- delay (Body m x0, v0) . bodyFVel (Body m x0) v0 igr -< allfs
   returnA -< b
   where
     posToImp x = fromMaybe zero (c x)
