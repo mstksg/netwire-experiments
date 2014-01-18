@@ -52,4 +52,5 @@ roomBodies :: (MonadFix m, Monoid e, HasTime Double s)
 roomBodies grav bodies igr = sequenceA $ map makeWire bodies
   where
     makeWire (b0, v0) = bodyFConstrained wall b0 v0 igr . pure [grav]
-    wall (V3 _ _ z) = z < 0
+    wall (V3 _ _ z) | z < 0     = Just (V3 0 0 1)
+                    | otherwise = Nothing

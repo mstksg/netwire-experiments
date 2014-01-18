@@ -10,12 +10,13 @@ module Physics.Body
 import Control.Category
 import Control.Monad.Writer.Strict
 import Control.Wire
-import Linear.Vector
+import Data.Maybe                  (mapMaybe)
 import Linear.V3
+import Linear.Vector
 import Physics.Integrator
-import Utils.Output.GNUPlot
 import Physics.Physics
-import Prelude hiding               ((.), id)
+import Prelude hiding              ((.), id)
+import Utils.Output.GNUPlot
 
 -- | Represents a point with mass and position
 --
@@ -47,21 +48,84 @@ bodyFPure :: (MonadFix m, Monoid e, HasTime t s)
     -> Wire s e m () Body
 bodyFPure fs b0 v0 igr = bodyF b0 v0 igr . pure fs
 
+-- | A body under rigid elastic "box" constraints.  The predicate function
+-- is a collision function that tests if a collision has happened.  The
+-- parameter in the case of a Just is the (unit) direction of the
+-- **normal** to the collided surface.
+--
 bodyFConstrained :: (MonadFix m, Monoid e, HasTime Double s)
-    => (V3D -> Bool)
+    => (V3D -> Maybe V3D)   -- Collision function
     -> Body
     -> V3D
     -> Integrator
     -> Wire s e m [V3D] Body
 bodyFConstrained c (Body m x0) v0 igr = proc fs -> do
   rec
-    b@(Body _ x) <- delay (Body m x0) . bodyF (Body m x0) v0 igr -< imp:fs
-    imp <- impulse -< undefined
+    let
+      allfs = imps ++ fs
+    imps <- delay [] . impulses' c -< x
+    b@(Body _ x) <- delay (Body m x0) . bodyF (Body m x0) v0 igr -< allfs
   returnA -< b
+  -- where
+    -- newImpulse x = case c x of
+    --                  Just _   -> undefined
+    --                  Nothing  -> undefined
 
-impulse :: (MonadFix m, Monoid e, HasTime Double s)
-    => Wire s e m (Event (V3D, Double)) V3D
-impulse dP dT = for dT . pure (dP ^/ dT) . now <|> pure zero
+    -- addImp (imps,Nothing) = imps
+    -- addImp (imps,Just cv0) = impulse' cv0 1 : imps
+
+
+testCollide :: (MonadFix m, Monoid e, HasTime Double s)
+    => (V3D -> Maybe V3D)
+    -> Wire s e m Body (Body, Maybe V3D)
+testCollide c = proc b@(Body _ x) -> returnA -< (b, c x)
+
+impulses :: (MonadFix m, Monoid e, HasTime Double s)
+    => (V3D -> Maybe V3D)
+    -> Wire s e m V3D [V3D]
+impulses c = proc x -> undefined -< undefined
+
+impulses' :: forall m e s. (MonadFix m, Monoid e, HasTime Double s)
+    => (V3D -> Maybe V3D)
+    -> Wire s e m V3D [V3D]
+impulses' c = mkPure (p [])
+  where
+    -- impulse magnitude, impulse direction, impulse duration
+    p :: [(V3D, (V3D, Double))] -> s -> V3D -> (Either e [V3D], Wire s e m V3D [V3D])
+    p ps ds x =
+      let dt  = dtime ds
+          downed  = mapMaybe (countdown dt) ps
+          downed' = case c x of
+            Just iunit | not . any ((== iunit) . fst . snd) $ ps
+              -> (iunit ^* 50, (iunit, dt)) : downed
+            _ -> downed
+      in (Right (map fst downed'), mkPure (p downed'))
+
+    countdown dt (ivec, (iunit, idur)) =
+      let down = idur - dt
+      in  if down > 0
+            then Just (ivec, (iunit, down))
+            else Nothing
+
+
+-- impulse' :: (MonadFix m, Monoid e, HasTime Double s)
+--     => V3D
+--     -> Double
+--     -> Wire s e m () V3D
+-- impulse' dP dT = undefined
+
+-- impulse' :: (MonadFix m, Monoid e, HasTime Double s)
+--     => Wire s e m (Event (V3D, Double)) V3D
+-- impulse' = undefined
+
+
+
+-- impulse :: (MonadFix m, Monoid e, HasTime Double s)
+--     => Wire s e m (Event (V3D, Double)) V3D
+-- impulse = for dT . pure (dP ^/ dT) . asSoonAs <|> pure zero
+--   where
+--     dT = 1
+--     dP = zero
 
 
     -- runIntegrator igr x0 v0 . arr ((^/ m))

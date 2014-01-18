@@ -14,15 +14,25 @@ import Prelude hiding               ((.), id)
 import Utils.Output.GNUPlot
 import Utils.Wire.TestWire
 
+-- | What is this number?  Well, we want our graviational constant to be 1,
+-- so we normalize with our time unit being a day and our distance unit
+-- being an AU.  Our mass unit then must be 6.6969e11 kg.  To convert, we
+-- divide our kg by the this number.
+mConst :: Double
+mConst = 1.0 / 6.69691e11
+
 processPlanetData :: String -> [(Body, V3D)]
 processPlanetData = map processLine . lines
   where
     processLine = makeData . map read . drop 1 . words
-    makeData (m:px:py:pz:vx:vy:vz:_) = (Body m (V3 py px pz), 700 *^ V3 vx vy vz)
+    makeData (m:px:py:pz:vx:vy:vz:_) =
+      ( Body (mConst * m) (V3 py px pz)
+      , V3 vx vy vz )
 
 main :: IO ()
 main = do
   pData <- processPlanetData <$> readFile "data/planet_data.dat"
+  print pData
   -- runMany pData
   runFixed pData
   return ()
@@ -43,7 +53,7 @@ runTest :: Wire (Timed Double ()) String IO () [Body] -> IO ()
 runTest =
   testWireRight
     5000
-    ((1/60) :: Double)
+    ((1/6000000000000) :: Double)
     (writeLog 9)
 
 clearLogs :: Int -> IO ()
