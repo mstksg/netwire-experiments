@@ -10,9 +10,11 @@ module Physics.Body
 import Control.Category
 import Control.Monad.Writer.Strict
 import Control.Wire
+import Linear.Metric
 import Data.Maybe                  (mapMaybe, isJust, fromMaybe)
 import Linear.V3
 import Linear.Vector
+import FRP.Netwire
 import Physics.Integrator
 import Physics.Physics
 import Prelude hiding              ((.), id)
@@ -34,7 +36,7 @@ bodyF :: (MonadFix m, Monoid e, HasTime t s)
     -> Integrator
     -> Wire s e m [V3D] Body
 bodyF (Body m x0) v0 igr = thisBody <$>
-    runIntegrator igr x0 v0 . arr ((^/ m) . sum)
+    runIntegratorPos igr x0 v0 . arr ((^/ m) . sum)
   where
     thisBody = Body m
 
@@ -63,15 +65,21 @@ bodyFConstrained c (Body m x0) v0 igr = proc fs -> do
   rec
     let
       -- allfs = fs
-      allfs = imp:fs
+      allfs    = impmag:fs
+      vel      = V3 vx vy vz
+      momentum = m *^ vel
+      impmag   = (imp `dot` (momentum * 2)) *^ imp
     -- imps <- delay [] . impulses c -< x
 
     -- collisions <- hold . accumE (flip (:)) [] . became (isJust . c) -< x
 
-    delayedX <- delay zero -< x
+    delayedX@(V3 xx xy xz) <- delay zero -< x
 
-    imp <- ((^* 10) . posToImp <$> holdFor (1/60) . became (isJust . c) <|> pure zero) -< delayedX
-    -- imp <- pure zero -< x
+    vx <- derivative . delay 0 -< xx
+    vy <- derivative . delay 0 -< xy
+    vz <- derivative . delay 0 -< xz
+
+    imp <- (^* 60) . posToImp <$> holdFor (1/60) . became (isJust . c) <|> pure zero -< delayedX
     b@(Body _ x) <- delay (Body m x0) . bodyF (Body m x0) v0 igr -< allfs
   returnA -< b
   where

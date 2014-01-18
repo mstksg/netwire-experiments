@@ -2,6 +2,7 @@
 
 module Physics.Integrator
   ( Integrator(..)
+  , runIntegratorPos
   , euler
   , verlet
   ) where
@@ -16,15 +17,23 @@ import Prelude hiding               ((.), id)
 
 -- | Integrator newtype, wrapping around integrator functions.  Integrator
 -- functions in general take an acceleration vector and return a position
--- vector integrated from the given initial position and velocity.
+-- vector and velocity vector integrated from the given initial position 
+-- and velocity.
 --
 newtype Integrator =
   Integrator { runIntegrator :: forall v t e a m s.
     (Monad m, Monoid e, HasTime t s, Additive v, Fractional (v a), Fractional a)
     => v a                    -- Initial position
     -> v a                    -- Initial velocity
-    -> Wire s e m (v a) (v a)
+    -> Wire s e m (v a) (v a, v a)
   }
+
+runIntegratorPos :: (Monad m, Monoid e, HasTime t s, Additive v, Fractional (v a), Fractional a)
+    => Integrator
+    -> v a
+    -> v a
+    -> Wire s e m (v a) (v a)
+runIntegratorPos (Integrator igr) x0 v0 = fst <$> igr x0 v0
 
 -- | Euler integrator
 --
@@ -32,7 +41,8 @@ euler :: Integrator
 euler = Integrator $
   \x0 v0 -> proc acc -> do
     vel <- integral v0 -< acc
-    integral x0 -< vel
+    pos <- integral x0 -< vel
+    returnA -< (pos, vel)
 
 -- | Verlet integrator
 --
@@ -44,14 +54,14 @@ verlet = Integrator vVel
         vInt = mkSF wpure
         wpure ds _ = (tup, loop' ds tup)
           where
-            tup = (x0 ^-^ (v0 ^* dt), x0)
+            tup = (x0 ^-^ (v0 ^* dt), (x0, zero))
             dt = realToFrac $ dtime ds
-        loop' ds1 (x1, x2) = mkSF $ \ds2 a ->
+        loop' ds1 (x1, (x2, _)) = mkSF $ \ds2 a ->
             let dt1 = realToFrac $ dtime ds1
                 dt2 = realToFrac $ dtime ds2
                 dtr = dt2 / dt1
                 x3  = (x2 ^+^ (x2 ^-^ x1) ^* dtr) ^+^ (a ^* (dt2 * dt2))
-                tup' = (x2, x3)
+                tup' = (x2, (x3, zero))
             in  (tup', loop' ds1 tup')
 
 -- -- | Runge-Kutta (RK4) integrator
