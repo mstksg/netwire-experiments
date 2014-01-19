@@ -1,14 +1,16 @@
 module Render.Backend.SDL where
 
 import Control.Wire
+import Linear.Vector
 import Data.Bits
 import Data.Word
 import Render.Render
+import Linear.V2
 import qualified Graphics.UI.SDL           as SDL
 import qualified Graphics.UI.SDL.Framerate as Framerate
 
-sdlBackend ::
-       Int
+sdlBackend :: SDLRenderable a
+    => Int
     -> Int
     -> (Word8, Word8, Word8)
     -> Backend (Timed NominalDiffTime ()) e IO (SDL.Surface -> IO ()) a
@@ -40,6 +42,7 @@ sdlBackend ht wd (cr,cg,cb) = Backend runGnuplot
               pix <- SDL.mapRGB (SDL.surfaceGetPixelFormat screen) cr cg cb
               SDL.fillRect screen Nothing pix
 
+              renderSDL mx' zero 1 screen
               r mx' screen
 
               SDL.flip screen
@@ -50,10 +53,15 @@ sdlBackend ht wd (cr,cg,cb) = Backend runGnuplot
 
 
 class SDLRenderable a where
-  renderSDL :: a -> SDL.Surface -> IO ()
+  renderSDL ::
+         a            -- item to render
+      -> V2 Double    -- origin
+      -> Double       -- scale
+      -> SDL.Surface  -- surface
+      -> IO ()
 
 instance SDLRenderable a => SDLRenderable [a] where
-  renderSDL xs s = mapM_ (`renderSDL` s) xs
+  renderSDL xs origin scale s = mapM_ (\x -> renderSDL x origin scale s) xs
 
 rgbColor :: Word8 -> Word8 -> Word8 -> SDL.Pixel
 rgbColor r g b = SDL.Pixel (shiftL (fi r) 24 .|.

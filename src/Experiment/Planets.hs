@@ -8,6 +8,7 @@
 -- import qualified Graphics.UI.SDL         as SDL
 import Control.Category
 import Control.Monad.Writer.Strict
+import Render.Sprite
 import Control.Wire
 import Data.Word
 import Linear.V2
@@ -40,11 +41,10 @@ processPlanetData nStr dStr = zipWith mergeData nData dData
       in  (Planet name 5 (0,0,0) b, v0)
     dData                        = map processLineD $ lines dStr
     processLineD                 = drop 1 . words
-    parseTup str                 = toCol $ read str
-    toCol (r,g,b) = (fromIntegral r, fromIntegral g, fromIntegral b)
     mergeData (p,v0) (rad:col) =
-      ( p { planetRadius = read rad, planetColor = parseTup (unwords col) }
+      ( p { planetRadius = rConst * read rad, planetColor = read (unwords col) }
       , v0)
+    rConst = 0.04
 
 
 data Planet = Planet  { planetName    :: String
@@ -58,32 +58,31 @@ newtype PlanetList = PlanetList [Planet]
 instance GNUPlottable Planet where
   gnuplot (Planet _ _ _ b) = gnuplot b
 
+instance SpriteClass Planet where
+  toSprite (Planet _ r c (Body _ (V3 x y _))) =
+    Sprite (Circle r) (V2 x y) c
+
 instance SDLRenderable PlanetList where
-  renderSDL (PlanetList ps) scr = do
+  renderSDL (PlanetList ps) origin scl scr = do
     let
       ht    = fromIntegral $ SDL.surfaceGetHeight scr
       wd    = fromIntegral $ SDL.surfaceGetHeight scr
-      ctr   = V2 ht wd ^/ 2
-      scale = ht / 20
-    forM_ ps $ \(Planet _ r (cr,cg,cb) (Body _ (V3 x y _))) -> do
-      let
-        pos        = V2 x y ^* scale
-        (V2 x' y') = pos ^+^ ctr
-        col        = rgbColor cr cg cb
+      ctr   = origin ^+^ V2 ht wd ^/ 2
+      scale = scl * ht / 20
+    mapM_ (\p -> renderSDL (toSprite p) ctr scale scr) ps
 
-      -- putStrLn "--"
-      -- print ht
-      -- print wd
-      -- print ctr
-      -- print scale
-      -- print pos
-      -- print pos'
-
-      SDL.filledCircle scr (round x') (round y') (round r) col
 
 -- instance SDLRenderable Planet where
---   renderSDL (Planet n r c b) scr = do
---     return ()
+--   renderSDL (Planet _ r (cr,cg,cb) (Body _ (V3 x y _))) origin scale scr =
+
+
+-- instance SDLRenderable Planet where
+--   renderSDL (Planet _ r (cr,cg,cb) (Body _ (V3 x y _))) origin scale scr =
+--     void $ SDL.filledCircle scr (round x') (round y') (round r) col
+--     where
+--       pos        = V2 x y ^* scale
+--       (V2 x' y') = pos ^+^ origin
+--       col        = rgbColor cr cg cb
 
 main :: IO ()
 main = do
@@ -130,7 +129,8 @@ runTestGNUPlot n w = do
 
 runTestSDL :: Wire (Timed NominalDiffTime ()) String IO () [Planet] -> IO ()
 runTestSDL =
-  runBackend (sdlBackend 600 600 (31,31,31)) (renderSDL . PlanetList)
+  runBackend (sdlBackend 600 600 (31,31,31)) (const . return . return $ ())
+  . (PlanetList <$>)
 
 bTup :: (Planet, V3D) -> (Body, V3D)
 bTup (Planet _ _ _ b0, v0) = (b0, v0)
