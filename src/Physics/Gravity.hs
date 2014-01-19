@@ -6,7 +6,6 @@ module Physics.Gravity
   , twoBody
   , manyFixedBody
   , manyBody
-  , fourBody
   ) where
 
 import Control.Category
@@ -58,21 +57,6 @@ twoBody (b0,v0) (b0',v0') igr = proc _ -> do
     b1 <- bodyGs b0  v0  igr -< [b2]
     b2 <- bodyGs b0' v0' igr -< [b1]
   returnA -< (b1,b2)
-
-fourBody :: (MonadFix m, Monoid e, HasTime t s)
-    => (Body, V3D)
-    -> (Body, V3D)
-    -> (Body, V3D)
-    -> (Body, V3D)
-    -> Integrator
-    -> Wire s e m () (Body,Body,Body,Body)
-fourBody (b1',v1') (b2',v2') (b3',v3') (b4',v4') igr = proc _ -> do
-  rec
-    b1 <- bodyGs b1' v1' igr -< [b2,b3,b4]
-    b2 <- bodyGs b2' v2' igr -< [b1,b3,b4]
-    b3 <- bodyGs b3' v3' igr -< [b1,b2,b4]
-    b4 <- bodyGs b4' v4' igr -< [b1,b2,b3]
-  returnA -< (b1,b2,b3,b4)
 
 -- | Many bodies under the influced of fixed sources
 --
