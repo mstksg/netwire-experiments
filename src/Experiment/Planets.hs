@@ -1,20 +1,25 @@
--- import Control.Monad             (void)
+{-# LANGUAGE FlexibleInstances #-}
+
+-- import Control.Monad                     (void)
 -- import Data.Traversable
 -- import FRP.Netwire
 -- import Linear.Metric
 -- import Utils.Wire.LogWire
--- import qualified Graphics.UI.SDL as SDL
+-- import qualified Graphics.UI.SDL         as SDL
 import Control.Category
 import Control.Monad.Writer.Strict
 import Control.Wire
 import Data.Word
+import Linear.V2
 import Linear.V3
 import Linear.Vector
 import Physics
-import Prelude hiding               ((.), id)
+import Prelude hiding                       ((.), id)
 import Render.Backend.GNUPlot
 import Render.Backend.SDL
 import Render.Render
+import qualified Graphics.UI.SDL            as SDL
+import qualified Graphics.UI.SDL.Primitives as SDL
 
 -- | What is this number?  Well, we want our graviational constant to be 1,
 -- so we normalize with our time unit being a day and our distance unit
@@ -23,15 +28,24 @@ import Render.Render
 mConst :: Double
 mConst = 1.48807874e-34
 
-processPlanetData :: String -> [(Planet, V3D)]
-processPlanetData = map processLine . lines
+processPlanetData :: String -> String -> [(Planet, V3D)]
+processPlanetData nStr dStr = zipWith mergeData nData dData
   where
-    processLine = makeData . words
-    makeData (name:dat) =
+    nData = map processLineN $ lines nStr
+    processLineN = makeDataN . words
+    makeDataN (name:dat) =
       let (m:px:py:pz:vx:vy:vz:_) = map read dat
           b                       = Body (mConst * m) (V3 px py pz)
           v0                      = V3 vx vy vz
-      in  (Planet name 1 (0,0,0) b, v0)
+      in  (Planet name 5 (0,0,0) b, v0)
+    dData                        = map processLineD $ lines dStr
+    processLineD                 = drop 1 . words
+    parseTup str                 = toCol $ read str
+    toCol (r,g,b) = (fromIntegral r, fromIntegral g, fromIntegral b)
+    mergeData (p,v0) (rad:col) =
+      ( p { planetRadius = read rad, planetColor = parseTup (unwords col) }
+      , v0)
+
 
 data Planet = Planet  { planetName    :: String
                       , planetRadius  :: Double
@@ -39,30 +53,50 @@ data Planet = Planet  { planetName    :: String
                       , planetBody    :: Body
                       } deriving (Show)
 
+newtype PlanetList = PlanetList [Planet]
+
 instance GNUPlottable Planet where
   gnuplot (Planet _ _ _ b) = gnuplot b
 
+instance SDLRenderable PlanetList where
+  renderSDL (PlanetList ps) scr = do
+    let
+      ht    = fromIntegral $ SDL.surfaceGetHeight scr
+      wd    = fromIntegral $ SDL.surfaceGetHeight scr
+      ctr   = V2 ht wd ^/ 2
+      scale = ht / 20
+    forM_ ps $ \(Planet _ r (cr,cg,cb) (Body _ (V3 x y _))) -> do
+      let
+        pos        = V2 x y ^* scale
+        (V2 x' y') = pos ^+^ ctr
+        col        = rgbColor cr cg cb
+
+      -- putStrLn "--"
+      -- print ht
+      -- print wd
+      -- print ctr
+      -- print scale
+      -- print pos
+      -- print pos'
+
+      SDL.filledCircle scr (round x') (round y') (round r) col
+
+-- instance SDLRenderable Planet where
+--   renderSDL (Planet n r c b) scr = do
+--     return ()
+
 main :: IO ()
 main = do
-  pData <- processPlanetData <$> readFile "data/planet_data.dat"
-  let
-    sun:mercury:venus:earth:mars:jupiter:saturn:_ = pData
+  pData <- processPlanetData
+    <$> readFile "data/planet_data.dat"
+    <*> readFile "data/planet_display.dat"
   mapM_ print pData
   runMany pData
-  -- runMany [sun,venus,jupiter,saturn]
-  -- runFixed pData
-  -- runTwoBody sun jupiter
-  -- runOneBody b0
-  -- runFourBody sun venus jupiter saturn
-  -- where
-  --   b0 = (Body 1 (V3 4 0 0)   , V3 0 0.5 0 )
-  --   b1 = (Body 3 (V3 (-1) 0 0), V3 0 1 0   )
-  --   b2 = (Body 3 (V3 1 0 0)   , V3 0 (-1) 0)
 
 runMany :: [(Planet, V3D)] -> IO ()
 runMany planets = runTest (length planets) w
   where
-    bwire = manyBody (map bTup planets) verlet
+    bwire = manyBody (map bTup planets) euler
     w = arr (zipWith ($) planetMakers) . bwire
     planetMakers = map (pMaker . fst) planets
 
@@ -86,10 +120,17 @@ runOneBody (p@(Planet _ _ _ b0), v0) = runTest 1 w
   where
     w = map (pMaker p) <$> manyFixedBody [Body 1 zero] [(b0,v0)] verlet
 
-runTest :: Int -> Wire (Timed Double ()) String IO () [Planet] -> IO ()
-runTest n w = do
-    clearLogs 10
-    runBackend (gnuPlotBackend 1 20000) (writeLog n) w
+runTest :: Int -> Wire (Timed NominalDiffTime ()) String IO () [Planet] -> IO ()
+runTest n = runTestSDL
+
+runTestGNUPlot :: Int -> Wire (Timed Double ()) String IO () [Planet] -> IO ()
+runTestGNUPlot n w = do
+  clearLogs 10
+  runBackend (gnuPlotBackend 1 20000) (writeLog n) w
+
+runTestSDL :: Wire (Timed NominalDiffTime ()) String IO () [Planet] -> IO ()
+runTestSDL =
+  runBackend (sdlBackend 600 600 (31,31,31)) (renderSDL . PlanetList)
 
 bTup :: (Planet, V3D) -> (Body, V3D)
 bTup (Planet _ _ _ b0, v0) = (b0, v0)

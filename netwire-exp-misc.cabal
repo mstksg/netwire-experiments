@@ -32,6 +32,7 @@ executable planets
                     , ScopedTypeVariables
                     , RankNTypes
                     , FlexibleContexts
+                    , FlexibleInstances
 
 executable room
   main-is:             Experiment/Room.hs
