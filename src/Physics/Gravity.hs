@@ -6,6 +6,7 @@ module Physics.Gravity
   , twoBody
   , manyFixedBody
   , manyBody
+  , fourBody
   ) where
 
 import Control.Category
@@ -54,9 +55,24 @@ twoBody :: (MonadFix m, Monoid e, HasTime t s)
     -> Wire s e m () (Body,Body)
 twoBody (b0,v0) (b0',v0') igr = proc _ -> do
   rec
-    b1 <- bodyG b0  v0  igr -< b2
-    b2 <- bodyG b0' v0' igr -< b1
+    b1 <- bodyGs b0  v0  igr -< [b2]
+    b2 <- bodyGs b0' v0' igr -< [b1]
   returnA -< (b1,b2)
+
+fourBody :: (MonadFix m, Monoid e, HasTime t s)
+    => (Body, V3D)
+    -> (Body, V3D)
+    -> (Body, V3D)
+    -> (Body, V3D)
+    -> Integrator
+    -> Wire s e m () (Body,Body,Body,Body)
+fourBody (b1',v1') (b2',v2') (b3',v3') (b4',v4') igr = proc _ -> do
+  rec
+    b1 <- bodyGs b1' v1' igr -< [b2,b3,b4]
+    b2 <- bodyGs b2' v2' igr -< [b1,b3,b4]
+    b3 <- bodyGs b3' v3' igr -< [b1,b2,b4]
+    b4 <- bodyGs b4' v4' igr -< [b1,b2,b3]
+  returnA -< (b1,b2,b3,b4)
 
 -- | Many bodies under the influced of fixed sources
 --
@@ -70,13 +86,18 @@ manyFixedBody sources bodyList igr = sequenceA wireList
     toWire (b0, v0) = bodyGs b0 v0 igr . pure sources
     wireList = map toWire bodyList
 
--- | Many bodies undergoing mutual self-interaction
---
-manyBody :: (MonadFix m, Monoid e, HasTime t s)
-    => [(Body, V3D)]
-    -> Integrator
-    -> Wire s e m () [Body]
-manyBody _ _ = undefined
+-- -- | Many bodies undergoing mutual self-interaction
+-- --
+-- manyBody :: (MonadFix m, Monoid e, HasTime t s)
+--     => [(Body, V3D)]
+--     -> Integrator
+--     -> Wire s e m () [Body]
+-- manyBody b0v0s igr = proc _ -> do
+--   rec
+--     ys <- sequenceA (map toWire b0v0s) -< []
+--   returnA -< ys
+--   where
+--     toWire (b0, v0) = bodyGs b0 v0 igr
 
 -- manyBody :: (MonadFix m, Monoid e, HasTime t s)
 --     => [(Body, V3D)]          -- Initial body states and initial velocities
@@ -86,6 +107,39 @@ manyBody _ _ = undefined
 --   where
 --     makeWire (b0, v0) (_, xs) = bodyGs b0 v0 igr . delay [] . seqArrow xs
 --     wireList = zipWith makeWire bodyList (selects wireList)
+
+-- manyBody :: (MonadFix m, Monoid e, HasTime t s)
+--     => [(Body, V3D)]          -- Initial body states and initial velocities
+--     -> Integrator             -- Integrator
+--     -> Wire s e m () [Body]
+-- manyBody bodyList igr = listLoop $ map toWire bodyList
+--   where
+--     toWire (b0, v0) = bodyGs b0 v0 igr
+
+-- listLoop :: MonadFix m => [Wire s e m [a] a] -> Wire s e m () [a]
+-- listLoop l = const [] ^>> go l
+--   where
+--     go [] = arr (const [])
+--     go (r:rs) = proc bs -> do
+--       rec
+--         x <- r . delay [] -< bs ++ xs
+--         xs <- go rs . delay [] -< xs ++ [x]
+--       returnA -< x : xs
+
+manyBody :: forall m e t s. (MonadFix m, Monoid e, HasTime t s)
+    => [(Body, V3D)]          -- Initial body states and initial velocities
+    -> Integrator             -- Integrator
+    -> Wire s e m () [Body]
+manyBody bodyList igr = proc _ -> do
+    rec
+      bs <- bodyWires -< bs
+    returnA -< bs
+  where
+    toWire :: (Body, V3D) -> Wire s e m [Body] Body
+    toWire (b0, v0) = bodyGs b0 v0 igr
+    bodyWires = sequenceA $ map toWire bodyList
+
+
 
 -- seqArrow :: (Arrow r, ArrowLoop r) => [r a b] -> r a [b]
 -- seqArrow []     = proc _ -> returnA -< []
@@ -107,6 +161,7 @@ manyBody _ _ = undefined
   --   wireList <- sequenced
   -- sequenced -<
 
+-- SO version
 -- bar :: (Floating a, Arrow r, Applicative (r ()), ArrowLoop r) => [a] -> r () [a]
 -- bar xs = Tr.sequenceA foos
 --   where
@@ -141,14 +196,16 @@ bodyGravity (Body m1 r1) (Body m2 r2) = gravity 1 m1 r1 m2 r2
 -- | Force of gravity
 --
 gravity ::
-    (Fractional (v a), Floating a, Metric v, Additive v)
+    (Fractional (v a), Floating a, Metric v, Additive v, Eq (v a))
     => a    -- graviational constant
     -> a    -- mass of attractor
     -> v a  -- position of attractor
     -> a    -- mass of object
     -> v a  -- position of self
     -> v a  -- graviational force
-gravity g m1 r1 m2 r2 = mag *^ signorm r
+gravity g m1 r1 m2 r2
+    | r1 == r2  = zero
+    | otherwise = mag *^ signorm r
   where
     r = r1 ^-^ r2
     mag = g * m1 * m2 / (norm r ** 2)

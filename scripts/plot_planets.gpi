@@ -31,6 +31,7 @@ set ylabel "y (AU)";
 set zlabel "z (AU)";
 set yrange [-32.5:46.5];
 set xrange [-33:46];
+set zrange [-10:10];
 set size ratio 1;
 
 splot   "out/planets_b0.dat" with lines title "Sun", \

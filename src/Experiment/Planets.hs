@@ -32,20 +32,22 @@ processPlanetData = map processLine . lines
 main :: IO ()
 main = do
   pData <- processPlanetData <$> readFile "data/planet_data.dat"
-  -- let
-  --   sun:_:_:_:_:jupiter:_ = pData
+  let
+    sun:mercury:venus:earth:mars:jupiter:saturn:_ = pData
   mapM_ print pData
-  -- runMany pData
-  runFixed pData
+  runMany pData
+  -- runMany [sun,venus,jupiter,saturn]
+  -- runFixed pData
   -- runTwoBody sun jupiter
   -- runOneBody b0
+  -- runFourBody sun venus jupiter saturn
   where
     b0 = (Body 1 (V3 4 0 0)   , V3 0 0.5 0 )
     b1 = (Body 3 (V3 (-1) 0 0), V3 0 1 0   )
     b2 = (Body 3 (V3 1 0 0)   , V3 0 (-1) 0)
 
 runMany :: [(Body, V3D)] -> IO ()
-runMany planets = runTest 9 $ manyBody planets verlet
+runMany planets = runTest (length planets) $ manyBody planets verlet
 
 runFixed :: [(Body, V3D)] -> IO ()
 runFixed pData = runTest 9 $ manyFixedBody [sun] planets verlet
@@ -60,14 +62,18 @@ runOneBody b = runTest 1 w
   where
     w = manyFixedBody [Body 1 zero] [b] verlet
 
+runFourBody :: (Body,V3D) -> (Body,V3D) -> (Body,V3D) -> (Body,V3D) -> IO ()
+runFourBody b1 b2 b3 b4 =
+  runTest 4 $ arr (\(a,b,c,d) -> [a,b,c,d]) . fourBody b1 b2 b3 b4 verlet
+
 
 runTest :: Int -> Wire (Timed Double ()) String IO () [Body] -> IO ()
 runTest n w = do
   clearLogs 10
-  testWireRight
-    12000
-    ((1/2) :: Double)
-    (writeLog n)
+  testWire'
+    20000
+    (1 :: Double)
+    (either print (writeLog n))
     w
 
 clearLogs :: Int -> IO ()
