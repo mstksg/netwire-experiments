@@ -12,6 +12,7 @@ import Linear.Vector
 import Physics
 import Prelude hiding               ((.), id)
 import Render.Backend.GNUPlot
+import Render.Backend.SDL
 import Render.Render
 
 -- | What is this number?  Well, we want our graviational constant to be 1,

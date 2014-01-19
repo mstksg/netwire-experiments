@@ -21,6 +21,7 @@ executable planets
   -- other-extensions:
   build-depends:       base >=4.6 && <4.7
                      , SDL ==0.6.5
+                     , SDL-gfx ==0.6.0
                      , netwire ==5.0.0
                      , linear ==1.0.1
                      , mtl ==2.1.2
@@ -38,6 +39,7 @@ executable room
   -- other-extensions:
   build-depends:       base >=4.6 && <4.7
                      , SDL ==0.6.5
+                     , SDL-gfx ==0.6.0
                      , netwire ==5.0.0
                      , linear ==1.0.1
                      , mtl ==2.1.2
