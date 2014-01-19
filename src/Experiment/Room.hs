@@ -1,6 +1,7 @@
 
 -- import Control.Wire
--- import Utils.Helpers     (wee)
+-- import Render.Render
+-- import Utils.Helpers       (wee)
 import Control.Category
 import Control.Monad
 import Control.Monad.Fix
@@ -9,9 +10,9 @@ import FRP.Netwire
 import Linear.V3
 import Linear.Vector
 import Physics
-import Prelude hiding       ((.), id)
-import Utils.Output.GNUPlot
-import Utils.Wire.TestWire
+import Prelude hiding         ((.), id)
+import Render.Backend.GNUPlot
+import Render.Render
 
 fr :: Double
 fr = 60
@@ -28,12 +29,9 @@ main = do
     bCount = length roomBodyList
 
 runTest :: Int -> Wire (Timed Double ()) String IO () [Body] -> IO ()
-runTest n =
-  testWire'
-    (round $ fr*6)
-    (1/fr)
-    -- (writeLog n)
-    (either print (writeLog n))
+runTest n w = do
+    clearLogs 10
+    runBackend (gnuPlotBackend (1/fr) (round (fr*6))) (writeLog n) w
 
 clearLogs :: Int -> IO ()
 clearLogs n = forM_ [0..(n-1)] $ \i ->

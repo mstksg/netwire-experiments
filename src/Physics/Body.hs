@@ -7,19 +7,19 @@ module Physics.Body
   , bodyFConstrained
   ) where
 
+-- import FRP.Netwire
 import Control.Category
 import Control.Monad.Writer.Strict
 import Control.Wire
-import Linear.Metric
-import Utils.Wire.Interval
 import Data.Maybe                  (mapMaybe, isJust, fromMaybe)
+import Linear.Metric
 import Linear.V3
 import Linear.Vector
-import FRP.Netwire
 import Physics.Integrator
 import Physics.Physics
 import Prelude hiding              ((.), id)
-import Utils.Output.GNUPlot
+import Render.Backend.GNUPlot
+import Utils.Wire.Interval
 
 -- | Represents a point with mass and position
 --

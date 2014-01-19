@@ -11,8 +11,8 @@ import Linear.V3
 import Linear.Vector
 import Physics
 import Prelude hiding               ((.), id)
-import Utils.Output.GNUPlot
-import Utils.Wire.TestWire
+import Render.Backend.GNUPlot
+import Render.Render
 
 -- | What is this number?  Well, we want our graviational constant to be 1,
 -- so we normalize with our time unit being a day and our distance unit
@@ -69,12 +69,8 @@ runFourBody b1 b2 b3 b4 =
 
 runTest :: Int -> Wire (Timed Double ()) String IO () [Body] -> IO ()
 runTest n w = do
-  clearLogs 10
-  testWire'
-    20000
-    (1 :: Double)
-    (either print (writeLog n))
-    w
+    clearLogs 10
+    runBackend (gnuPlotBackend 1 20000) (writeLog n) w
 
 clearLogs :: Int -> IO ()
 clearLogs n = forM_ [0..(n-1)] $ \i ->
