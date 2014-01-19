@@ -1,3 +1,5 @@
+{-# LANGUAGE UndecidableInstances, FlexibleInstances #-}
+
 module Render.Sprite where
 
 import Control.Monad                        (void)
@@ -7,16 +9,27 @@ import Linear.Vector
 import Render.Backend.SDL
 import qualified Graphics.UI.SDL.Primitives as SDL
 
-data Sprite = Sprite SpriteShape (V2 Double) Color
+data SpritePrim = SpritePrim SpriteShape (V2 Double) Color
 
 data SpriteShape = Circle Double
+
+newtype Sprite = Sprite [SpritePrim]
 type Color = (Word8,Word8,Word8)
 
 class SpriteClass s where
   toSprite :: s -> Sprite
 
-instance SDLRenderable Sprite where
-  renderSDL (Sprite sh pos (cr,cg,cb)) origin scl scr =
+class SpritePrimClass s where
+  toSpritePrim :: s -> SpritePrim
+
+instance SpriteClass SpritePrim where
+  toSprite = Sprite . return
+
+instance SpritePrimClass s => SpriteClass s where
+  toSprite = Sprite . return . toSpritePrim
+
+instance SDLRenderable SpritePrim where
+  renderSDL (SpritePrim sh pos (cr,cg,cb)) origin scl scr =
     case sh of
       Circle r ->
         let r' = r * scl
@@ -24,7 +37,11 @@ instance SDLRenderable Sprite where
     where
       V2 x' y' = origin ^+^ pos ^* scl
       col      = rgbColor cr cg cb
-    
+
+instance SDLRenderable Sprite where
+  renderSDL (Sprite sprites) origin scl scr =
+    mapM_ (\s -> renderSDL s origin scl scr) sprites
+
 
 -- instance SDLRenderable PlanetList where
 --   renderSDL (PlanetList ps) origin scl scr = do

@@ -58,9 +58,9 @@ newtype PlanetList = PlanetList [Planet]
 instance GNUPlottable Planet where
   gnuplot (Planet _ _ _ b) = gnuplot b
 
-instance SpriteClass Planet where
-  toSprite (Planet _ r c (Body _ (V3 x y _))) =
-    Sprite (Circle r) (V2 x y) c
+instance SpritePrimClass Planet where
+  toSpritePrim (Planet _ r c (Body _ (V3 x y _))) =
+    SpritePrim (Circle r) (V2 x y) c
 
 instance SDLRenderable PlanetList where
   renderSDL (PlanetList ps) origin scl scr = do
