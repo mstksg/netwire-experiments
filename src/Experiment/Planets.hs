@@ -71,6 +71,14 @@ instance SDLRenderable PlanetList where
       scale = scl * ht / 20
     mapM_ (\p -> renderSDL (toSprite p) ctr scale scr) ps
 
+-- instance SpriteClass PlanetList where
+--   toSprite (PlanetList ps) = Sprite (map spr ps)
+--     where
+--       spr (Planet _ r c (Body _ (V3 x y _)))
+
+
+
+
 
 -- instance SDLRenderable Planet where
 --   renderSDL (Planet _ r (cr,cg,cb) (Body _ (V3 x y _))) origin scale scr =
@@ -125,12 +133,11 @@ runTest n = runTestSDL
 runTestGNUPlot :: Int -> Wire (Timed Double ()) String IO () [Planet] -> IO ()
 runTestGNUPlot n w = do
   clearLogs 10
-  runBackend (gnuPlotBackend 1 20000) (writeLog n) w
+  runBackend (gnuPlotBackend 1 20000) (writeLog n) (w . pure ())
 
 runTestSDL :: Wire (Timed NominalDiffTime ()) String IO () [Planet] -> IO ()
-runTestSDL =
-  runBackend (sdlBackend 600 600 (31,31,31)) (const . return . return $ ())
-  . (PlanetList <$>)
+runTestSDL w =
+  runBackend (sdlBackend 600 600 (31,31,31)) (const . return . return $ ()) (PlanetList <$> w . pure ())
 
 bTup :: (Planet, V3D) -> (Body, V3D)
 bTup (Planet _ _ _ b0, v0) = (b0, v0)

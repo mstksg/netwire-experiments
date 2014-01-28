@@ -1,11 +1,13 @@
 module Render.Backend.SDL where
 
 import Control.Wire
-import Linear.Vector
+import Control.Wire.Unsafe.Event
 import Data.Bits
+import Data.Maybe (mapMaybe)
 import Data.Word
-import Render.Render
 import Linear.V2
+import Linear.Vector
+import Render.Render
 import qualified Graphics.UI.SDL           as SDL
 import qualified Graphics.UI.SDL.Framerate as Framerate
 
@@ -14,11 +16,11 @@ sdlBackend :: SDLRenderable a
     -> Int
     -> (Word8, Word8, Word8)
     -> Backend (Timed NominalDiffTime ()) e IO (SDL.Surface -> IO ()) a
-sdlBackend ht wd (cr,cg,cb) = Backend runGnuplot
+sdlBackend ht wd (cr,cg,cb) = Backend runSdl
   where
     fr = 120
     simDt = 2/60
-    runGnuplot r wr = SDL.withInit [SDL.InitEverything] $ do
+    runSdl r wr = SDL.withInit [SDL.InitEverything] $ do
       screen <- SDL.setVideoMode ht wd 32 [SDL.SWSurface]--, SDL.Fullscreen]
 
       frameRate <- Framerate.new
@@ -31,8 +33,10 @@ sdlBackend ht wd (cr,cg,cb) = Backend runGnuplot
       where
         go screen s' w' frameRate = do
 
+          sdlEvents <- processSDLEvent <$> SDL.pollEvent
+
           (ds, s) <- stepSession s'
-          (mx, w) <- stepWire w' ds (Right ())
+          (mx, w) <- stepWire w' ds (Right sdlEvents)
 
           case mx of
             Right mx' -> do
@@ -42,8 +46,8 @@ sdlBackend ht wd (cr,cg,cb) = Backend runGnuplot
               pix <- SDL.mapRGB (SDL.surfaceGetPixelFormat screen) cr cg cb
               SDL.fillRect screen Nothing pix
 
-              renderSDL mx' zero 1 screen
               r mx' screen
+              renderSDL mx' zero 1 screen
 
               SDL.flip screen
 
@@ -69,3 +73,41 @@ rgbColor r g b = SDL.Pixel (shiftL (fi r) 24 .|.
                             shiftL (fi b) 8  .|.
                             255)
   where fi = fromIntegral
+
+processSDLEvent :: SDL.Event -> Event RenderEvent
+processSDLEvent SDL.NoEvent = NoEvent
+processSDLEvent (SDL.KeyDown sym) = Event $ RenderKeyDown (sdlKey sym)
+processSDLEvent (SDL.KeyUp sym) = Event $ RenderKeyUp (sdlKey sym)
+processSDLEvent (SDL.MouseButtonDown x y b) = Event $ RenderMouseDown (fromIntegral x,fromIntegral y) (sdlMouse b)
+processSDLEvent (SDL.MouseButtonUp x y b) = Event $ RenderMouseUp (fromIntegral x,fromIntegral y) (sdlMouse b)
+processSDLEvent SDL.Quit = Event RenderQuit
+processSDLEvent _ = Event RenderUnknownEvent
+
+sdlKey :: SDL.Keysym -> RenderKeyData
+sdlKey (SDL.Keysym _ m u) =
+  RenderKeyData
+    (fromEnum u)
+    (mapMaybe sdlModifier m)
+
+sdlMouse :: SDL.MouseButton -> RenderMouseButton
+sdlMouse SDL.ButtonLeft = RenderMouseLeft
+sdlMouse SDL.ButtonMiddle = RenderMouseMiddle
+sdlMouse SDL.ButtonRight = RenderMouseRight
+sdlMouse SDL.ButtonWheelUp = RenderMouseWheelUp
+sdlMouse SDL.ButtonWheelDown = RenderMouseWheelDown
+sdlMouse _ = RenderMouseButtonUnknown
+
+sdlModifier :: SDL.Modifier -> Maybe RenderKeyModifier
+sdlModifier SDL.KeyModLeftShift = Just RenderKeyShift
+sdlModifier SDL.KeyModRightShift = Just RenderKeyShift
+sdlModifier SDL.KeyModLeftAlt = Just RenderKeyAlt
+sdlModifier SDL.KeyModRightAlt = Just RenderKeyAlt
+sdlModifier _ = Nothing
+
+-- data RenderEvent = RenderKeyDown RenderKeyData
+--                  | RenderKeyUp RenderKeyData
+--                  | RenderMouseDown (Double,Double) RenderMouseButton
+--                  | RenderMouseUp (Double,Double) RenderMouseButton
+--                  | RenderQuit
+--                  | RenderNullEvent
+--                  | RenderUnknownEvent

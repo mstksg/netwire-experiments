@@ -31,7 +31,7 @@ main = do
 runTest :: Int -> Wire (Timed Double ()) String IO () [Body] -> IO ()
 runTest n w = do
     clearLogs 10
-    runBackend (gnuPlotBackend (1/fr) (round (fr*6))) (writeLog n) w
+    runBackend (gnuPlotBackend (1/fr) (round (fr*6))) (writeLog n) (w . pure ())
 
 clearLogs :: Int -> IO ()
 clearLogs n = forM_ [0..(n-1)] $ \i ->
