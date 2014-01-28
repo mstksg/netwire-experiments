@@ -16,14 +16,16 @@ data RenderEvent = RenderKeyDown RenderKeyData
                  | RenderQuit
                  | RenderNullEvent
                  | RenderUnknownEvent
+                 deriving (Show)
 
 data RenderKeyData = RenderKeyData { renderKeyDataKey :: Int
                                    , renderKeyDataModifiers :: [RenderKeyModifier]
-                                   }
+                                   } deriving (Show)
 
 data RenderKeyModifier = RenderKeyShift
                        | RenderKeyAlt
                        | RenderKeyCtrl
+                       deriving (Show)
 
 data RenderMouseButton = RenderMouseLeft
                        | RenderMouseMiddle
@@ -31,3 +33,9 @@ data RenderMouseButton = RenderMouseLeft
                        | RenderMouseWheelUp
                        | RenderMouseWheelDown
                        | RenderMouseButtonUnknown
+                       deriving (Show)
+
+isMouseEvent :: RenderEvent -> Bool
+isMouseEvent (RenderMouseDown {}) = True
+isMouseEvent (RenderMouseUp {})   = True
+isMouseEvent _                    = False

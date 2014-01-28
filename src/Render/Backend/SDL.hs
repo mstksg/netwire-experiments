@@ -1,9 +1,10 @@
 module Render.Backend.SDL where
 
+-- import Control.Monad                       as M
 import Control.Wire
 import Control.Wire.Unsafe.Event
 import Data.Bits
-import Data.Maybe (mapMaybe)
+import Data.Maybe                          (mapMaybe)
 import Data.Word
 import Linear.V2
 import Linear.Vector
@@ -18,8 +19,8 @@ sdlBackend :: SDLRenderable a
     -> Backend (Timed NominalDiffTime ()) e IO (SDL.Surface -> IO ()) a
 sdlBackend ht wd (cr,cg,cb) = Backend runSdl
   where
-    fr = 120
-    simDt = 2/60
+    fr = 30
+    simDt = 1/30
     runSdl r wr = SDL.withInit [SDL.InitEverything] $ do
       screen <- SDL.setVideoMode ht wd 32 [SDL.SWSurface]--, SDL.Fullscreen]
 
@@ -33,10 +34,14 @@ sdlBackend ht wd (cr,cg,cb) = Backend runSdl
       where
         go screen s' w' frameRate = do
 
-          sdlEvents <- processSDLEvent <$> SDL.pollEvent
+          renderEvent <- processSDLEvent <$> SDL.pollEvent
+
+          case renderEvent of
+            NoEvent -> return ()
+            Event e -> print e
 
           (ds, s) <- stepSession s'
-          (mx, w) <- stepWire w' ds (Right sdlEvents)
+          (mx, w) <- stepWire w' ds (Right renderEvent)
 
           case mx of
             Right mx' -> do
