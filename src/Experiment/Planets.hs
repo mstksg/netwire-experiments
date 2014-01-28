@@ -1,4 +1,4 @@
-{-# LANGUAGE FlexibleInstances #-}
+module Main where
 
 -- import Control.Monad                     (void)
 -- import FRP.Netwire
@@ -20,7 +20,6 @@ import Render.Backend.SDL
 import Render.Render
 import Render.Sprite
 import qualified Graphics.UI.SDL            as SDL
-import qualified Graphics.UI.SDL.Primitives as SDL
 
 -- | What is this number?  Well, we want our graviational constant to be 1,
 -- so we normalize with our time unit being a day and our distance unit
@@ -58,9 +57,9 @@ newtype PlanetList = PlanetList [Planet]
 instance GNUPlottable Planet where
   gnuplot (Planet _ _ _ b) = gnuplot b
 
-instance SpritePrimClass Planet where
-  toSpritePrim (Planet _ r c (Body _ (V3 x y _))) =
-    SpritePrim (Circle r) (V2 x y) c
+instance SpriteClass Planet where
+  toSprite (Planet _ r c (Body _ (V3 x y _))) =
+    Sprite [SpritePrim (Circle r) (V2 x y) c]
 
 instance SDLRenderable PlanetList where
   renderSDL (PlanetList ps) origin scl scr = do
@@ -141,7 +140,7 @@ runOneBody (p@(Planet _ _ _ b0), v0) = runTest 1 (w . pure ())
     w = map (pMaker p) <$> manyFixedBody [Body 1 zero] [(b0,v0)] verlet
 
 runTest :: Int -> Wire (Timed Double ()) String IO (Event RenderEvent) [Planet] -> IO ()
-runTest n = runTestSDL
+runTest _ = runTestSDL
 -- runTest n = runTestGNUPlot n
 
 runTestGNUPlot :: Int -> Wire (Timed Double ()) String IO (Event RenderEvent) [Planet] -> IO ()

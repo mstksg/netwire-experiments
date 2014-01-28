@@ -1,5 +1,3 @@
-{-# LANGUAGE Arrows #-}
-
 module Physics.Body
   ( Body(..)
   , bodyF
@@ -117,10 +115,10 @@ bodyFConstrained c b0@(Body m _) v0 igr = proc fs -> do
 --     -> Wire s e m V3D [V3D]
 -- impulses c = proc x -> undefined -< undefined
 
-impulses :: forall m e s. (MonadFix m, Monoid e, HasTime Double s)
+_impulses :: forall m e s. (MonadFix m, Monoid e, HasTime Double s)
     => (V3D -> Maybe V3D)
     -> Wire s e m V3D [V3D]
-impulses c = mkSF (p [])
+_impulses c = mkSF (p [])
   where
     -- impulse magnitude, impulse direction, impulse duration
     p :: [(V3D, (V3D, Double))] -> s -> V3D -> ([V3D], Wire s e m V3D [V3D])
@@ -132,16 +130,15 @@ impulses c = mkSF (p [])
               -> (iunit ^* 50, (iunit, dt)) : downed
             _ -> downed
       in (map fst downed', mkSF (p downed'))
-
     countdown dt (ivec, (iunit, idur)) =
       let down = idur - dt
       in  if down > 0
             then Just (ivec, (iunit, down))
             else Nothing
 
-impulses' :: (MonadFix m, Monoid e, HasTime Double s)
+_impulses' :: (MonadFix m, Monoid e, HasTime Double s)
     => Wire s e m (Event ()) ()
-impulses' = undefined
+_impulses' = undefined
 
 -- impulse' :: (MonadFix m, Monoid e, HasTime Double s)
 --     => V3D

@@ -1,9 +1,8 @@
-{-# LANGUAGE UndecidableInstances, FlexibleInstances #-}
-
 module Render.Sprite where
 
 import Control.Monad                        (void)
 import Data.Word
+import qualified Graphics.UI.SDL as SDL
 import Linear.V2
 import Linear.Vector
 import Render.Backend.SDL
@@ -19,28 +18,38 @@ type Color = (Word8,Word8,Word8)
 class SpriteClass s where
   toSprite :: s -> Sprite
 
-class SpritePrimClass s where
-  toSpritePrim :: s -> SpritePrim
+-- class SpritePrimClass s where
+--   toSpritePrim :: s -> SpritePrim
 
 instance SpriteClass SpritePrim where
   toSprite = Sprite . return
 
-instance SpritePrimClass s => SpriteClass s where
-  toSprite = Sprite . return . toSpritePrim
+-- instance SpritePrimClass s => SpriteClass s where
+--   toSprite = Sprite . return . toSpritePrim
 
-instance SDLRenderable SpritePrim where
-  renderSDL (SpritePrim sh pos (cr,cg,cb)) origin scl scr =
-    case sh of
-      Circle r ->
-        let r' = r * scl
-        in void $ SDL.filledCircle scr (round x') (round y') (round r') col
-    where
-      V2 x' y' = origin ^+^ pos ^* scl
-      col      = rgbColor cr cg cb
+-- instance SDLRenderable SpritePrim where
+--   renderSDL (SpritePrim sh pos (cr,cg,cb)) origin scl scr =
+--     case sh of
+--       Circle r ->
+--         let r' = r * scl
+--         in void $ SDL.filledCircle scr (round x') (round y') (round r') col
+--     where
+--       V2 x' y' = origin ^+^ pos ^* scl
+--       col      = rgbColor cr cg cb
 
 instance SDLRenderable Sprite where
   renderSDL (Sprite sprites) origin scl scr =
-    mapM_ (\s -> renderSDL s origin scl scr) sprites
+    mapM_ (\s -> renderPrimitive s origin scl scr) sprites
+
+renderPrimitive :: SpritePrim -> V2 Double -> Double -> SDL.Surface -> IO ()
+renderPrimitive (SpritePrim sh pos (cr,cg,cb)) origin scl scr =
+  case sh of
+    Circle r ->
+      let r' = r * scl
+      in void $ SDL.filledCircle scr (round x') (round y') (round r') col
+  where
+    V2 x' y' = origin ^+^ pos ^* scl
+    col      = rgbColor cr cg cb
 
 
 -- instance SDLRenderable PlanetList where

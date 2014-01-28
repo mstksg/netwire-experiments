@@ -1,5 +1,3 @@
--- {-# LANGUAGE Arrows #-}
-
 module Physics.Physics where
 
 import Linear.V3

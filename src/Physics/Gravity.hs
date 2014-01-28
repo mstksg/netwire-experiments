@@ -1,5 +1,3 @@
-{-# LANGUAGE Arrows #-}
-
 module Physics.Gravity
   ( bodyG
   , bodyGs
