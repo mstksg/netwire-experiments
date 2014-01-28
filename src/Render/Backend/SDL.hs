@@ -16,7 +16,7 @@ sdlBackend :: SDLRenderable a
     => Int
     -> Int
     -> (Word8, Word8, Word8)
-    -> Backend (Timed NominalDiffTime ()) e IO (SDL.Surface -> IO ()) a
+    -> Backend (Timed Double ()) e IO (SDL.Surface -> IO ()) a
 sdlBackend ht wd (cr,cg,cb) = Backend runSdl
   where
     fr = 30

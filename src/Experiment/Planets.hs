@@ -89,7 +89,7 @@ runMany planets = runTest (length planets) (w . pure ())
 runManyMouse :: [(Planet, V3D)] -> IO ()
 runManyMouse planets = runTest (length planets + 1) w
   where
-    bwire = manyBody' (map bTup planets) euler
+    bwire = manyBody' (map bTup planets) verlet
     w = zipWith ($) planetMakers <$> bwire
     planetMakers = map (pMaker . fst) (planets ++ [extraPlanet])
     extraPlanet = (Planet "Bob" 0.1 (255,255,255) (Body 0 zero), zero)
@@ -110,10 +110,10 @@ manyBody' bodyList igr = proc e -> do
     mouseBody :: Wire s e m ([Body], Event RenderEvent) Body
     mouseBody = proc (_,e) -> do
       t <- realToFrac . (/5) <$> time -< ()
-      let pos = 2.5 *^ V3 (sin t) (cos t) 0
+      let pos = 2.5 *^ V3 (sin t) (cos t) (sin ((t+1)/2) / 4)
       lastMouse <- hold . filterE isMouseEvent <|> pure emptyMouse-< e
       returnA -< case lastMouse of
-        RenderMouseDown _ RenderMouseLeft -> Body 0.25 pos
+        RenderMouseDown _ RenderMouseLeft -> Body 0.5 pos
         _ -> Body 0 pos
       -- returnA -< Body 0 1
     emptyMouse :: RenderEvent
@@ -140,16 +140,16 @@ runOneBody (p@(Planet _ _ _ b0), v0) = runTest 1 (w . pure ())
   where
     w = map (pMaker p) <$> manyFixedBody [Body 1 zero] [(b0,v0)] verlet
 
-runTest :: Int -> Wire (Timed NominalDiffTime ()) String IO (Event RenderEvent) [Planet] -> IO ()
+runTest :: Int -> Wire (Timed Double ()) String IO (Event RenderEvent) [Planet] -> IO ()
 runTest n = runTestSDL
 -- runTest n = runTestGNUPlot n
 
-runTestGNUPlot :: Int -> Wire (Timed NominalDiffTime ()) String IO (Event RenderEvent) [Planet] -> IO ()
+runTestGNUPlot :: Int -> Wire (Timed Double ()) String IO (Event RenderEvent) [Planet] -> IO ()
 runTestGNUPlot n w = do
   clearLogs 10
   runBackend (gnuPlotBackend 1 20000) (writeLog n) w
 
-runTestSDL :: Wire (Timed NominalDiffTime ()) String IO (Event RenderEvent) [Planet] -> IO ()
+runTestSDL :: Wire (Timed Double ()) String IO (Event RenderEvent) [Planet] -> IO ()
 runTestSDL w =
   runBackend (sdlBackend 600 600 (31,31,31)) (const . return . return $ ()) (PlanetList <$> w)
 
