@@ -94,11 +94,13 @@ instance SDLRenderable Sprite where
             drawFunc = fromFilling f SDL.polygon SDL.filledPolygon
         Line (V2 x0 y0) (V2 x1 y1)
           | x0 == x1  ->
-              SDL.vLine scr (round x0) (round y0) (round y1)
+              SDL.vLine scr (round (x+x0)) (round (y+y0)) (round (y+y1))
           | y0 == y1  ->
-              SDL.hLine scr (round x0) (round x1) (round y0)
+              SDL.hLine scr (round (x+x0)) (round (x+x1)) (round (y+y0))
           | otherwise ->
-              SDL.line scr (round x0) (round y0) (round x1) (round y1)
+              SDL.line scr
+                (round (x+x0)) (round (y+y0))
+                (round (x+x1)) (round (y+y1))
       col = rgbColor cr cg cb
 
 rgbColor :: Word8 -> Word8 -> Word8 -> SDL.Pixel

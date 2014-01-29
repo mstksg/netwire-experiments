@@ -28,7 +28,7 @@ data AArrow = AArrow Body
 
 instance HasSprite AArrow where
   toSprite (AArrow (Body _ (V3 x y _))) =
-    Sprite (V2 x y) (Circle 3 Filled) (0,0,0)
+    Sprite (V2 x y) (Line (V2 (-2) 0) (V2 2 0)) (0,0,0)
 
 instance HasSurface Stage where
   toSurface (Stage w h _ as) =
