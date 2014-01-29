@@ -1,25 +1,26 @@
 module Main where
 
--- import Control.Monad                     (void)
+-- import Control.Monad             (void)
 -- import FRP.Netwire
 -- import Linear.Metric
 -- import Utils.Wire.LogWire
--- import qualified Graphics.UI.SDL         as SDL
+-- import qualified Graphics.UI.SDL as SDL
 import Control.Category
 import Control.Monad.Writer.Strict
-import Control.Wire                         as W
+import Control.Wire                 as W
 import Data.Traversable
 import Data.Word
 import Linear.V2
 import Linear.V3
 import Linear.Vector
 import Physics
-import Prelude hiding                       ((.), id)
+import Prelude hiding               ((.), id)
 import Render.Backend.GNUPlot
 import Render.Backend.SDL
 import Render.Render
 import Render.Sprite
-import qualified Graphics.UI.SDL            as SDL
+import Render.Surface
+import qualified Graphics.UI.SDL    as SDL
 
 -- | What is this number?  Well, we want our graviational constant to be 1,
 -- so we normalize with our time unit being a day and our distance unit
@@ -57,18 +58,35 @@ newtype PlanetList = PlanetList [Planet]
 instance GNUPlottable Planet where
   gnuplot (Planet _ _ _ b) = gnuplot b
 
-instance SpriteClass Planet where
+instance HasSprite Planet where
   toSprite (Planet _ r c (Body _ (V3 x y _))) =
-    Sprite [SpritePrim (Circle r) (V2 x y) c]
+    Sprite (V2 x y) (Circle r) c
+
+instance HasSurface PlanetList where
+  toSurface (PlanetList ps) = Surface zero idTrans (map toSprite ps) []
 
 instance SDLRenderable PlanetList where
-  renderSDL (PlanetList ps) origin scl scr = do
+  renderSDL pl origin scl scr = do
     let
       ht    = fromIntegral $ SDL.surfaceGetHeight scr
       wd    = fromIntegral $ SDL.surfaceGetHeight scr
       ctr   = origin ^+^ V2 ht wd ^/ 2
       scale = scl * ht / 20
-    mapM_ (\p -> renderSDL (toSprite p) ctr scale scr) ps
+      sList = toSpriteList ctr (transScale scale) (toSurface pl)
+    forM_ sList $ \s -> renderSDL s origin scl scr
+
+-- instance SpriteClass Planet where
+--   toSprite (Planet _ r c (Body _ (V3 x y _))) =
+--     toSprite (SpritePrim (Circle r) (V2 x y) c)
+
+-- instance SDLRenderable PlanetList where
+--   renderSDL (PlanetList ps) origin scl scr = do
+--     let
+--       ht    = fromIntegral $ SDL.surfaceGetHeight scr
+--       wd    = fromIntegral $ SDL.surfaceGetHeight scr
+--       ctr   = origin ^+^ V2 ht wd ^/ 2
+--       scale = scl * ht / 20
+--     mapM_ (\p -> renderSDL (toSprite p) ctr scale scr) ps
 
 main :: IO ()
 main = do

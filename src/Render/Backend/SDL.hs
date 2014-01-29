@@ -1,16 +1,19 @@
 module Render.Backend.SDL where
 
--- import Control.Monad                       as M
+import Control.Monad
 import Control.Wire
 import Control.Wire.Unsafe.Event
 import Data.Bits
-import Data.Maybe                          (mapMaybe)
+import Data.Maybe                           (mapMaybe)
 import Data.Word
 import Linear.V2
 import Linear.Vector
 import Render.Render
-import qualified Graphics.UI.SDL           as SDL
-import qualified Graphics.UI.SDL.Framerate as Framerate
+import Render.Sprite
+import Render.Surface
+import qualified Graphics.UI.SDL            as SDL
+import qualified Graphics.UI.SDL.Framerate  as Framerate
+import qualified Graphics.UI.SDL.Primitives as SDL
 
 sdlBackend :: SDLRenderable a
     => Int
@@ -60,7 +63,6 @@ sdlBackend ht wd (cr,cg,cb) = Backend runSdl
 
             Left _ -> return ()
 
-
 class SDLRenderable a where
   renderSDL ::
          a            -- item to render
@@ -69,8 +71,46 @@ class SDLRenderable a where
       -> SDL.Surface  -- surface
       -> IO ()
 
-instance SDLRenderable a => SDLRenderable [a] where
-  renderSDL xs origin scale s = mapM_ (\x -> renderSDL x origin scale s) xs
+
+instance SDLRenderable Surface where
+  renderSDL s origin scl scr =
+      forM_ sprs $ \spr -> renderSDL spr origin scl scr
+    where
+      sprs = toSpriteList' s
+
+instance SDLRenderable Sprite where
+  renderSDL (Sprite p sh (cr,cg,cb)) origin scl scr =
+    case sh of
+      Circle r -> void $
+          SDL.filledCircle scr (round x') (round y') (round r') col
+        where
+          r' = r * scl
+      -- _ -> return ()
+    where
+      V2 x' y' = origin ^+^ p ^* scl
+      col = rgbColor cr cg cb
+
+-- instance HasSurface s => SDLRenderable s where
+--   renderSDL s origin scl scr = renderSDL (toSurface s) origin scl scr
+
+-- instance SDLRenderable Sprite where
+--   renderSDL (Sprite sprites) origin scl scr =
+--     mapM_ (\s -> renderPrimitiveSDL s origin scl scr) sprites
+
+-- instance SDLRenderable a => SDLRenderable [a] where
+--   renderSDL xs origin scale s = mapM_ (\x -> renderSDL x origin scale s) xs
+
+-- renderPrimitiveSDL :: Sprite -> V2 Double -> Double -> SDL.Surface -> IO ()
+-- renderPrimitiveSDL (Sprite sh pos (cr,cg,cb)) origin scl scr =
+--   case sh of
+--     Circle r ->
+--       let r' = r * scl
+--       in void $ SDL.filledCircle scr (round x') (round y') (round r') col
+--   where
+--     V2 x' y' = origin ^+^ pos ^* scl
+--     col      = rgbColor cr cg cb
+
+
 
 rgbColor :: Word8 -> Word8 -> Word8 -> SDL.Pixel
 rgbColor r g b = SDL.Pixel (shiftL (fi r) 24 .|.
