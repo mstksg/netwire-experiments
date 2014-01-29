@@ -23,18 +23,27 @@ data Stage = Stage { stageWidth :: Double
                    , stageArrows :: [AArrow]
                    }
 
-data Archer = Archer Body
-data AArrow = AArrow Body
+type Angle = Double
 
-instance HasSprite AArrow where
-  toSprite (AArrow (Body _ (V3 x y _))) =
-    Sprite (V2 x y) (Line (V2 (-2) 0) (V2 2 0)) (0,0,0)
+data Archer = Archer Body
+data AArrow = AArrow Body Angle
+
+-- instance HasSprite AArrow where
+--   toSprite (AArrow (Body _ (V3 x y _)) _) =
+
+instance HasSurface AArrow where
+  toSurface (AArrow (Body _ (V3 x y _)) ang) =
+    Surface (V2 x y) (transRotate ang) [EntSprite spr]
+    where
+      spr = Sprite zero (Line (V2 (-2) 0) (V2 2 0)) (0,0,0)
 
 instance HasSurface Stage where
   toSurface (Stage w h _ as) =
-      Surface zero idTrans (map EntSprite (back:map toSprite as))
+      Surface zero idTrans ents
     where
       back  = Sprite (V2 (w/2) (h/2)) (Rectangle (V2 w h) Filled) (1,142,14)
+      arrEnts = map (EntSurface . toSurface) as
+      ents = EntSprite back:arrEnts
 
 instance SDLRenderable Stage where
   renderSDL scr stg@(Stage w h _ _) = mapM_ (renderSDL scr) sList
@@ -51,12 +60,12 @@ simpleStage :: (Monad m, HasTime t s) => Double -> Double -> Wire s e m () Stage
 simpleStage w h = Stage w h [] . return <$> arrow x0 v0
   where
     x0 = V3 w (h/2) 0
-    v0 = V3 (-10) 0 0
+    v0 = V3 (-5) (-1) 0
 
 arrow :: (Monad m, HasTime t s) => V3D -> V3D -> Wire s e m () AArrow
-arrow x0 v0 = AArrow . Body 1 <$> proc _ -> do
+arrow x0 v0@(V3 vx vy _) = proc _ -> do
   pos <- integral x0 -< v0
-  returnA -< pos
+  returnA -< AArrow (Body 1 pos) (atan2 vy vx)
 
 testStage :: Wire (Timed Double ()) e IO () Stage -> IO ()
 testStage w =
