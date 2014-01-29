@@ -66,27 +66,14 @@ instance HasSurface PlanetList where
   toSurface (PlanetList ps) = Surface zero idTrans (map toSprite ps) []
 
 instance SDLRenderable PlanetList where
-  renderSDL pl origin scl scr = do
-    let
+  renderSDL scr = mapM_ (renderSDL scr) . sList
+    where
+      sList pl = toSpriteList ctr (transScale scale) (toSurface pl)
       ht    = fromIntegral $ SDL.surfaceGetHeight scr
       wd    = fromIntegral $ SDL.surfaceGetHeight scr
-      ctr   = origin ^+^ V2 ht wd ^/ 2
-      scale = scl * ht / 20
-      sList = toSpriteList ctr (transScale scale) (toSurface pl)
-    forM_ sList $ \s -> renderSDL s origin scl scr
+      ctr   = V2 ht wd ^/ 2
+      scale = ht / 20
 
--- instance SpriteClass Planet where
---   toSprite (Planet _ r c (Body _ (V3 x y _))) =
---     toSprite (SpritePrim (Circle r) (V2 x y) c)
-
--- instance SDLRenderable PlanetList where
---   renderSDL (PlanetList ps) origin scl scr = do
---     let
---       ht    = fromIntegral $ SDL.surfaceGetHeight scr
---       wd    = fromIntegral $ SDL.surfaceGetHeight scr
---       ctr   = origin ^+^ V2 ht wd ^/ 2
---       scale = scl * ht / 20
---     mapM_ (\p -> renderSDL (toSprite p) ctr scale scr) ps
 
 main :: IO ()
 main = do
