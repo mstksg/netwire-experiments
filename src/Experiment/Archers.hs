@@ -67,7 +67,7 @@ main = testStage (simpleStage 400 300)
 
 simpleStage :: (Monad m, HasTime t s, Monoid e, Fractional t) => Double -> Double -> Wire s e m () Stage
 simpleStage w h = proc _ -> do
-    arws <- return <$> arrow x0 v0 . at 7 --> pure [] -< Hit
+    arws <- return <$> arrow x0 v0 . never --> pure [] -< Hit
     arcs <- return <$> archer a0 . at 5 --> pure [] -< Hit
     returnA -< Stage w h arcs arws
   where
@@ -90,9 +90,10 @@ archer x0 = hittable archer' . arr ((),)
   where
     archer' :: Wire s e m () Archer
     archer' = proc _ -> do
-      vx <- hold . stdNoiseR 2 (-10,10) 1 -< ()
-      vy <- hold . stdNoiseR 3 (-10,10) 2 -< ()
-      pos <- integral x0 -< V3 vx vy 0
+      -- vx <- hold . stdNoiseR 2 (-10,10) 1 -< ()
+      -- vy <- hold . stdNoiseR 3 (-10,10) 2 -< ()
+      -- pos <- integral x0 -< V3 vx vy 0
+      (pos, vx, vy) <- returnA -< (x0,0,0)
       returnA -< Archer (Body 1 pos) (atan2 vy vx)
 
 
