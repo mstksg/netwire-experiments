@@ -28,13 +28,13 @@ data AArrow = AArrow Body
 
 instance HasSprite AArrow where
   toSprite (AArrow (Body _ (V3 x y _))) =
-    Sprite (V2 x y) (Circle 3) (0,0,0)
+    Sprite (V2 x y) (Circle 3 Filled) (0,0,0)
 
 instance HasSurface Stage where
   toSurface (Stage w h _ as) =
       Surface zero idTrans (back:map toSprite as) []
     where
-      back  = Sprite (V2 (w/2) (h/2)) (Rectangle (V2 w h)) (1,142,14)
+      back  = Sprite (V2 (w/2) (h/2)) (Rectangle (V2 w h) Filled) (1,142,14)
 
 instance SDLRenderable Stage where
   renderSDL scr stg@(Stage w h _ _) = mapM_ (renderSDL scr) sList

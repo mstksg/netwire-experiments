@@ -60,7 +60,7 @@ instance GNUPlottable Planet where
 
 instance HasSprite Planet where
   toSprite (Planet _ r c (Body _ (V3 x y _))) =
-    Sprite (V2 x y) (Circle r) c
+    Sprite (V2 x y) (Circle r Filled) c
 
 instance HasSurface PlanetList where
   toSurface (PlanetList ps) = Surface zero idTrans (map toSprite ps) []
