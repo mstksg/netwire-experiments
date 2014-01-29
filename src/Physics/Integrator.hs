@@ -1,5 +1,3 @@
-{-# LANGUAGE Arrows #-}
-
 module Physics.Integrator
   ( Integrator(..)
   , runIntegratorPos
@@ -7,7 +5,6 @@ module Physics.Integrator
   , verlet
   ) where
 
-import Control.Monad.Writer.Strict
 import Control.Wire
 import FRP.Netwire
 import Linear.Vector
