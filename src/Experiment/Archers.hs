@@ -1,15 +1,17 @@
+{-# LANGUAGE TupleSections #-}
+
 module Main where
 
 import Control.Category
-import Control.Wire
+import Control.Wire              as W
 import FRP.Netwire
-import Render.Render
 import Linear.V2
 import Linear.V3
 import Linear.Vector
 import Physics
 import Prelude hiding            ((.),id)
 import Render.Backend.SDL
+import Render.Render
 import Render.Sprite
 import Render.Surface
 import qualified Graphics.UI.SDL as SDL
@@ -65,25 +67,40 @@ main = testStage (simpleStage 400 300)
 
 simpleStage :: (Monad m, HasTime t s, Monoid e, Fractional t) => Double -> Double -> Wire s e m () Stage
 simpleStage w h = proc _ -> do
-    arw <- arrow x0 v0 -< ()
-    arc <- archer a0 -< ()
-    returnA -< Stage w h [arc] [arw]
+    arws <- return <$> arrow x0 v0 . at 7 --> pure [] -< Hit
+    arcs <- return <$> archer a0 . at 5 --> pure [] -< Hit
+    returnA -< Stage w h arcs arws
   where
     x0 = V3 w (h/2) 0
-    v0 = V3 (-5) (-1) 0
+    v0 = V3 (-12) 0 0
     a0 = V3 (w/2) (h/2) 0
 
-arrow :: (Monad m, HasTime t s) => V3D -> V3D -> Wire s e m () AArrow
-arrow x0 v0@(V3 vx vy _) = proc _ -> do
-  pos <- integral x0 -< v0
-  returnA -< AArrow (Body 1 pos) (atan2 vy vx)
+data Hit = Hit
 
-archer :: (Monad m, Monoid e, HasTime t s, Fractional t) => V3D -> Wire s e m () Archer
-archer x0 = proc _ -> do
-  vx <- hold . stdNoiseR 0.5 (-10,10) 1 -< ()
-  vy <- hold . stdNoiseR 0.5 (-10,10) 2 -< ()
-  pos <- integral x0 -< V3 vx vy 0
-  returnA -< Archer (Body 1 pos) (atan2 vy vx)
+arrow :: forall s t e m. (Monad m, HasTime t s, Monoid e) => V3D -> V3D -> Wire s e m (Event Hit) AArrow
+arrow x0 v0@(V3 vx vy _) = hittable arrow' . arr ((),)
+  where
+    arrow' :: Wire s e m () AArrow
+    arrow' = proc _ -> do
+      pos <- integral x0 -< v0
+      returnA -< AArrow (Body 1 pos) (atan2 vy vx)
+
+archer :: forall s t e m. (Monad m, Monoid e, HasTime t s, Fractional t) => V3D -> Wire s e m (Event Hit) Archer
+archer x0 = hittable archer' . arr ((),)
+  where
+    archer' :: Wire s e m () Archer
+    archer' = proc _ -> do
+      vx <- hold . stdNoiseR 2 (-10,10) 1 -< ()
+      vy <- hold . stdNoiseR 3 (-10,10) 2 -< ()
+      pos <- integral x0 -< V3 vx vy 0
+      returnA -< Archer (Body 1 pos) (atan2 vy vx)
+
+
+hittable :: (Monad m, Monoid e) => Wire s e m a b -> Wire s e m (a, Event Hit) b
+hittable wr = proc (a,h) -> do
+  x <- wr -< a
+  alive <- W.until -< (x, h)
+  returnA -< alive
 
 testStage :: Wire (Timed Double ()) () IO () Stage -> IO ()
 testStage w =
