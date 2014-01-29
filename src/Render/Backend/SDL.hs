@@ -74,26 +74,31 @@ instance SDLRenderable Surface where
   renderSDL scr = mapM_ (renderSDL scr) . toSpriteList'
 
 instance SDLRenderable Sprite where
-  renderSDL scr (Sprite (V2 x y) sh (cr,cg,cb)) =
-    case sh of
-      Circle r f ->
-        let drawFunc = fromFilling f SDL.circle SDL.filledCircle
-        in  void $ drawFunc scr (round x) (round y) (round r) col
-      Rectangle (V2 w h) f ->
-        let drawFunc = fromFilling f SDL.rectangle SDL.box
-        in  void $
-              drawFunc scr
+  renderSDL scr (Sprite (V2 x y) sh (cr,cg,cb)) = void (drawer col)
+    where
+      drawer = case sh of
+        Circle r f ->
+          let drawFunc = fromFilling f SDL.circle SDL.filledCircle
+          in  drawFunc scr (round x) (round y) (round r)
+        Rectangle (V2 w h) f ->
+          let drawFunc = fromFilling f SDL.rectangle SDL.box
+          in  drawFunc scr
                 (SDL.Rect
                   (round (x-(w/2)))
                   (round (y-(h/2)))
                   (round (x+(w/2)))
                   (round (y+(h/2))))
-                col
-      Polygon vs f -> void $ drawFunc scr (map toTup vs) col
-        where
-          toTup (V2 x' y') = (round (x+x'), round (y+y'))
-          drawFunc = fromFilling f SDL.polygon SDL.filledPolygon
-    where
+        Polygon vs f -> drawFunc scr (map toTup vs)
+          where
+            toTup (V2 x' y') = (round (x+x'), round (y+y'))
+            drawFunc = fromFilling f SDL.polygon SDL.filledPolygon
+        Line (V2 x0 y0) (V2 x1 y1)
+          | x0 == x1  ->
+              SDL.vLine scr (round x0) (round y0) (round y1)
+          | y0 == y1  ->
+              SDL.hLine scr (round x0) (round x1) (round y0)
+          | otherwise ->
+              SDL.line scr (round x0) (round y0) (round x1) (round y1)
       col = rgbColor cr cg cb
 
 rgbColor :: Word8 -> Word8 -> Word8 -> SDL.Pixel
