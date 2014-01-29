@@ -39,9 +39,9 @@ sdlBackend ht wd (cr,cg,cb) = Backend runSdl
 
           renderEvent <- processSDLEvent <$> SDL.pollEvent
 
-          case renderEvent of
-            NoEvent -> return ()
-            Event e -> print e
+          -- case renderEvent of
+          --   NoEvent -> return ()
+          --   Event e -> print e
 
           (ds, s) <- stepSession s'
           (mx, w) <- stepWire w' ds (Right renderEvent)
