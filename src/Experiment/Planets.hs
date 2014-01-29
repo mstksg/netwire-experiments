@@ -63,7 +63,8 @@ instance HasSprite Planet where
     Sprite (V2 x y) (Circle r Filled) c
 
 instance HasSurface PlanetList where
-  toSurface (PlanetList ps) = Surface zero idTrans (map toSprite ps) []
+  toSurface (PlanetList ps) =
+    Surface zero idTrans (map (EntSprite . toSprite) ps)
 
 instance SDLRenderable PlanetList where
   renderSDL scr = mapM_ (renderSDL scr) . sList

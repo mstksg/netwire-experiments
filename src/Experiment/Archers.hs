@@ -32,7 +32,7 @@ instance HasSprite AArrow where
 
 instance HasSurface Stage where
   toSurface (Stage w h _ as) =
-      Surface zero idTrans (back:map toSprite as) []
+      Surface zero idTrans (map EntSprite (back:map toSprite as))
     where
       back  = Sprite (V2 (w/2) (h/2)) (Rectangle (V2 w h) Filled) (1,142,14)
 
