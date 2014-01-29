@@ -28,6 +28,13 @@ toSpriteList p t (Surface psur tsur sprs surfs) =
 toSpriteList' :: Surface -> [Sprite]
 toSpriteList' = toSpriteList zero idTrans
 
+addSprite :: Surface -> Sprite -> Bool -> Surface
+addSprite srf@(Surface _ _ sprs _) spr True =
+    srf { surfaceSprites = spr:sprs }
+addSprite srf@(Surface _ _ sprs _) spr False =
+    srf { surfaceSprites = sprs++[spr] }
+
+
 idTrans :: Transformation2
 idTrans = V2 (V2 1 0)
              (V2 0 1)

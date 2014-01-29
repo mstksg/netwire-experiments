@@ -77,8 +77,18 @@ instance SDLRenderable Sprite where
   renderSDL scr (Sprite (V2 x y) sh (cr,cg,cb)) =
     case sh of
       Circle r -> void $
-          SDL.filledCircle scr (round x) (round y) (round r) col
-      -- _ -> return ()
+        SDL.filledCircle scr (round x) (round y) (round r) col
+      Rectangle (V2 w h) -> void $
+        SDL.box scr
+          (SDL.Rect
+            (round (x-(w/2)))
+            (round (y-(h/2)))
+            (round (x+(w/2)))
+            (round (y+(h/2))))
+          col
+      Polygon vs -> void $ SDL.filledPolygon scr (map toTup vs) col
+        where
+          toTup (V2 x' y') = (round (x+x'), round (y+y'))
     where
       col = rgbColor cr cg cb
 

@@ -28,17 +28,20 @@ data AArrow = AArrow Body
 
 instance HasSprite AArrow where
   toSprite (AArrow (Body _ (V3 x y _))) =
-    Sprite (V2 x y) (Circle 5) (0,0,0)
+    Sprite (V2 x y) (Circle 3) (0,0,0)
 
 instance HasSurface Stage where
-  toSurface (Stage _ _ _ as) = Surface zero idTrans (map toSprite as) []
+  toSurface (Stage w h _ as) =
+      Surface zero idTrans (back:map toSprite as) []
+    where
+      back  = Sprite (V2 (w/2) (h/2)) (Rectangle (V2 w h)) (1,142,14)
 
 instance SDLRenderable Stage where
   renderSDL scr stg@(Stage w h _ _) = mapM_ (renderSDL scr) sList
     where
       sList = toSpriteList zero (transScale scale) (toSurface stg)
       ht    = fromIntegral $ SDL.surfaceGetHeight scr
-      wd    = fromIntegral $ SDL.surfaceGetHeight scr
+      wd    = fromIntegral $ SDL.surfaceGetWidth scr
       scale = min (ht / h) (wd / w)
 
 main :: IO ()
@@ -48,7 +51,7 @@ simpleStage :: (Monad m, HasTime t s) => Double -> Double -> Wire s e m () Stage
 simpleStage w h = Stage w h [] . return <$> arrow x0 v0
   where
     x0 = V3 w (h/2) 0
-    v0 = V3 (-1) 0 0
+    v0 = V3 (-10) 0 0
 
 arrow :: (Monad m, HasTime t s) => V3D -> V3D -> Wire s e m () AArrow
 arrow x0 v0 = AArrow . Body 1 <$> proc _ -> do
@@ -58,7 +61,7 @@ arrow x0 v0 = AArrow . Body 1 <$> proc _ -> do
 testStage :: Wire (Timed Double ()) e IO () Stage -> IO ()
 testStage w =
   runBackend
-    (sdlBackend 600 600 (250,250,250))
+    (sdlBackend 600 600 (50,50,50))
     (const . return . return $ ())
     (w . pure ())
 
