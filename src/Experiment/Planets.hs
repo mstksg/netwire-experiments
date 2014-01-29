@@ -3,6 +3,7 @@ module Main where
 -- import Control.Monad             (void)
 -- import FRP.Netwire
 -- import Linear.Metric
+-- import Render.Backend.NoBackend
 -- import Utils.Wire.LogWire
 -- import qualified Graphics.UI.SDL as SDL
 import Control.Category
@@ -146,8 +147,9 @@ runOneBody (p@(Planet _ _ _ b0), v0) = runTest 1 (w . pure ())
     w = map (pMaker p) <$> manyFixedBody [Body 1 zero] [(b0,v0)] verlet
 
 runTest :: Int -> Wire (Timed Double ()) () IO (Event RenderEvent) [Planet] -> IO ()
-runTest _ = runTestSDL
--- runTest n = runTestGNUPlot n
+-- runTest _ = runBackend (noBackend 0.1) (const ())
+-- runTest _ = runTestSDL
+runTest n = runTestGNUPlot n
 
 runTestGNUPlot :: Int -> Wire (Timed Double ()) () IO (Event RenderEvent) [Planet] -> IO ()
 runTestGNUPlot n w = do

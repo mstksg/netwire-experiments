@@ -28,6 +28,7 @@ executable planets
                      , gnuplot ==0.5.1
   hs-source-dirs:      src
   default-language:    Haskell2010
+  ghc-options:         -O2
   default-extensions: Arrows
                     , ScopedTypeVariables
                     , RankNTypes
@@ -68,9 +69,10 @@ executable archers
                      -- , gnuplot ==0.5.1
   hs-source-dirs:      src
   default-language:    Haskell2010
-  default-extensions: Arrows
-                    , ScopedTypeVariables
-                    , RankNTypes
-                    , FlexibleContexts
-                    , FlexibleInstances
-                    , UndecidableInstances
+  ghc-options:         -O2
+  default-extensions:  Arrows
+                     , ScopedTypeVariables
+                     , RankNTypes
+                     , FlexibleContexts
+                     , FlexibleInstances
+                     , UndecidableInstances
