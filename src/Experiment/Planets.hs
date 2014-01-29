@@ -145,16 +145,16 @@ runOneBody (p@(Planet _ _ _ b0), v0) = runTest 1 (w . pure ())
   where
     w = map (pMaker p) <$> manyFixedBody [Body 1 zero] [(b0,v0)] verlet
 
-runTest :: Int -> Wire (Timed Double ()) String IO (Event RenderEvent) [Planet] -> IO ()
+runTest :: Int -> Wire (Timed Double ()) () IO (Event RenderEvent) [Planet] -> IO ()
 runTest _ = runTestSDL
 -- runTest n = runTestGNUPlot n
 
-runTestGNUPlot :: Int -> Wire (Timed Double ()) String IO (Event RenderEvent) [Planet] -> IO ()
+runTestGNUPlot :: Int -> Wire (Timed Double ()) () IO (Event RenderEvent) [Planet] -> IO ()
 runTestGNUPlot n w = do
   clearLogs 10
   runBackend (gnuPlotBackend 1 20000) (writeLog n) w
 
-runTestSDL :: Wire (Timed Double ()) String IO (Event RenderEvent) [Planet] -> IO ()
+runTestSDL :: Wire (Timed Double ()) () IO (Event RenderEvent) [Planet] -> IO ()
 runTestSDL w =
   runBackend (sdlBackend 600 600 (31,31,31)) (const . return . return $ ()) (PlanetList <$> w)
 
