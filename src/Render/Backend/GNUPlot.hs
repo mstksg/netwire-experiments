@@ -6,10 +6,10 @@ import Render.Render
 import Utils.Wire.TestWire
 
 gnuPlotBackend ::
-       Real t
+       (Real t, Monoid e, Show e)
     => t
     -> Int
-    -> Backend (Timed t ()) String IO (IO ()) a
+    -> Backend (Timed t ()) e IO (IO ()) a
 gnuPlotBackend dt n = Backend runGnuplot
   where
     runGnuplot r wr = testWire' n dt (either print r) (wr . never)

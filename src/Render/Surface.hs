@@ -7,33 +7,33 @@ import Linear.Vector
 
 type Transformation2 = M22 Double
 
+data Entity = EntSurface Surface
+            | EntSprite Sprite
+
 data Surface = Surface { surfacePos         :: V2 Double
                        , surfaceTrans       :: Transformation2
-                       , surfaceSprites     :: [Sprite]
-                       , surfaceSurfaces    :: [Surface]
+                       , surfaceEntities    :: [Entity]
                        }
 
 class HasSurface s where
   toSurface :: s -> Surface
 
+instance HasSurface Sprite where
+  toSurface s = Surface zero idTrans [EntSprite s]
+
 toSpriteList :: V2 Double -> Transformation2 -> Surface -> [Sprite]
-toSpriteList p t (Surface psur tsur sprs surfs) =
-    map placeSprite sprs ++ concatMap placeSurface surfs
+toSpriteList p t (Surface psur tsur ents) =
+    concatMap placeEntity ents
   where
     totP = (t !* psur) ^+^ p
     totT = t !*! tsur
+    placeEntity (EntSurface s) = placeSurface s
+    placeEntity (EntSprite s) = [placeSprite s]
     placeSprite = transSprite totP totT
     placeSurface = toSpriteList totP totT
 
 toSpriteList' :: Surface -> [Sprite]
 toSpriteList' = toSpriteList zero idTrans
-
-addSprite :: Surface -> Sprite -> Bool -> Surface
-addSprite srf@(Surface _ _ sprs _) spr True =
-    srf { surfaceSprites = spr:sprs }
-addSprite srf@(Surface _ _ sprs _) spr False =
-    srf { surfaceSprites = sprs++[spr] }
-
 
 idTrans :: Transformation2
 idTrans = V2 (V2 1 0)
