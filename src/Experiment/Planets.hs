@@ -1,32 +1,27 @@
+{-# LANGUAGE CPP #-}
+
 module Main where
 
--- import Control.Monad                     (void)
--- import Data.Word
--- import Experiment.Planets.Instances.SDL
--- import FRP.Netwire
--- import Linear.Metric
--- import Linear.V2
--- import Render.Backend.NoBackend
--- import Render.Sprite
--- import Render.Surface
--- import Utils.Wire.LogWire
--- import qualified Graphics.UI.SDL         as SDL
 import Control.Category
 import Control.Monad.Writer.Strict
 import Control.Wire                         as W
 import Data.Traversable
-import Experiment.Planets.Instances.GLUT    ()
 import Experiment.Planets.Instances.GNUPlot ()
-import Experiment.Planets.Instances.SDL     ()
 import Experiment.Planets.Types
 import Linear.V3
 import Linear.Vector
 import Physics
 import Prelude hiding                       ((.), id)
-import Render.Backend.GLUT
 import Render.Backend.GNUPlot
-import Render.Backend.SDL
 import Render.Render
+
+#ifdef mingw32_HOST_OS
+import Render.Backend.GLUT
+import Experiment.Planets.Instances.GLUT    ()
+#else
+import Render.Backend.SDL
+import Experiment.Planets.Instances.SDL     ()
+#endif
 
 -- | What is this number?  Well, we want our graviational constant to be 1,
 -- so we normalize with our time unit being a day and our distance unit
@@ -123,20 +118,17 @@ runOneBody (p@(Planet _ _ _ b0), v0) = runTest 1 (w . pure ())
     w = map (pMaker p) <$> manyFixedBody [Body 1 zero] [(b0,v0)] verlet
 
 runTest :: Int -> Wire (Timed Double ()) () IO (Event RenderEvent) [Planet] -> IO ()
-runTest _ = runTestGLUT
+runTest _ w =
+#ifdef mingw32_HOST_OS
+  runBackend (glutBackend 600 600 (31,31,31)) (const . return $ ()) (PlanetList <$> w)
+#else
+  runBackend (sdlBackend 600 600 (31,31,31)) (const . return . return $ ()) (PlanetList <$> w)
+#endif
 
 runTestGNUPlot :: Int -> Wire (Timed Double ()) () IO (Event RenderEvent) [Planet] -> IO ()
 runTestGNUPlot n w = do
   clearLogs 10
   runBackend (gnuPlotBackend 1 20000) (writeLog n) w
-
-runTestSDL :: Wire (Timed Double ()) () IO (Event RenderEvent) [Planet] -> IO ()
-runTestSDL w =
-  runBackend (sdlBackend 600 600 (31,31,31)) (const . return . return $ ()) (PlanetList <$> w)
-
-runTestGLUT :: Wire (Timed Double ()) () IO (Event RenderEvent) [Planet] -> IO ()
-runTestGLUT w =
-  runBackend (glutBackend 600 600 (31,31,31)) (const . return $ ()) (PlanetList <$> w)
 
 bTup :: (Planet, V3D) -> (Body, V3D)
 bTup (Planet _ _ _ b0, v0) = (b0, v0)

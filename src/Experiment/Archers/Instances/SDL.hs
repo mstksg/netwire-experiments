@@ -1,7 +1,6 @@
 
 module Experiment.Archers.Instances.SDL where
 
-
 import Render.Backend.SDL
 import Experiment.Archers.Types
 import Linear.Vector

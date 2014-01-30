@@ -1,14 +1,8 @@
 {-# LANGUAGE TupleSections #-}
+{-# LANGUAGE CPP #-}
 
 module Main where
 
--- import Control.Arrow
--- import Control.Wire.Unsafe.Event
--- import Data.Traversable
--- import Render.Backend.GLUT
--- import Render.Sprite
--- import Render.Surface
--- import qualified Graphics.UI.SDL     as SDL
 import Control.Category
 import Control.Monad
 import Control.Monad.Fix
@@ -18,13 +12,18 @@ import Experiment.Archers.Instances.SDL ()
 import Experiment.Archers.Types
 import FRP.Netwire
 import Linear.Metric
--- import Linear.V2
 import Linear.V3
 import Linear.Vector
 import Physics
 import Prelude hiding                   ((.),id)
-import Render.Backend.SDL
 import Render.Render
+
+#ifdef mingw32_HOST_OS
+#else
+import Render.Backend.SDL
+#endif
+
+
 
 -- data Team = Team { teamArcher :: Archer
 --                  , teamArrows :: Arrow }
@@ -141,10 +140,14 @@ hittable wr = proc (a,h) -> do
 
 testStage :: Wire (Timed Double ()) () IO () Stage -> IO ()
 testStage w =
+#ifdef mingw32_HOST_OS
+  undefined
+#else
   runBackend
     (sdlBackend 600 600 (50,50,50))
     (const . return . return $ ())
     (w . pure ())
+#endif
 
 
 
