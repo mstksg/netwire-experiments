@@ -12,6 +12,7 @@ import Control.Wire                 as W
 import Data.Traversable
 import Data.Word
 import Linear.V2
+import Render.Backend.GLUT
 import Linear.V3
 import Linear.Vector
 import Physics
@@ -76,6 +77,8 @@ instance SDLRenderable PlanetList where
       ctr      = V2 ht wd ^/ 2
       scale    = ht / 20
 
+instance GLUTRenderable PlanetList where
+  renderGLUT = undefined
 
 main :: IO ()
 main = do
@@ -147,8 +150,6 @@ runOneBody (p@(Planet _ _ _ b0), v0) = runTest 1 (w . pure ())
     w = map (pMaker p) <$> manyFixedBody [Body 1 zero] [(b0,v0)] verlet
 
 runTest :: Int -> Wire (Timed Double ()) () IO (Event RenderEvent) [Planet] -> IO ()
--- runTest _ = runBackend (noBackend 0.1) (const ())
--- runTest _ = runTestSDL
 runTest n = runTestGNUPlot n
 
 runTestGNUPlot :: Int -> Wire (Timed Double ()) () IO (Event RenderEvent) [Planet] -> IO ()
@@ -159,6 +160,10 @@ runTestGNUPlot n w = do
 runTestSDL :: Wire (Timed Double ()) () IO (Event RenderEvent) [Planet] -> IO ()
 runTestSDL w =
   runBackend (sdlBackend 600 600 (31,31,31)) (const . return . return $ ()) (PlanetList <$> w)
+
+runTestGLUT :: Wire (Timed Double ()) () IO (Event RenderEvent) [Planet] -> IO ()
+runTestGLUT w =
+  runBackend (glutBackend 600 600 (31,31,31)) (const ()) (PlanetList <$> w)
 
 bTup :: (Planet, V3D) -> (Body, V3D)
 bTup (Planet _ _ _ b0, v0) = (b0, v0)

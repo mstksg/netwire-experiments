@@ -3,24 +3,26 @@
 module Main where
 
 -- import Control.Arrow
+-- import Control.Wire.Unsafe.Event
 import Control.Category
 import Control.Monad
 import Control.Monad.Fix
-import Control.Wire              as W
--- import Control.Wire.Unsafe.Event
-import Data.Maybe                (maybeToList)
+import Control.Wire                 as W
+import Data.Maybe                   (maybeToList)
+import Data.Traversable
 import FRP.Netwire
 import Linear.Metric
 import Linear.V2
 import Linear.V3
 import Linear.Vector
 import Physics
-import Prelude hiding            ((.),id)
+import Prelude hiding               ((.),id)
+import Render.Backend.GLUT
 import Render.Backend.SDL
 import Render.Render
 import Render.Sprite
 import Render.Surface
-import qualified Graphics.UI.SDL as SDL
+import qualified Graphics.UI.SDL    as SDL
 
 -- data Team = Team { teamArcher :: Archer
 --                  , teamArrows :: Arrow }
@@ -83,6 +85,21 @@ simpleStage w h = proc _ -> do
     x0 = V3 w (h/2) 0
     v0 = V3 (-12) 0 0
     a0 = V3 (w/2) (h/2) 0
+
+
+archersAndDarts :: Monad m => Wire s e m ([Archer],[Dart]) ([Archer],[Dart])
+archersAndDarts = proc (as,ds) -> undefined -< undefined
+  where
+    dartAsWire :: Wire s e m (Dart, [Archer]) Dart
+    dartAsWire = undefined
+    archerDsWire :: Wire s e m (Archer, [Dart]) Archer
+    archerDsWire = undefined
+    dartWire :: Wire s e m (Dart, Archer) Dart
+    dartWire = undefined
+    archerWire :: Wire s e m (Archer, Dart) Archer
+    archerWire = undefined
+
+
 
 -- tryReturn :: (MonadPlus mp, Monoid e, Monad m) => Wire s e m a b -> Wire s e m a (mp b)
 -- tryReturn w = return <$> w <|> pure mzero

@@ -46,8 +46,12 @@ toPolygon (Rectangle (V2 w h) f) = Polygon [ V2 (-w/2) (-h/2)
                                            , V2 ( w/2) ( h/2)
                                            , V2 (-w/2) ( h/2) ] f
 toPolygon (Polygon vs f) = Polygon vs f
-toPolygon (Circle r f)   = toPolygon (Rectangle (V2 r r) f)
 toPolygon (Line p1 p2)   = Polygon [p1, p2] Unfilled
+toPolygon (Circle r f)   = Polygon (map angleToCircle [0..360]) f
+  where
+    angleToCircle d =
+      let a = d / 180 * pi
+      in  r *^ V2 (cos a) (sin a)
 
 fromFilling :: Filling -> a -> a -> a
 fromFilling Unfilled f _ = f
