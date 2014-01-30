@@ -1,74 +1,32 @@
 {-# LANGUAGE TupleSections #-}
+{-# LANGUAGE CPP #-}
 
 module Main where
 
--- import Control.Arrow
--- import Control.Wire.Unsafe.Event
 import Control.Category
 import Control.Monad
 import Control.Monad.Fix
-import Control.Wire                 as W
-import Data.Maybe                   (maybeToList)
-import Data.Traversable
+import Control.Wire                     as W
+import Data.Maybe                       (maybeToList)
+import Experiment.Archers.Instances.SDL ()
+import Experiment.Archers.Types
 import FRP.Netwire
 import Linear.Metric
-import Linear.V2
 import Linear.V3
 import Linear.Vector
 import Physics
-import Prelude hiding               ((.),id)
-import Render.Backend.GLUT
-import Render.Backend.SDL
+import Prelude hiding                   ((.),id)
 import Render.Render
-import Render.Sprite
-import Render.Surface
-import qualified Graphics.UI.SDL    as SDL
+
+#ifdef mingw32_HOST_OS
+#else
+import Render.Backend.SDL
+#endif
+
+
 
 -- data Team = Team { teamArcher :: Archer
 --                  , teamArrows :: Arrow }
-
-data Stage = Stage { stageWidth :: Double
-                   , stageHeight :: Double
-                   , stageArchers :: [Archer]
-                   , stageDarts :: [Dart]
-                   }
-
-type Angle = Double
-
-data Archer = Archer Body Angle
-data Dart = Dart Body Angle
-
--- instance HasSprite Dart where
---   toSprite (Dart (Body _ (V3 x y _)) _) =
-
-instance HasSurface Dart where
-  toSurface (Dart (Body _ (V3 x y _)) ang) =
-    Surface (V2 x y) (transRotate ang) [EntSprite spr]
-    where
-      spr = Sprite zero (Line (V2 (-2) 0) (V2 2 0)) (0,0,0)
-
-instance HasSurface Archer where
-  toSurface (Archer (Body _ (V3 x y _)) ang) =
-    Surface (V2 x y) (transRotate ang) [EntSprite spr]
-    where
-      spr = Sprite zero (Circle 3 Unfilled) (0,0,0)
-
-instance HasSurface Stage where
-  toSurface (Stage w h arcs arrs) =
-      Surface zero idTrans ents
-    where
-      back  = Sprite (V2 (w/2) (h/2)) (Rectangle (V2 w h) Filled) (1,142,14)
-      arrEnts = map (EntSurface . toSurface) arrs
-      arcEnts = map (EntSurface . toSurface) arcs
-      ents = EntSprite back:(arcEnts ++ arrEnts)
-
-instance SDLRenderable Stage where
-  renderSDL scr stg@(Stage w h _ _) = mapM_ (renderSDL scr) sList
-    where
-      sList = toSpriteList zero (transScale scale) (toSurface stg)
-      ht    = fromIntegral $ SDL.surfaceGetHeight scr
-      wd    = fromIntegral $ SDL.surfaceGetWidth scr
-      scale = min (ht / h) (wd / w)
 
 main :: IO ()
 main = testStage (simpleStage 400 300)
@@ -182,10 +140,14 @@ hittable wr = proc (a,h) -> do
 
 testStage :: Wire (Timed Double ()) () IO () Stage -> IO ()
 testStage w =
+#ifdef mingw32_HOST_OS
+  undefined
+#else
   runBackend
     (sdlBackend 600 600 (50,50,50))
     (const . return . return $ ())
     (w . pure ())
+#endif
 
 
 
