@@ -2,10 +2,14 @@
 
 module Main where
 
+-- import Control.Arrow
 import Control.Category
+import Control.Monad.Fix
 import Control.Wire              as W
 import FRP.Netwire
+import Linear.Metric
 import Linear.V2
+import Control.Monad
 import Linear.V3
 import Linear.Vector
 import Physics
@@ -22,19 +26,19 @@ import qualified Graphics.UI.SDL as SDL
 data Stage = Stage { stageWidth :: Double
                    , stageHeight :: Double
                    , stageArchers :: [Archer]
-                   , stageArrows :: [AArrow]
+                   , stageDarts :: [Dart]
                    }
 
 type Angle = Double
 
 data Archer = Archer Body Angle
-data AArrow = AArrow Body Angle
+data Dart = Dart Body Angle
 
--- instance HasSprite AArrow where
---   toSprite (AArrow (Body _ (V3 x y _)) _) =
+-- instance HasSprite Dart where
+--   toSprite (Dart (Body _ (V3 x y _)) _) =
 
-instance HasSurface AArrow where
-  toSurface (AArrow (Body _ (V3 x y _)) ang) =
+instance HasSurface Dart where
+  toSurface (Dart (Body _ (V3 x y _)) ang) =
     Surface (V2 x y) (transRotate ang) [EntSprite spr]
     where
       spr = Sprite zero (Line (V2 (-2) 0) (V2 2 0)) (0,0,0)
@@ -65,25 +69,40 @@ instance SDLRenderable Stage where
 main :: IO ()
 main = testStage (simpleStage 400 300)
 
-simpleStage :: (Monad m, HasTime t s, Monoid e, Fractional t) => Double -> Double -> Wire s e m () Stage
+simpleStage :: (MonadFix m, HasTime t s, Monoid e, Fractional t) => Double -> Double -> Wire s e m () Stage
 simpleStage w h = proc _ -> do
-    arws <- return <$> arrow x0 v0 . never --> pure [] -< Hit
-    arcs <- return <$> archer a0 . at 5 --> pure [] -< Hit
-    returnA -< Stage w h arcs arws
+    rec
+      (dart',hit) <- dartH x0 v0 . delay (Archer (Body 1 zero) 0 ) -< head archers
+      archers <- arr return . archer a0 --> pure [] -< hit
+    returnA -< Stage w h archers [dart']
   where
     x0 = V3 w (h/2) 0
     v0 = V3 (-12) 0 0
     a0 = V3 (w/2) (h/2) 0
 
+-- tryReturn :: (MonadPlus mp, Monoid e, Monad m) => Wire s e m a b -> Wire s e m a (mp b)
+-- tryReturn w = return <$> w <|> pure mzero
+
 data Hit = Hit
 
-arrow :: forall s t e m. (Monad m, HasTime t s, Monoid e) => V3D -> V3D -> Wire s e m (Event Hit) AArrow
-arrow x0 v0@(V3 vx vy _) = hittable arrow' . arr ((),)
+dart :: forall s t e m. (Monad m, HasTime t s, Monoid e) => V3D -> V3D -> Wire s e m (Event Hit) Dart
+dart x0 v0@(V3 vx vy _) = hittable dart' . arr ((),)
   where
-    arrow' :: Wire s e m () AArrow
-    arrow' = proc _ -> do
+    dart' :: Wire s e m () Dart
+    dart' = proc _ -> do
       pos <- integral x0 -< v0
-      returnA -< AArrow (Body 1 pos) (atan2 vy vx)
+      returnA -< Dart (Body 1 pos) (atan2 vy vx)
+
+dartH :: forall s t e m. (Monad m, HasTime t s, Monoid e) => V3D -> V3D -> Wire s e m Archer (Dart, Event Hit)
+dartH x0 v0@(V3 vx vy _) = dart'
+  where
+    dart' :: Wire s e m Archer (Dart, Event Hit)
+    dart' = proc (Archer (Body _ arcpos) _) -> do
+      pos <- integral x0 -< v0
+      hitArcher <-
+        never . W.unless (\(d,_) -> norm d < 5) --> arr (snd<$>) . now
+          -< (arcpos ^-^ pos, Hit)
+      returnA -< (Dart (Body 1 pos) (atan2 vy vx),hitArcher)
 
 archer :: forall s t e m. (Monad m, Monoid e, HasTime t s, Fractional t) => V3D -> Wire s e m (Event Hit) Archer
 archer x0 = hittable archer' . arr ((),)
