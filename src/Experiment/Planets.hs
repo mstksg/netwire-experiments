@@ -150,7 +150,7 @@ runOneBody (p@(Planet _ _ _ b0), v0) = runTest 1 (w . pure ())
     w = map (pMaker p) <$> manyFixedBody [Body 1 zero] [(b0,v0)] verlet
 
 runTest :: Int -> Wire (Timed Double ()) () IO (Event RenderEvent) [Planet] -> IO ()
-runTest n = runTestGNUPlot n
+runTest _ = runTestGLUT
 
 runTestGNUPlot :: Int -> Wire (Timed Double ()) () IO (Event RenderEvent) [Planet] -> IO ()
 runTestGNUPlot n w = do
