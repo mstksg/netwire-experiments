@@ -1,28 +1,32 @@
 module Main where
 
--- import Control.Monad             (void)
+-- import Control.Monad                     (void)
+-- import Data.Word
+-- import Experiment.Planets.Instances.SDL
 -- import FRP.Netwire
 -- import Linear.Metric
+-- import Linear.V2
 -- import Render.Backend.NoBackend
+-- import Render.Sprite
+-- import Render.Surface
 -- import Utils.Wire.LogWire
--- import qualified Graphics.UI.SDL as SDL
+-- import qualified Graphics.UI.SDL         as SDL
 import Control.Category
 import Control.Monad.Writer.Strict
-import Control.Wire                 as W
+import Control.Wire                         as W
 import Data.Traversable
-import Data.Word
-import Linear.V2
-import Render.Backend.GLUT
+import Experiment.Planets.Instances.GLUT    ()
+import Experiment.Planets.Instances.GNUPlot ()
+import Experiment.Planets.Instances.SDL     ()
+import Experiment.Planets.Types
 import Linear.V3
 import Linear.Vector
 import Physics
-import Prelude hiding               ((.), id)
+import Prelude hiding                       ((.), id)
+import Render.Backend.GLUT
 import Render.Backend.GNUPlot
 import Render.Backend.SDL
 import Render.Render
-import Render.Sprite
-import Render.Surface
-import qualified Graphics.UI.SDL    as SDL
 
 -- | What is this number?  Well, we want our graviational constant to be 1,
 -- so we normalize with our time unit being a day and our distance unit
@@ -48,42 +52,6 @@ processPlanetData nStr dStr = zipWith mergeData nData dData
       , v0)
     rConst = 0.04
 
-
-data Planet = Planet  { planetName    :: String
-                      , planetRadius  :: Double
-                      , planetColor   :: (Word8,Word8,Word8)
-                      , planetBody    :: Body
-                      } deriving (Show)
-
-newtype PlanetList = PlanetList [Planet]
-
-instance GNUPlottable Planet where
-  gnuplot (Planet _ _ _ b) = gnuplot b
-
-instance HasSprite Planet where
-  toSprite (Planet _ r c (Body _ (V3 x y _))) =
-    Sprite (V2 x y) (Circle r Filled) c
-
-instance HasSurface PlanetList where
-  toSurface (PlanetList ps) =
-    Surface zero idTrans (map (EntSprite . toSprite) ps)
-
-instance SDLRenderable PlanetList where
-  renderSDL scr = mapM_ (renderSDL scr) . sList
-    where
-      sList pl = toSpriteList ctr (transScale scale) (toSurface pl)
-      ht       = fromIntegral $ SDL.surfaceGetHeight scr
-      wd       = fromIntegral $ SDL.surfaceGetHeight scr
-      ctr      = V2 ht wd ^/ 2
-      scale    = ht / 20
-
-instance GLUTRenderable PlanetList where
-  renderGLUT = mapM_ renderGLUT . sList
-    where
-      sList pl = toSpriteList ctr (transScale scale) (toSurface pl)
-      sHt      = 2
-      ctr      = zero
-      scale    = sHt / 20
 
 main :: IO ()
 main = do
