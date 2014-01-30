@@ -78,7 +78,12 @@ instance SDLRenderable PlanetList where
       scale    = ht / 20
 
 instance GLUTRenderable PlanetList where
-  renderGLUT = undefined
+  renderGLUT = mapM_ renderGLUT . sList
+    where
+      sList pl = toSpriteList ctr (transScale scale) (toSurface pl)
+      sHt      = 2
+      ctr      = zero
+      scale    = sHt / 20
 
 main :: IO ()
 main = do
@@ -163,7 +168,7 @@ runTestSDL w =
 
 runTestGLUT :: Wire (Timed Double ()) () IO (Event RenderEvent) [Planet] -> IO ()
 runTestGLUT w =
-  runBackend (glutBackend 600 600 (31,31,31)) (const ()) (PlanetList <$> w)
+  runBackend (glutBackend 600 600 (31,31,31)) (const . return $ ()) (PlanetList <$> w)
 
 bTup :: (Planet, V3D) -> (Body, V3D)
 bTup (Planet _ _ _ b0, v0) = (b0, v0)
