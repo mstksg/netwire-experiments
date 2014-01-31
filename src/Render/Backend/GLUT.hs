@@ -17,6 +17,8 @@ import Render.Sprite             as Sprite
 import Render.Surface
 import qualified Data.Sequence   as S
 
+-- data GLUTState = GLUTState { glutState }
+
 
 glutBackend :: forall e a. GLUTRenderable a
     => Int
@@ -37,23 +39,24 @@ glutBackend wd ht (cr,cg,cb) = Backend runGLUT
     runGLUT r wr = do
         (progName,_) <- getArgsAndInitialize
 
-        a <- newIORef Nothing
+        a         <- newIORef Nothing
         wireState <- newIORef (sess, wr)
-        evs <- newIORef mempty
+        evs       <- newIORef mempty
+        status    <- newIORef mempty
 
         initialWindowSize $= Size (fromIntegral wd) (fromIntegral ht)
         initialDisplayMode $= [ RGBMode, WithDepthBuffer, DoubleBuffered ]
         createWindow progName
         clearColor $= col
-        displayCallback $= display a
-        idleCallback $= Just (step evs wireState a)
+        displayCallback $= display status a
+        idleCallback $= Just (step status evs wireState a)
         keyboardMouseCallback $= Just (keyboardMouse evs)
 
         mainLoop
 
       where
-        display :: IORef (Maybe (Either e a)) -> DisplayCallback
-        display a = do
+        display :: IORef String -> IORef (Maybe (Either e a)) -> DisplayCallback
+        display status a = do
           mx <- readIORef a
 
           case mx of
@@ -61,17 +64,23 @@ glutBackend wd ht (cr,cg,cb) = Backend runGLUT
             Just (Right mx') -> do
               clear [ColorBuffer]
               renderGLUT mx'
+
+              stat <- readIORef status
+              currentRasterPosition $= Vertex4 (-0.95) (0.95) 0 1
+              renderString Fixed8By13 stat
+
               r mx'
               swapBuffers
             Just (Left _) -> exit
 
         step ::
-               IORef (S.Seq RenderEvent)
+               IORef String
+            -> IORef (S.Seq RenderEvent)
             -> IORef (Session IO (Timed Double ())
                      , Wire (Timed Double ()) e IO (Event RenderEvent) a)
             -> IORef (Maybe (Either e a))
             -> IdleCallback
-        step evs wireState a = do
+        step status evs wireState a = do
           (s',w') <- readIORef wireState
           (ds,s) <- stepSession s'
 
@@ -82,6 +91,11 @@ glutBackend wd ht (cr,cg,cb) = Backend runGLUT
                   ev' S.:< evseq' -> do
                     writeIORef evs evseq'
                     return (Event ev')
+
+
+          -- case ev of
+          --   NoEvent -> return ()
+          --   Event e -> writeIORef status (show e)
 
           (mx,w) <- stepWire w' ds (Right ev)
 
@@ -108,7 +122,7 @@ glutBackend wd ht (cr,cg,cb) = Backend runGLUT
                              LeftButton -> RenderMouseLeft
                              MiddleButton -> RenderMouseMiddle
                              RightButton -> RenderMouseRight
-                             WheelUp -> RenderMouseWheelUp
+                             WheelUp -> RenderMouseWheelUp   -- doesn't work for some reason
                              WheelDown -> RenderMouseWheelDown
                              _ -> RenderMouseButtonUnknown
                   in  (upDown (RenderMouseDown,RenderMouseUp)) pos b'
@@ -147,7 +161,7 @@ glutBackend wd ht (cr,cg,cb) = Backend runGLUT
 --                        | RenderMouseButtonUnknown
 --                        deriving (Show)
 
-        
+
 
 class GLUTRenderable s where
   renderGLUT :: s -> IO ()
