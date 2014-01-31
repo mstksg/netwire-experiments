@@ -80,6 +80,9 @@ instance SDLRenderable Sprite where
         Circle r f ->
           let drawFunc = fromFilling f SDL.circle SDL.filledCircle
           in  drawFunc scr (round x) (round y) (round r)
+        Ellipse (V2 rx ry) f ->
+          let drawFunc = fromFilling f SDL.ellipse SDL.filledEllipse
+          in  drawFunc scr (round x) (round y) (round rx) (round ry)
         Rectangle (V2 w h) f ->
           let drawFunc = fromFilling f SDL.rectangle SDL.box
           in  drawFunc scr

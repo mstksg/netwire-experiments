@@ -25,7 +25,7 @@ data RenderKeyData = RenderKeyData { renderKeyDataKey :: Int
 data RenderKeyModifier = RenderKeyShift
                        | RenderKeyAlt
                        | RenderKeyCtrl
-                       deriving (Show)
+                       deriving (Show, Enum)
 
 data RenderMouseButton = RenderMouseLeft
                        | RenderMouseMiddle
