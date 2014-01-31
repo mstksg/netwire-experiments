@@ -15,7 +15,7 @@ import Prelude hiding                       ((.), id)
 import Render.Backend.GNUPlot
 import Render.Render
 
-#ifdef mingw32_HOST_OS
+#ifdef WINDOWS
 import Render.Backend.GLUT
 import Experiment.Planets.Instances.GLUT    ()
 #else
@@ -119,7 +119,7 @@ runOneBody (p@(Planet _ _ _ b0), v0) = runTest 1 (w . pure ())
 
 runTest :: Int -> Wire (Timed Double ()) () IO (Event RenderEvent) [Planet] -> IO ()
 runTest _ w =
-#ifdef mingw32_HOST_OS
+#ifdef WINDOWS
   runBackend (glutBackend 600 600 (31,31,31)) (const . return $ ()) (PlanetList <$> w)
 #else
   runBackend (sdlBackend 600 600 (31,31,31)) (const . return . return $ ()) (PlanetList <$> w)

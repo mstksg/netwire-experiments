@@ -17,7 +17,7 @@ import Physics
 import Prelude hiding                   ((.),id)
 import Render.Render
 
-#ifdef mingw32_HOST_OS
+#ifdef WINDOWS
 #else
 import Render.Backend.SDL
 import Experiment.Archers.Instances.SDL ()
@@ -140,7 +140,7 @@ hittable wr = proc (a,h) -> do
 
 testStage :: Wire (Timed Double ()) () IO () Stage -> IO ()
 testStage w =
-#ifdef mingw32_HOST_OS
+#ifdef WINDOWS
   undefined
 #else
   runBackend

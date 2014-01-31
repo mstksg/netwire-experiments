@@ -1,8 +1,9 @@
+{-# OPTIONS -fno-warn-orphans #-}
+
 module Experiment.Planets.Instances.SDL where
 
 import Render.Backend.SDL
 import Experiment.Planets.Types
-import Render.Sprite
 import Linear.Vector
 import Render.Surface
 import Linear.V2
