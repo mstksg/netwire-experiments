@@ -117,8 +117,7 @@ glutBackend simDt tScale (wd,ht) (cr,cg,cb) = Backend runGLUT
             iters = min iLimit iters'
             newLast = (realToFrac (simDt * fromIntegral iters' / tScale)) `addUTCTime` lastT
 
-
-          writeIORef status ((show . round) (1/tdiff))
+          -- writeIORef status ((show . round) (1/tdiff))
 
           (s',w') <- stepN (iters-1) (s'',w'')
 
@@ -133,9 +132,9 @@ glutBackend simDt tScale (wd,ht) (cr,cg,cb) = Backend runGLUT
                       writeIORef evs evseq'
                       return (Event ev')
 
-            -- case ev of
-            --   NoEvent -> return ()
-            --   Event e -> writeIORef status (show e)
+            case ev of
+              NoEvent -> return ()
+              Event e -> writeIORef status (show e)
 
             (mx,w) <- stepWire w' ds (Right ev)
 
