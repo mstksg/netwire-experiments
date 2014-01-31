@@ -1,3 +1,4 @@
+{-# OPTIONS -fno-warn-orphans #-}
 
 module Experiment.Planets.Instances.GLUT where
 
