@@ -8,7 +8,6 @@ import Control.Monad
 import Control.Monad.Fix
 import Control.Wire                     as W
 import Data.Maybe                       (maybeToList)
-import Experiment.Archers.Instances.SDL ()
 import Experiment.Archers.Types
 import FRP.Netwire
 import Linear.Metric
@@ -21,6 +20,7 @@ import Render.Render
 #ifdef mingw32_HOST_OS
 #else
 import Render.Backend.SDL
+import Experiment.Archers.Instances.SDL ()
 #endif
 
 

@@ -6,6 +6,7 @@ import Prelude hiding ((.),id)
 import Linear.Vector
 -- import Control.Monad
 import Linear.V2
+-- import Data.Time.Clock
 import Data.IORef
 import Render.Sprite as Sprite
 import Render.Surface
@@ -15,7 +16,7 @@ import Graphics.UI.GLUT as GLUT
 import Control.Wire
 
 
-glutBackend :: GLUTRenderable a
+glutBackend :: forall e a. GLUTRenderable a
     => Int
     -> Int
     -> (Word8, Word8, Word8)
@@ -33,27 +34,49 @@ glutBackend wd ht (cr,cg,cb) = Backend runGLUT
 
     runGLUT r wr = do
         (progName,_) <- getArgsAndInitialize
-        ref <- newIORef (sess,wr)
+
+        a <- newIORef Nothing
+        wireState <- newIORef (sess, wr)
+
         initialWindowSize $= Size (fromIntegral wd) (fromIntegral ht)
-        initialDisplayMode $= [RGBMode, SingleBuffered]
+        initialDisplayMode $= [ RGBMode, WithDepthBuffer, DoubleBuffered ]
         createWindow progName
         clearColor $= col
-        displayCallback $= display ref
+        displayCallback $= display a
+        idleCallback $= Just (step wireState a)
+
         mainLoop
 
       where
-        display ref = do
-          (s',w') <- readIORef ref
-          (ds,s) <- stepSession s'
-          (mx,w) <- stepWire w' ds (Right NoEvent)
-          clear [ColorBuffer]
+        display :: IORef (Maybe (Either e a)) -> DisplayCallback
+        display a = do
+          mx <- readIORef a
+
           case mx of
-            Right mx' -> do
+            Nothing -> return ()
+            Just (Right mx') -> do
+              clear [ColorBuffer]
               renderGLUT mx'
               r mx'
-              writeIORef ref (s,w)
-            Left _ -> exit
-          flush
+              swapBuffers
+            Just (Left _) -> exit
+
+        step ::
+               IORef (Session IO (Timed Double ())
+                     , Wire (Timed Double ()) e IO (Event RenderEvent) a)
+            -> IORef (Maybe (Either e a))
+            -> IdleCallback
+        step wireState a = do
+          (s',w') <- readIORef wireState
+          (ds,s) <- stepSession s'
+          (mx,w) <- stepWire w' ds (Right NoEvent)
+
+          writeIORef wireState (s,w)
+          writeIORef a (Just mx)
+
+          postRedisplay Nothing
+
+        
 
 class GLUTRenderable s where
   renderGLUT :: s -> IO ()
