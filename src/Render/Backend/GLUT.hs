@@ -1,8 +1,8 @@
 
 module Render.Backend.GLUT where
 
--- import Control.Monad
--- import Data.Time.Clock
+import Control.Monad as M
+import Data.Time.Clock
 import Control.Wire
 import Control.Wire.Unsafe.Event
 import Data.IORef
@@ -17,19 +17,33 @@ import Render.Sprite             as Sprite
 import Render.Surface
 import qualified Data.Sequence   as S
 
--- data GLUTState = GLUTState { glutState }
+data GLUTStateRefs e a = GLUTStateRefs
+                           { glutStateA        :: IORef (Maybe (Either e a))
+                           , glutStateWire     :: IORef (Wire (Timed Double ()) e IO (Event RenderEvent) a)
+                           , glutStateSession  :: IORef (Session IO (Timed Double ()))
+                           , glutStateEQueue   :: IORef (S.Seq RenderEvent)
+                           , glutStateStatus   :: IORef String
+                           , glutStateLastTime :: IORef UTCTime
+                           }
 
+
+iterationLimit :: Int
+iterationLimit = 5
 
 glutBackend :: forall e a. GLUTRenderable a
-    => Int
-    -> Int
-    -> (Word8, Word8, Word8)
+    => Double                 -- simulation dt
+    -> Double                 -- simulation time/real time ratio
+    -> (Int,Int)              -- width and height
+    -> (Word8, Word8, Word8)  -- background color
     -> Backend (Timed Double ()) e IO (IO ()) a
-glutBackend wd ht (cr,cg,cb) = Backend runGLUT
+glutBackend simDt tScale (wd,ht) (cr,cg,cb) = Backend runGLUT
   where
-    -- fr = 30
-    simDt = 1/30
+    sess :: Session IO (Timed Double ())
     sess = countSession_ simDt
+
+    iLimit :: Int
+    iLimit = round (tScale * fromIntegral iterationLimit)
+
     col = Color4
             (fromIntegral cr / 255)
             (fromIntegral cg / 255)
@@ -39,24 +53,39 @@ glutBackend wd ht (cr,cg,cb) = Backend runGLUT
     runGLUT r wr = do
         (progName,_) <- getArgsAndInitialize
 
-        a         <- newIORef Nothing
-        wireState <- newIORef (sess, wr)
-        evs       <- newIORef mempty
-        status    <- newIORef mempty
+        
+        stateRefs <- initState
 
         initialWindowSize $= Size (fromIntegral wd) (fromIntegral ht)
         initialDisplayMode $= [ RGBMode, WithDepthBuffer, DoubleBuffered ]
         createWindow progName
         clearColor $= col
-        displayCallback $= display status a
-        idleCallback $= Just (step status evs wireState a)
-        keyboardMouseCallback $= Just (keyboardMouse evs)
+        displayCallback $= display stateRefs
+        idleCallback $= Just (step stateRefs)
+        keyboardMouseCallback $= Just (keyboardMouse stateRefs)
 
         mainLoop
 
       where
-        display :: IORef String -> IORef (Maybe (Either e a)) -> DisplayCallback
-        display status a = do
+        initState :: IO (GLUTStateRefs e a)
+        initState = do
+          a          <- newIORef Nothing
+          wire       <- newIORef wr
+          session    <- newIORef sess
+          eventQueue <- newIORef mempty
+          status     <- newIORef mempty
+          lastTime   <- getCurrentTime >>= newIORef
+
+          return $ GLUTStateRefs  a
+                                  wire
+                                  session
+                                  eventQueue
+                                  status
+                                  lastTime
+
+
+        display :: GLUTStateRefs e a -> DisplayCallback
+        display (GLUTStateRefs a _ _ _ status _) = do
           mx <- readIORef a
 
           case mx of
@@ -73,40 +102,65 @@ glutBackend wd ht (cr,cg,cb) = Backend runGLUT
               swapBuffers
             Just (Left _) -> exit
 
-        step ::
-               IORef String
-            -> IORef (S.Seq RenderEvent)
-            -> IORef (Session IO (Timed Double ())
-                     , Wire (Timed Double ()) e IO (Event RenderEvent) a)
-            -> IORef (Maybe (Either e a))
-            -> IdleCallback
-        step status evs wireState a = do
-          (s',w') <- readIORef wireState
-          (ds,s) <- stepSession s'
-
-          evseq <- readIORef evs
-          ev <- case S.viewl evseq of
-                  S.EmptyL        ->
-                    return NoEvent
-                  ev' S.:< evseq' -> do
-                    writeIORef evs evseq'
-                    return (Event ev')
+        step :: GLUTStateRefs e a -> IdleCallback
+        step (GLUTStateRefs a wire session evs status lastTime) = do
+          s'' <- readIORef session
+          w'' <- readIORef wire
 
 
-          -- case ev of
-          --   NoEvent -> return ()
-          --   Event e -> writeIORef status (show e)
+          lastT <- readIORef lastTime
+          now <- getCurrentTime
 
-          (mx,w) <- stepWire w' ds (Right ev)
+          let
+            tdiff = realToFrac (now `diffUTCTime` lastT)
+            iters' = max 0 (floor (tScale * tdiff / simDt)) :: Int
+            iters = min iLimit iters'
+            newLast = (realToFrac (simDt * fromIntegral iters' / tScale)) `addUTCTime` lastT
 
-          writeIORef wireState (s,w)
-          writeIORef a (Just mx)
+
+          writeIORef status ((show . round) (1/tdiff))
+
+          (s',w') <- stepN (iters-1) (s'',w'')
+
+          M.when (iters > 0) $ do
+            (ds,s) <- stepSession s'
+
+            evseq <- readIORef evs
+            ev <- case S.viewl evseq of
+                    S.EmptyL        ->
+                      return NoEvent
+                    ev' S.:< evseq' -> do
+                      writeIORef evs evseq'
+                      return (Event ev')
+
+            -- case ev of
+            --   NoEvent -> return ()
+            --   Event e -> writeIORef status (show e)
+
+            (mx,w) <- stepWire w' ds (Right ev)
+
+            writeIORef wire w
+            writeIORef session s
+            writeIORef a (Just mx)
+
+          writeIORef lastTime newLast
 
           postRedisplay Nothing
 
+        stepN ::
+               Int
+            -> (Session IO (Timed Double ()),Wire (Timed Double ()) e IO (Event RenderEvent) a)
+            -> IO (Session IO (Timed Double ()),Wire (Timed Double ()) e IO (Event RenderEvent) a)
+        stepN n (s',w')
+          | n <= 0    = return (s',w')
+          | otherwise = do
+              (ds,s) <- stepSession s'
+              (_,w) <- stepWire w' ds (Right NoEvent)
+              stepN (n-1) (s,w)
 
-        keyboardMouse :: IORef (S.Seq RenderEvent) -> KeyboardMouseCallback
-        keyboardMouse evs key kstate mods (Position x y) = do
+
+        keyboardMouse :: GLUTStateRefs e a -> KeyboardMouseCallback
+        keyboardMouse (GLUTStateRefs _ _ _ evs _ _) key kstate mods (Position x y) = do
             case ev of
               RenderNullEvent -> return ()
               ev'             -> modifyIORef' evs (S.|> ev')
