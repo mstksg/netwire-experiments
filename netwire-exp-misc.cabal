@@ -24,6 +24,7 @@ executable planets
     build-depends:       base >=4.6 && <4.7
                        , netwire ==5.0.0
                        , linear ==1.0.1
+                       , time ==1.4.0.1
                        , containers >= 0.5.0.0
                        , mtl ==2.1.2
                        , gnuplot ==0.5.1
@@ -34,6 +35,7 @@ executable planets
                        , SDL-gfx ==0.6.0
                        , netwire ==5.0.0
                        , linear ==1.0.1
+                       , time ==1.4.0.1
                        , containers >= 0.5.0.0
                        , mtl ==2.1.2
                        , gnuplot ==0.5.1
@@ -86,14 +88,18 @@ executable archers
     build-depends:       base >=4.6 && <4.7
                        , netwire ==5.0.0
                        , linear ==1.0.1
+                       , containers >= 0.5.0.0
                        , mtl ==2.1.2
+                       , time ==1.4.0.1
                        , GLUT ==2.5.0.2
   else
     build-depends:       base >=4.6 && <4.7
                        , SDL ==0.6.5
                        , SDL-gfx ==0.6.0
                        , netwire ==5.0.0
+                       , containers >= 0.5.0.0
                        , linear ==1.0.1
+                       , time ==1.4.0.1
                        , mtl ==2.1.2
                        , GLUT ==2.5.0.2
   hs-source-dirs:      src
