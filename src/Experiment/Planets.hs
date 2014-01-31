@@ -5,6 +5,7 @@ module Main where
 import Control.Category
 import Control.Monad.Writer.Strict
 import Control.Wire                         as W
+import Data.Char                            (ord)
 import Data.Maybe                           (fromJust, isJust)
 import Data.Traversable
 import Experiment.Planets.Instances.GNUPlot ()
@@ -77,9 +78,13 @@ runManyMouse planets = runTest (length planets + 1) wz
     planetMakers = map (pMaker . fst) (planets ++ [extraPlanet])
     extraPlanet = (Planet "Bob" 0.1 (255,255,255) (Body 0 zero), zero)
 
-    zoomEvent (RenderMouseDown _ RenderMouseWheelUp) = Just (1/1.2)
-    zoomEvent (RenderMouseDown _ RenderMouseWheelDown) = Just (1.2)
-    zoomEvent _ = Nothing
+    zoomEvent (RenderMouseDown _ RenderMouseWheelUp)    = Just (1/1.2)
+    zoomEvent (RenderMouseDown _ RenderMouseWheelDown)  = Just (1.2)
+    zoomEvent (RenderKeyDown (RenderKeyData c mods))
+      | c == ord '+'                                    = Just (1.2)
+      | c == ord '-'                                    = Just (1/1.2)
+      | otherwise                                       = Nothing
+    zoomEvent _                                         = Nothing
 
 manyBody' :: forall m e t s. (MonadFix m, Monoid e, HasTime t s, Fractional t)
     => [(Body, V3D)]          -- Initial body states and initial velocities
