@@ -2,7 +2,7 @@ module Render.Sprite where
 
 import Linear.V2
 import Data.Word
-import Control.Applicative (pure)
+import Control.Applicative (pure, (<*>), (<$>))
 import Linear.Vector
 import Linear.Matrix
 
@@ -32,9 +32,13 @@ transSprite p t (Sprite pspr sh c) = Sprite p' sh' c
 transShape :: M22 Double -> SpriteShape -> SpriteShape
 transShape t c@(Circle r f) =
   case maybeDiagonal t of
-    Just (V2 x y) | x == y    -> Circle (r * x) f
-                  | otherwise -> Ellipse (V2 (r*x) (r*y)) f
-    Nothing                   -> transShape t (toPolygon c)
+    Just t'@(V2 x y) | x == y    -> Circle (r * x) f
+                     | otherwise -> Ellipse (r *^ t') f
+    Nothing                      -> transShape t (toPolygon c)
+transShape t e@(Ellipse r f) =
+    case maybeDiagonal t of
+      Just r' -> Ellipse ((*) <$> r' <*> r) f
+      Nothing -> transShape t (toPolygon e)
 transShape t r@(Rectangle (V2 w h) f) =
   case maybeDiagonal t of
     Just (V2 x y) -> Rectangle (V2 (w*x) (h*y)) f
