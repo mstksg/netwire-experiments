@@ -24,6 +24,7 @@ executable planets
                      -- , SDL-gfx ==0.6.0
                      , netwire ==5.0.0
                      , linear ==1.0.1
+                     , containers >= 0.5.0.0
                      , mtl ==2.1.2
                      , gnuplot ==0.5.1
                      , GLUT ==2.5.0.2
