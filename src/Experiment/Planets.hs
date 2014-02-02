@@ -80,7 +80,7 @@ runManyMouse planets = runTest (length planets + 1) wz
 
     zoomEvent (RenderMouseDown _ RenderMouseWheelUp)    = Just (1/1.2)
     zoomEvent (RenderMouseDown _ RenderMouseWheelDown)  = Just (1.2)
-    zoomEvent (RenderKeyDown (RenderKeyData c mods))
+    zoomEvent (RenderKeyDown (RenderKeyData c _))
       | c == ord '+'                                    = Just (1.2)
       | c == ord '-'                                    = Just (1/1.2)
       | otherwise                                       = Nothing
