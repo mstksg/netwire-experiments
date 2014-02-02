@@ -5,6 +5,7 @@ module Main where
 
 import Control.Category
 import Control.Monad
+import Control.Wire.Unsafe.Event
 import Control.Monad.Fix
 import Control.Wire                     as W
 import Data.Maybe                       (maybeToList, listToMaybe)
@@ -33,19 +34,19 @@ import Experiment.Archers.Instances.SDL ()
 main :: IO ()
 main = testStage (simpleStage 400 300)
 
-simpleStage :: (MonadFix m, HasTime t s, Monoid e, Fractional t) => Double -> Double -> Wire s e m () Stage
+simpleStage :: forall m t s e. (MonadFix m, HasTime t s, Monoid e, Fractional t) => Double -> Double -> Wire s e m () Stage
 simpleStage w h = proc _ -> do
-    rec
-      (d,hit) <- dartWire x0 v0 . delay Nothing -< listToMaybe as
-      as <- arr (:[]) . archerWire a0 <|> pure [] -< hit
-    -- rec
-    --   (dart',hit) <- dartHM x0 v0 . delay (Archer (Body 1 zero) 0) -< head archers
-    --   let
-    --     darts = maybeToList dart'
-    --   archers <- arr return . archer a0 --> pure [] -< hit
-    -- returnA -< Stage w h archers darts
-    returnA -< Stage w h as (maybeToList d)
+    (as,ds) <- arr (\(a,d) -> ([a],[d])) . hitInteraction --> pure ([],[]) -< ()
+    returnA -< Stage w h as ds
   where
+    hitInteraction :: Wire s e m () (Archer, Dart)
+    hitInteraction = proc _ -> do
+      rec
+        a <- archerWire a0 . delay NoEvent-< hit
+        d <- dartWire x0 v0 . delay NoEvent -< hit
+        hit <- hitWire . delay (Nothing, Nothing) -< (Just a,Just d)
+      returnA -< (a,d)
+
     x0 = V3 w (h/2) 0
     v0 = V3 (-12) 0 0
     a0 = V3 (w/2) (h/2) 0
@@ -55,22 +56,33 @@ data Hit = Hit
 archerWire :: (Monad m, Monoid e) => V3D -> Wire s e m (Event Hit) Archer
 archerWire x0 = proc h -> do
   xa <- pure x0 -< ()
-  returnA . W.until -< (Archer (Body 1 xa) 0, h)
+  W.until -< (Archer (Body 1 xa) 0, h)
 
-dartWire :: (Monad m, Monoid e, HasTime t s) => V3D -> V3D -> Wire s e m (Maybe Archer) (Maybe Dart, Event Hit)
-dartWire x0 v0@(V3 vx vy _) = proc a -> do
+dartWire :: (Monad m, Monoid e, HasTime t s) => V3D -> V3D -> Wire s e m (Event Hit) Dart
+dartWire x0 v0@(V3 vx vy _) = proc h -> do
   pos <- integral x0 -< v0
-  e <-
-    case a of
-      Just (Archer (Body _ xa) _) ->
-        never . W.unless (\(d,_) -> norm d < 5) --> now . arr snd
-          -< (pos ^-^ xa, Hit)
-      Nothing ->
-        never -< ()
-  d <-
-    arr Just . W.until --> pure Nothing
-      -< (Dart (Body 1 pos) (atan2 vy vx), e)
-  returnA -< (d,e)
+  W.until -< (Dart (Body 1 pos) (atan2 vy vx), h)
+  -- e <-
+  --   case a of
+  --     Just (Archer (Body _ xa) _) ->
+  --       never . W.unless ((< 5) . norm) . arr fst --> now . arr snd
+  --         -< (pos ^-^ xa, Hit)
+  --     Nothing ->
+  --       never -< ()
+  -- d <-
+  --   arr Just . W.until --> pure Nothing
+  --     -< (Dart (Body 1 pos) (atan2 vy vx), e)
+  -- returnA -< (d,e)
+
+
+hitWire :: (Monad m, Monoid e) => Wire s e m (Maybe Archer, Maybe Dart) (Event Hit)
+hitWire = proc (a,d) ->
+  case (a,d) of
+    (Just (Archer (Body _ xa) _), Just (Dart (Body _ xd) _)) ->
+      never . W.unless ((< 5) . norm) . arr fst --> now . arr snd
+        -< (xa ^-^ xd, Hit)
+    _ -> never -< ()
+
 
 --         never . W.unless (\(d,_) -> norm d < 5) --> arr (snd<$>) . now
 --           -< (arcpos ^-^ pos, Hit)
