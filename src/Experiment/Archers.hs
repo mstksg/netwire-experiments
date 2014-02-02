@@ -11,6 +11,7 @@ import Control.Wire                     as W
 import Data.Maybe                       (catMaybes)
 import Experiment.Archers.Types
 import FRP.Netwire
+import Control.Monad.Random
 import Data.List (unfoldr)
 import Linear.Metric
 import Linear.V3
@@ -33,109 +34,50 @@ import Experiment.Archers.Instances.SDL ()
 --                  , teamArrows :: Arrow }
 
 main :: IO ()
-main = testStage (simpleStage 400 300)
+main = do
+    a0s <- evalRandIO . replicateM 25 $ (,) <$> genPos <*> getRandom
+    d0s <- evalRandIO . replicateM 30 $ (,) <$> ((^+^ (V3 (w/4) (h/4) 0)) . (^/ 2) <$> genPos) <*> genVel
+    print a0s
+    print d0s
+    testStage (simpleStage w h a0s d0s)
+  where
+    w = 400
+    h = 300
+    genPos = V3 <$> getRandomR (0,w) <*> getRandomR (0,h) <*> pure 0
+    genVel = V3 <$> getRandomR (-20,20) <*> getRandomR (-20,20) <*> pure 0
+
 
 simpleStage :: forall m t s e. (MonadFix m, HasTime t s, Monoid e, Fractional t)
-    => Double
-    -> Double
+    => Double           -- width
+    -> Double           -- height
+    -> [(V3D,Int)]      -- archers
+    -> [(V3D,V3D)]      -- darts
     -> Wire s e m () Stage
-simpleStage w h = proc _ -> do
+simpleStage w h a0s d0s = proc _ -> do
     (as,ds) <- hitInteraction' -< ()
     returnA -< Stage w h as ds
   where
-    -- hitInteraction :: Wire s e m () ([Archer], [Dart])
-    -- hitInteraction = proc _ -> do
-    --   rec
-    --     let
-    --       hita1 = fmap snd . mergeEs $ [ hit11, hit12, hit13 ]
-    --       hita2 = fmap snd . mergeEs $ [ hit21, hit22, hit23 ]
-    --       hita3 = fmap snd . mergeEs $ [ hit31, hit32, hit33 ]
-    --       hitd1 = fmap fst . mergeEs $ [ hit11, hit21, hit21 ]
-    --       hitd2 = fmap fst . mergeEs $ [ hit12, hit22, hit32 ]
-    --       hitd3 = fmap fst . mergeEs $ [ hit13, hit23, hit33 ]
-    --     a1 <- archerWire a10 . delay NoEvent -< hita1
-    --     a2 <- archerWire a20 . delay NoEvent -< hita2
-    --     a3 <- archerWire a30 . delay NoEvent -< hita3
-    --     d1 <- dartWire x10 v10 . delay NoEvent -< hitd1
-    --     d2 <- dartWire x20 v20 . delay NoEvent -< hitd2
-    --     d3 <- dartWire x30 v30 . delay NoEvent -< hitd3
-    --     hit11 <- hitWire -< (a1,d1)
-    --     hit12 <- hitWire -< (a1,d2)
-    --     hit13 <- hitWire -< (a1,d3)
-    --     hit21 <- hitWire -< (a2,d1)
-    --     hit22 <- hitWire -< (a2,d2)
-    --     hit23 <- hitWire -< (a2,d3)
-    --     hit31 <- hitWire -< (a3,d1)
-    --     hit32 <- hitWire -< (a3,d2)
-    --     hit33 <- hitWire -< (a3,d3)
-    --   returnA -< (catMaybes [a1,a2,a3], catMaybes [d1,d2,d3])
+    aCount = length a0s
+    dCount = length d0s
 
     hitInteraction' :: Wire s e m () ([Archer], [Dart])
     hitInteraction' = proc _ -> do
       rec
         let
-          hitas = map (fmap snd . mergeEs) $ chunks 3 hits
-          hitds = map (fmap fst . mergeEs) $ everys 3 hits
+          hitas = map (fmap snd . mergeEs) $ chunks dCount hits
+          hitds = map (fmap fst . mergeEs) $ everys aCount hits
 
-        as <- zipArrow (map archerWire [a10,a20,a30]) -< hitas
-        ds <- zipArrow (map (uncurry dartWire) [(x10,v10),(x20,v20),(x30,v30)]) -< hitds
-
-
-        hits <- zipHits hitWire 3 -< (as, ds)
-
-        -- a1 <- archerWire a10 . delay NoEvent . arr (!! 1) -< [hita1, hita2, hita3]
-        -- a2 <- archerWire a20 . delay NoEvent . arr (!! 2) -< [hita1, hita2, hita3]
-        -- a3 <- archerWire a30 . delay NoEvent . arr (!! 3) -< [hita1, hita2, hita3]
+        as <- zipArrow (map (uncurry archerWire) a0s) -< hitas
+        ds <- zipArrow (map (uncurry dartWire) d0s) -< hitds
 
 
-
-        -- [a1,a2,a3] <- undefined -< [hita1, hita2, hita3]
-
-
-        -- hit11 <- hitWire . arr (\(as,ds) -> (as !! 0, ds !! 0)) -< (as,ds)
-        -- hit12 <- hitWire . arr (\(as,ds) -> (as !! 0, ds !! 1)) -< (as,ds)
-        -- hit13 <- hitWire . arr (\(as,ds) -> (as !! 0, ds !! 2)) -< (as,ds)
-        -- hit21 <- hitWire . arr (\(as,ds) -> (as !! 1, ds !! 0)) -< (as,ds)
-        -- hit22 <- hitWire . arr (\(as,ds) -> (as !! 1, ds !! 1)) -< (as,ds)
-        -- hit23 <- hitWire . arr (\(as,ds) -> (as !! 1, ds !! 2)) -< (as,ds)
-        -- hit31 <- hitWire . arr (\(as,ds) -> (as !! 2, ds !! 0)) -< (as,ds)
-        -- hit32 <- hitWire . arr (\(as,ds) -> (as !! 2, ds !! 1)) -< (as,ds)
-        -- hit33 <- hitWire . arr (\(as,ds) -> (as !! 2, ds !! 2)) -< (as,ds)
-
-        -- a1 <- archerWire a10 . delay NoEvent -< hita1
-        -- a2 <- archerWire a20 . delay NoEvent -< hita2
-        -- a3 <- archerWire a30 . delay NoEvent -< hita3
-        -- d1 <- dartWire x10 v10 . delay NoEvent -< hitd1
-        -- d2 <- dartWire x20 v20 . delay NoEvent -< hitd2
-        -- d3 <- dartWire x30 v30 . delay NoEvent -< hitd3
-        -- hit11 <- hitWire -< (a1,d1)
-        -- hit12 <- hitWire -< (a1,d2)
-        -- hit13 <- hitWire -< (a1,d3)
-        -- hit21 <- hitWire -< (a2,d1)
-        -- hit22 <- hitWire -< (a2,d2)
-        -- hit23 <- hitWire -< (a2,d3)
-        -- hit31 <- hitWire -< (a3,d1)
-        -- hit32 <- hitWire -< (a3,d2)
-        -- hit33 <- hitWire -< (a3,d3)
+        hits <- zipHits hitWire aCount dCount -< (as, ds)
 
       returnA -< (catMaybes as, catMaybes ds)
 
-    mergeEs :: [Event a] -> Event a
-    mergeEs = foldl (merge const) NoEvent
+mergeEs :: [Event a] -> Event a
+mergeEs = foldl (merge const) NoEvent
 
-
-    -- x0 = V3 w (h/2) 0
-    -- v0 = V3 (-12) 0 0
-    -- a0 = V3 (w/2) (h/2) 0
-    x10 = V3 w (h/2) 0
-    v10 = V3 (-12) 0 0
-    a10 = V3 (w/2) (h/2) 0
-    x20 = V3 (w*3/4) (h/2) 0
-    v20 = V3 (-12) 0 0
-    a20 = V3 (w/4) (h/2) 0
-    x30 = V3 (w/2) 0 0
-    v30 = V3 0 (12) 0
-    a30 = V3 (w/2) (h*3/4) 0
 
 everys :: Int -> [a] -> [[a]]
 everys n xs = map (\i -> every n (drop i xs)) [0..(n-1)]
@@ -143,9 +85,6 @@ everys n xs = map (\i -> every n (drop i xs)) [0..(n-1)]
 every :: Int -> [a] -> [a]
 every _ []   = []
 every n (x:xs) = x : every n (drop (n-1) xs)
--- every n xs = case drop (n-1) xs of
---               (y:ys) -> y : every n ys
---               [] -> []
 
 chunks :: Int -> [a] -> [[a]]
 chunks n xs = takeWhile (not . null) $ unfoldr (Just . splitAt n) xs
@@ -164,8 +103,9 @@ zipArrow arrs = go arrs 0
 zipHits :: Monad m
     => Wire s e m (a1,a2) b
     -> Int
+    -> Int
     -> Wire s e m ([a1],[a2]) [b]
-zipHits wr n = go ((,) <$> [0..(n-1)] <*> [0..(n-1)])
+zipHits wr ac dc = go ((,) <$> [0..(ac-1)] <*> [0..(dc-1)])
   where
     go [] = pure []
     go ((ai,di):adis) = proc ads@(as,ds) -> do
@@ -173,14 +113,15 @@ zipHits wr n = go ((,) <$> [0..(n-1)] <*> [0..(n-1)])
       hs <- go adis -< ads
       returnA -< h:hs
 
-
 data Hit = Hit
 
-archerWire :: (Monad m, Monoid e)
+archerWire :: (Monad m, Monoid e, HasTime t s)
     => V3D
+    -> Int
     -> Wire s e m (Event Dart) (Maybe Archer)
-archerWire x0 = proc h -> do
-  xa <- pure x0 -< ()
+archerWire x0 gen = proc h -> do
+  (vx,vy) <- hold . stdNoiseR 2 ((-10,-10),(10,10)) gen -< ()
+  xa <- integral x0 -< V3 vx vy 0
   W.until --> pure Nothing
     -< (Just (Archer (Body 1 xa) 0), h)
 
@@ -193,19 +134,6 @@ dartWire x0 v0@(V3 vx vy _) = proc h -> do
   W.until --> pure Nothing
     -< (Just (Dart (Body 1 pos) (atan2 vy vx)), h)
 
-  -- e <-
-  --   case a of
-  --     Just (Archer (Body _ xa) _) ->
-  --       never . W.unless ((< 5) . norm) . arr fst --> now . arr snd
-  --         -< (pos ^-^ xa, Hit)
-  --     Nothing ->
-  --       never -< ()
-  -- d <-
-  --   arr Just . W.until --> pure Nothing
-  --     -< (Dart (Body 1 pos) (atan2 vy vx), e)
-  -- returnA -< (d,e)
-
-
 hitWire :: (Monad m, Monoid e) => Wire s e m (Maybe Archer, Maybe Dart) (Event (Archer, Dart))
 hitWire = proc ad ->
   case ad of
@@ -216,9 +144,6 @@ hitWire = proc ad ->
       never
         -< ()
 
-
---         never . W.unless (\(d,_) -> norm d < 5) --> arr (snd<$>) . now
---           -< (arcpos ^-^ pos, Hit)
 
 -- archersAndDarts :: Monad m => Wire s e m ([Archer],[Dart]) ([Archer],[Dart])
 -- archersAndDarts = proc (as,ds) -> undefined -< undefined
@@ -231,8 +156,6 @@ hitWire = proc ad ->
 --     dartWire = undefined
 --     archerWire :: Wire s e m (Archer, Dart) Archer
 --     archerWire = undefined
-
-
 
 -- tryReturn :: (MonadPlus mp, Monoid e, Monad m) => Wire s e m a b -> Wire s e m a (mp b)
 -- tryReturn w = return <$> w <|> pure mzero
@@ -326,10 +249,3 @@ testStage w =
     (const . return . return $ ())
     (w . pure ())
 #endif
-
-
-
-
--- runTestSDL :: Wire (Timed Double ()) String IO (Event RenderEvent) [Planet] -> IO ()
--- runTestSDL w =
---   runBackend (sdlBackend 600 600 (31,31,31)) (const . return . return $ ()) (PlanetList <$> w)
