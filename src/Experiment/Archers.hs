@@ -36,20 +36,35 @@ main = testStage (simpleStage 400 300)
 
 simpleStage :: forall m t s e. (MonadFix m, HasTime t s, Monoid e, Fractional t) => Double -> Double -> Wire s e m () Stage
 simpleStage w h = proc _ -> do
-    (as,ds) <- arr (\(a,d) -> ([a],[d])) . hitInteraction --> pure ([],[]) -< ()
+    (as,ds) <- hitInteraction --> pure ([],[]) -< ()
     returnA -< Stage w h as ds
   where
-    hitInteraction :: Wire s e m () (Archer, Dart)
+    hitInteraction :: Wire s e m () ([Archer], [Dart])
     hitInteraction = proc _ -> do
       rec
-        a <- archerWire a0 . delay NoEvent-< hit
-        d <- dartWire x0 v0 . delay NoEvent -< hit
-        hit <- hitWire . delay (Nothing, Nothing) -< (Just a,Just d)
-      returnA -< (a,d)
+        a1 <- archerWire a0 . delay NoEvent -< hita1
+        a2 <- archerWire a0 . delay NoEvent -< hita2
+        d1 <- dartWire x0 v0 . delay NoEvent -< hitd1
+        d2 <- dartWire x0 v0 . delay NoEvent -< hitd2
+        hit11 <- hitWire -< (a1,d1)
+        hit12 <- hitWire -< (a1,d2)
+        hit21 <- hitWire -< (a2,d1)
+        hit22 <- hitWire -< (a2,d2)
+        hita1 <- arr fst <& arr snd -< (hit11,hit12)
+        hita2 <- arr fst <& arr snd -< (hit21,hit22)
+        hitd1 <- arr fst <& arr snd -< (hit11,hit21)
+        hitd2 <- arr fst <& arr snd -< (hit12,hit22)
+      returnA -< ([a1,a2],[d1,d2])
 
     x0 = V3 w (h/2) 0
     v0 = V3 (-12) 0 0
     a0 = V3 (w/2) (h/2) 0
+    x10 = V3 w (h/2) 0
+    v10 = V3 (-12) 0 0
+    a10 = V3 (w/2) (h/2) 0
+    x20 = V3 (w*3/4) (h/2) 0
+    v20 = V3 (-12) 0 0
+    a20 = V3 (w/4) (h/2) 0
 
 data Hit = Hit
 
@@ -75,13 +90,10 @@ dartWire x0 v0@(V3 vx vy _) = proc h -> do
   -- returnA -< (d,e)
 
 
-hitWire :: (Monad m, Monoid e) => Wire s e m (Maybe Archer, Maybe Dart) (Event Hit)
-hitWire = proc (a,d) ->
-  case (a,d) of
-    (Just (Archer (Body _ xa) _), Just (Dart (Body _ xd) _)) ->
-      never . W.unless ((< 5) . norm) . arr fst --> now . arr snd
-        -< (xa ^-^ xd, Hit)
-    _ -> never -< ()
+hitWire :: (Monad m, Monoid e) => Wire s e m (Archer, Dart) (Event Hit)
+hitWire = proc (Archer (Body _ xa) _, Dart (Body _ xd) _) ->
+  never . W.unless ((< 5) . norm) . arr fst --> now . arr snd
+    -< (xa ^-^ xd, Hit)
 
 
 --         never . W.unless (\(d,_) -> norm d < 5) --> arr (snd<$>) . now
