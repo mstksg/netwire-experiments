@@ -44,7 +44,7 @@ simpleStage w h = proc _ -> do
     --     darts = maybeToList dart'
     --   archers <- arr return . archer a0 --> pure [] -< hit
     -- returnA -< Stage w h archers darts
-    returnA -< Stage w h as [d]
+    returnA -< Stage w h as (maybeToList d)
   where
     x0 = V3 w (h/2) 0
     v0 = V3 (-12) 0 0
@@ -57,7 +57,7 @@ archerWire x0 = proc h -> do
   xa <- pure x0 -< ()
   returnA . W.until -< (Archer (Body 1 xa) 0, h)
 
-dartWire :: (Monad m, Monoid e, HasTime t s) => V3D -> V3D -> Wire s e m (Maybe Archer) (Dart, Event Hit)
+dartWire :: (Monad m, Monoid e, HasTime t s) => V3D -> V3D -> Wire s e m (Maybe Archer) (Maybe Dart, Event Hit)
 dartWire x0 v0@(V3 vx vy _) = proc a -> do
   pos <- integral x0 -< v0
   e <-
@@ -67,7 +67,10 @@ dartWire x0 v0@(V3 vx vy _) = proc a -> do
           -< (pos ^-^ xa, Hit)
       Nothing ->
         never -< ()
-  returnA -< (Dart (Body 1 pos) (atan2 vy vx), e)
+  d <-
+    arr Just . W.until --> pure Nothing
+      -< (Dart (Body 1 pos) (atan2 vy vx), e)
+  returnA -< (d,e)
 
 --         never . W.unless (\(d,_) -> norm d < 5) --> arr (snd<$>) . now
 --           -< (arcpos ^-^ pos, Hit)
