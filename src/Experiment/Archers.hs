@@ -18,6 +18,8 @@ import Prelude hiding                   ((.),id)
 import Render.Render
 
 #ifdef WINDOWS
+import Render.Backend.GLUT
+import Experiment.Archers.Instances.GLUT    ()
 #else
 import Render.Backend.SDL
 import Experiment.Archers.Instances.SDL ()
@@ -141,7 +143,10 @@ hittable wr = proc (a,h) -> do
 testStage :: Wire (Timed Double ()) () IO () Stage -> IO ()
 testStage w =
 #ifdef WINDOWS
-  undefined
+  runBackend
+    (glutBackend (1/30) 5 (600,600) (50,50,50))
+    (const . return $ ())
+    (w . pure ())
 #else
   runBackend
     (sdlBackend 600 600 (50,50,50))
