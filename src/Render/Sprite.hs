@@ -2,6 +2,7 @@ module Render.Sprite where
 
 import Linear.V2
 import Data.Word
+import Control.Applicative (pure, (<*>), (<$>))
 import Linear.Vector
 import Linear.Matrix
 
@@ -11,6 +12,7 @@ data Sprite = Sprite { spritePos   :: V2 Double
                      }
 
 data SpriteShape = Circle Double Filling
+                 | Ellipse (V2 Double) Filling
                  | Rectangle (V2 Double) Filling
                  | Polygon [V2 Double] Filling
                  | Line (V2 Double) (V2 Double)
@@ -28,7 +30,15 @@ transSprite p t (Sprite pspr sh c) = Sprite p' sh' c
     sh' = transShape t sh
 
 transShape :: M22 Double -> SpriteShape -> SpriteShape
-transShape t (Circle r f) = Circle (r * sqrt (det22 t)) f
+transShape t c@(Circle r f) =
+  case maybeDiagonal t of
+    Just t'@(V2 x y) | x == y    -> Circle (r * x) f
+                     | otherwise -> Ellipse (r *^ t') f
+    Nothing                      -> transShape t (toPolygon c)
+transShape t e@(Ellipse r f) =
+    case maybeDiagonal t of
+      Just r' -> Ellipse ((*) <$> r' <*> r) f
+      Nothing -> transShape t (toPolygon e)
 transShape t r@(Rectangle (V2 w h) f) =
   case maybeDiagonal t of
     Just (V2 x y) -> Rectangle (V2 (w*x) (h*y)) f
@@ -47,11 +57,12 @@ toPolygon (Rectangle (V2 w h) f) = Polygon [ V2 (-w/2) (-h/2)
                                            , V2 (-w/2) ( h/2) ] f
 toPolygon (Polygon vs f) = Polygon vs f
 toPolygon (Line p1 p2)   = Polygon [p1, p2] Unfilled
-toPolygon (Circle r f)   = Polygon (map angleToCircle [0..360]) f
+toPolygon (Circle r f)   = toPolygon (Ellipse (pure r) f)
+toPolygon (Ellipse (V2 rx ry) f) = Polygon (map angleToEllipse [0..360]) f
   where
-    angleToCircle d =
+    angleToEllipse d =
       let a = d / 180 * pi
-      in  r *^ V2 (cos a) (sin a)
+      in  V2 (rx * cos a) (ry * sin a)
 
 fromFilling :: Filling -> a -> a -> a
 fromFilling Unfilled f _ = f

@@ -15,14 +15,16 @@ data Planet = Planet  { planetName    :: String
                       , planetBody    :: Body
                       } deriving (Show)
 
-newtype PlanetList = PlanetList [Planet]
+data PlanetList = PlanetList { planetListZoom :: Double
+                             , planetListPlanets :: [Planet]
+                             } deriving (Show)
 
 instance HasSprite Planet where
   toSprite (Planet _ r c (Body _ (V3 x y _))) =
     Sprite (V2 x y) (Circle r Filled) c
 
 instance HasSurface PlanetList where
-  toSurface (PlanetList ps) =
-    Surface zero idTrans (map (EntSprite . toSprite) ps)
+  toSurface (PlanetList z ps) =
+    Surface zero (transScale z) (map (EntSprite . toSprite) ps)
 
 

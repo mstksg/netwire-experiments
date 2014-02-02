@@ -1,30 +1,49 @@
 
 module Render.Backend.GLUT where
 
-import Render.Render
-import Prelude hiding ((.),id)
-import Linear.Vector
--- import Control.Monad
-import Linear.V2
-import Data.IORef
-import Render.Sprite as Sprite
-import Render.Surface
-import Data.Word
-import Control.Wire.Unsafe.Event
-import Graphics.UI.GLUT as GLUT
+import Control.Monad as M
+import Data.Time.Clock
 import Control.Wire
+import Control.Wire.Unsafe.Event
+import Data.IORef
+import Data.Word
+import Data.Char
+import Graphics.UI.GLUT          as GLUT
+import Linear.V2
+import Linear.Vector
+import Prelude hiding            ((.),id)
+import Render.Render
+import Render.Sprite             as Sprite
+import Render.Surface
+import qualified Data.Sequence   as S
+
+data GLUTStateRefs e a = GLUTStateRefs
+                           { glutStateA        :: IORef (Maybe (Either e a))
+                           , glutStateWire     :: IORef (Wire (Timed Double ()) e IO (Event RenderEvent) a)
+                           , glutStateSession  :: IORef (Session IO (Timed Double ()))
+                           , glutStateEQueue   :: IORef (S.Seq RenderEvent)
+                           , glutStateStatus   :: IORef String
+                           , glutStateLastTime :: IORef UTCTime
+                           }
 
 
-glutBackend :: GLUTRenderable a
-    => Int
-    -> Int
-    -> (Word8, Word8, Word8)
+iterationLimit :: Int
+iterationLimit = 5
+
+glutBackend :: forall e a. GLUTRenderable a
+    => Double                 -- simulation dt
+    -> Double                 -- simulation time/real time ratio
+    -> (Int,Int)              -- width and height
+    -> (Word8, Word8, Word8)  -- background color
     -> Backend (Timed Double ()) e IO (IO ()) a
-glutBackend wd ht (cr,cg,cb) = Backend runGLUT
+glutBackend simDt tScale (wd,ht) (cr,cg,cb) = Backend runGLUT
   where
-    -- fr = 30
-    simDt = 1/30
+    sess :: Session IO (Timed Double ())
     sess = countSession_ simDt
+
+    iLimit :: Int
+    iLimit = round (tScale * fromIntegral iterationLimit)
+
     col = Color4
             (fromIntegral cr / 255)
             (fromIntegral cg / 255)
@@ -33,27 +52,170 @@ glutBackend wd ht (cr,cg,cb) = Backend runGLUT
 
     runGLUT r wr = do
         (progName,_) <- getArgsAndInitialize
-        ref <- newIORef (sess,wr)
+
+        
+        stateRefs <- initState
+
         initialWindowSize $= Size (fromIntegral wd) (fromIntegral ht)
-        initialDisplayMode $= [RGBMode, SingleBuffered]
+        initialDisplayMode $= [ RGBMode, WithDepthBuffer, DoubleBuffered ]
         createWindow progName
         clearColor $= col
-        displayCallback $= display ref
+        displayCallback $= display stateRefs
+        idleCallback $= Just (step stateRefs)
+        keyboardMouseCallback $= Just (keyboardMouse stateRefs)
+
         mainLoop
 
       where
-        display ref = do
-          (s',w') <- readIORef ref
-          (ds,s) <- stepSession s'
-          (mx,w) <- stepWire w' ds (Right NoEvent)
-          clear [ColorBuffer]
+        initState :: IO (GLUTStateRefs e a)
+        initState = do
+          a          <- newIORef Nothing
+          wire       <- newIORef wr
+          session    <- newIORef sess
+          eventQueue <- newIORef mempty
+          status     <- newIORef mempty
+          lastTime   <- getCurrentTime >>= newIORef
+
+          return $ GLUTStateRefs  a
+                                  wire
+                                  session
+                                  eventQueue
+                                  status
+                                  lastTime
+
+
+        display :: GLUTStateRefs e a -> DisplayCallback
+        display (GLUTStateRefs a _ _ _ status _) = do
+          mx <- readIORef a
+
           case mx of
-            Right mx' -> do
+            Nothing -> return ()
+            Just (Right mx') -> do
+              clear [ColorBuffer]
               renderGLUT mx'
+
+              stat <- readIORef status
+              currentRasterPosition $= Vertex4 (-0.95) (0.95) 0 1
+              renderString Fixed8By13 stat
+
               r mx'
-              writeIORef ref (s,w)
-            Left _ -> exit
-          flush
+              swapBuffers
+            Just (Left _) -> exit
+
+        step :: GLUTStateRefs e a -> IdleCallback
+        step (GLUTStateRefs a wire session evs status lastTime) = do
+          s'' <- readIORef session
+          w'' <- readIORef wire
+
+
+          lastT <- readIORef lastTime
+          now <- getCurrentTime
+
+          let
+            tdiff = realToFrac (now `diffUTCTime` lastT)
+            iters' = max 0 (floor (tScale * tdiff / simDt)) :: Int
+            iters = min iLimit iters'
+            newLast = (realToFrac (simDt * fromIntegral iters' / tScale)) `addUTCTime` lastT
+
+
+          writeIORef status ((show . round) (1/tdiff))
+
+          (s',w') <- stepN (iters-1) (s'',w'')
+
+          M.when (iters > 0) $ do
+            (ds,s) <- stepSession s'
+
+            evseq <- readIORef evs
+            ev <- case S.viewl evseq of
+                    S.EmptyL        ->
+                      return NoEvent
+                    ev' S.:< evseq' -> do
+                      writeIORef evs evseq'
+                      return (Event ev')
+
+            -- case ev of
+            --   NoEvent -> return ()
+            --   Event e -> writeIORef status (show e)
+
+            (mx,w) <- stepWire w' ds (Right ev)
+
+            writeIORef wire w
+            writeIORef session s
+            writeIORef a (Just mx)
+
+          writeIORef lastTime newLast
+
+          postRedisplay Nothing
+
+        stepN ::
+               Int
+            -> (Session IO (Timed Double ()),Wire (Timed Double ()) e IO (Event RenderEvent) a)
+            -> IO (Session IO (Timed Double ()),Wire (Timed Double ()) e IO (Event RenderEvent) a)
+        stepN n (s',w')
+          | n <= 0    = return (s',w')
+          | otherwise = do
+              (ds,s) <- stepSession s'
+              (_,w) <- stepWire w' ds (Right NoEvent)
+              stepN (n-1) (s,w)
+
+
+        keyboardMouse :: GLUTStateRefs e a -> KeyboardMouseCallback
+        keyboardMouse (GLUTStateRefs _ _ _ evs _ _) key kstate mods (Position x y) = do
+            case ev of
+              RenderNullEvent -> return ()
+              ev'             -> modifyIORef' evs (S.|> ev')
+          where
+            upDown (d,u) = case kstate of
+                             Down -> d
+                             Up -> u
+            pos = (fromIntegral x, fromIntegral y)
+            ev =
+              case key of
+                MouseButton b ->
+                  let b' = case b of
+                             LeftButton -> RenderMouseLeft
+                             MiddleButton -> RenderMouseMiddle
+                             RightButton -> RenderMouseRight
+                             WheelUp -> RenderMouseWheelUp   -- doesn't work for some reason
+                             WheelDown -> RenderMouseWheelDown
+                             _ -> RenderMouseButtonUnknown
+                  in  (upDown (RenderMouseDown,RenderMouseUp)) pos b'
+                SpecialKey _ -> RenderUnknownEvent
+                GLUT.Char c ->
+                  let mods' = zip
+                                (map ($ mods) [shift,alt,ctrl])
+                                [RenderKeyShift ..]
+                      modList = map snd . filter ((== Down) . fst) $ mods'
+                      kData = RenderKeyData (ord c) modList
+                  in  (upDown (RenderKeyDown,RenderKeyUp)) kData
+
+
+-- data RenderEvent = RenderKeyDown RenderKeyData
+--                  | RenderKeyUp RenderKeyData
+--                  | RenderMouseDown (Int,Int) RenderMouseButton
+--                  | RenderMouseUp (Int,Int) RenderMouseButton
+--                  | RenderQuit
+--                  | RenderNullEvent
+--                  | RenderUnknownEvent
+--                  deriving (Show)
+-- data RenderKeyData = RenderKeyData { renderKeyDataKey :: Int
+--                                    , renderKeyDataModifiers :: [RenderKeyModifier]
+--                                    } deriving (Show)
+
+-- data RenderKeyModifier = RenderKeyShift
+--                        | RenderKeyAlt
+--                        | RenderKeyCtrl
+--                        deriving (Show)
+
+-- data RenderMouseButton = RenderMouseLeft
+--                        | RenderMouseMiddle
+--                        | RenderMouseRight
+--                        | RenderMouseWheelUp
+--                        | RenderMouseWheelDown
+--                        | RenderMouseButtonUnknown
+--                        deriving (Show)
+
+
 
 class GLUTRenderable s where
   renderGLUT :: s -> IO ()
