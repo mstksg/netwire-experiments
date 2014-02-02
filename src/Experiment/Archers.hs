@@ -34,7 +34,10 @@ import Experiment.Archers.Instances.SDL ()
 main :: IO ()
 main = testStage (simpleStage 400 300)
 
-simpleStage :: forall m t s e. (MonadFix m, HasTime t s, Monoid e, Fractional t) => Double -> Double -> Wire s e m () Stage
+simpleStage :: forall m t s e. (MonadFix m, HasTime t s, Monoid e, Fractional t)
+    => Double
+    -> Double
+    -> Wire s e m () Stage
 simpleStage w h = proc _ -> do
     (as,ds) <- hitInteraction -< ()
     returnA -< Stage w h as ds
@@ -44,27 +47,52 @@ simpleStage w h = proc _ -> do
       rec
         a1 <- archerWire a10 . delay NoEvent -< hita1
         a2 <- archerWire a20 . delay NoEvent -< hita2
+        a3 <- archerWire a30 . delay NoEvent -< hita3
         d1 <- dartWire x10 v10 . delay NoEvent -< hitd1
         d2 <- dartWire x20 v20 . delay NoEvent -< hitd2
+        d3 <- dartWire x30 v30 . delay NoEvent -< hitd3
         hit11 <- hitWire -< (a1,d1)
         hit12 <- hitWire -< (a1,d2)
+        hit13 <- hitWire -< (a1,d3)
         hit21 <- hitWire -< (a2,d1)
         hit22 <- hitWire -< (a2,d2)
-        hita1 <- arr fst <& arr snd -< (hit11,hit12)
-        hita2 <- arr fst <& arr snd -< (hit21,hit22)
-        hitd1 <- arr fst <& arr snd -< (hit11,hit21)
-        hitd2 <- arr fst <& arr snd -< (hit12,hit22)
-      returnA -< (catMaybes [a1,a2], catMaybes [d1,d2])
+        hit23 <- hitWire -< (a2,d3)
+        hit31 <- hitWire -< (a3,d1)
+        hit32 <- hitWire -< (a3,d2)
+        hit33 <- hitWire -< (a3,d3)
+        hita1 <- arr mergeEs -< [ hit11, hit12, hit13 ]
+        hita2 <- arr mergeEs -< [ hit21, hit22, hit23 ]
+        hita3 <- arr mergeEs -< [ hit31, hit32, hit33 ]
+        hitd1 <- arr mergeEs -< [ hit11, hit21, hit21 ]
+        hitd2 <- arr mergeEs -< [ hit12, hit22, hit32 ]
+        hitd3 <- arr mergeEs -< [ hit13, hit23, hit33 ]
+      returnA -< (catMaybes [a1,a2,a3], catMaybes [d1,d2,d3])
 
-    x0 = V3 w (h/2) 0
-    v0 = V3 (-12) 0 0
-    a0 = V3 (w/2) (h/2) 0
+    mergeEs :: [Event a] -> Event a
+    mergeEs = foldl (merge const) NoEvent
+
+    -- x0 = V3 w (h/2) 0
+    -- v0 = V3 (-12) 0 0
+    -- a0 = V3 (w/2) (h/2) 0
     x10 = V3 w (h/2) 0
     v10 = V3 (-12) 0 0
     a10 = V3 (w/2) (h/2) 0
     x20 = V3 (w*3/4) (h/2) 0
     v20 = V3 (-12) 0 0
     a20 = V3 (w/4) (h/2) 0
+    x30 = V3 (w/2) 0 0
+    v30 = V3 0 (12) 0
+    a30 = V3 (w/2) (h*3/4) 0
+
+-- sequenceHits :: Monad m
+--     => [Wire s e m (Event Hit) (Maybe Archer)]
+--     -> [Wire s e m (Event Hit) (Maybe Dart)]
+--     -> Wire s e m () ([Archer],[Dart])
+-- sequenceHits aWires dWires = undefined
+--   where
+--     archers = map (archerWire dWires) aWires
+--     archerWire [] aWire = aWire . never . pure ()
+--     archerWire (d:ds) aWire =
 
 data Hit = Hit
 
