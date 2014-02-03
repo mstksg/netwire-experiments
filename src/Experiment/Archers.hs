@@ -12,7 +12,7 @@ import Data.Maybe                       (catMaybes)
 import Experiment.Archers.Types
 import FRP.Netwire
 import Control.Monad.Random
-import Data.List (unfoldr)
+import Data.List (unfoldr, transpose)
 import Linear.Metric
 import Linear.V3
 import Linear.Vector
@@ -35,8 +35,8 @@ import Experiment.Archers.Instances.SDL ()
 
 main :: IO ()
 main = do
-    a0s <- evalRandIO . replicateM 25 $ (,) <$> genPos <*> getRandom
-    d0s <- evalRandIO . replicateM 30 $ (,) <$> ((^+^ (V3 (w/4) (h/4) 0)) . (^/ 2) <$> genPos) <*> genVel
+    a0s <- evalRandIO . replicateM 20 $ (,) <$> genPos <*> getRandom
+    d0s <- evalRandIO . replicateM 20 $ (,) <$> ((^+^ (V3 (w/4) (h/4) 0)) . (^/ 2) <$> genPos) <*> genVel
     print a0s
     print d0s
     testStage (simpleStage w h a0s d0s)
@@ -64,12 +64,13 @@ simpleStage w h a0s d0s = proc _ -> do
     hitInteraction' = proc _ -> do
       rec
         let
-          hitas = map (fmap snd . mergeEs) $ chunks dCount hits
-          hitds = map (fmap fst . mergeEs) $ everys aCount hits
+          chunked = chunks dCount hits
+          transposed = transpose chunked
+          hitas = map (fmap snd . mergeEs) chunked
+          hitds = map (fmap fst . mergeEs) transposed
 
         as <- zipArrow (map (uncurry archerWire) a0s) -< hitas
         ds <- zipArrow (map (uncurry dartWire) d0s) -< hitds
-
 
         hits <- zipHits hitWire aCount dCount -< (as, ds)
 
@@ -77,14 +78,6 @@ simpleStage w h a0s d0s = proc _ -> do
 
 mergeEs :: [Event a] -> Event a
 mergeEs = foldl (merge const) NoEvent
-
-
-everys :: Int -> [a] -> [[a]]
-everys n xs = map (\i -> every n (drop i xs)) [0..(n-1)]
-
-every :: Int -> [a] -> [a]
-every _ []   = []
-every n (x:xs) = x : every n (drop (n-1) xs)
 
 chunks :: Int -> [a] -> [[a]]
 chunks n xs = takeWhile (not . null) $ unfoldr (Just . splitAt n) xs
