@@ -31,7 +31,7 @@ instance HasSurface Archer where
   toSurface (Archer (Body _ (V3 x y _)) ang) =
     Surface (V2 x y) (transRotate ang) [EntSprite spr]
     where
-      spr = Sprite zero (Circle 3 Unfilled) (0,0,0)
+      spr = Sprite zero (Circle 3 Filled) (0,0,0)
 
 instance HasSurface Stage where
   toSurface (Stage w h arcs arrs) =
