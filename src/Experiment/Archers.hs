@@ -37,7 +37,7 @@ import Experiment.Archers.Instances.SDL ()
 
 main :: IO ()
 main = do
-    a0s <- evalRandIO . replicateM 20 $ (,) <$> genPos <*> getRandom
+    a0s <- evalRandIO . replicateM 30 $ (,) <$> genPos <*> getRandom
     -- d0s <- evalRandIO . replicateM 20 $ (,) <$> ((^+^ (V3 (w/4) (h/4) 0)) . (^/ 2) <$> genPos) <*> genVel
     gen <- evalRandIO getRandom
     -- print a0s
@@ -64,7 +64,7 @@ simpleStage1 w h a0s gen = proc _ -> do
       (hitas, hitds) = hitWatcher as ds
     as <- zipArrow (map (uncurry archerWire) a0s) . delay [] -< hitas
     newDarts <- popDart gen -< d0w
-    ds <- krSwitch (pure []) -< ([NoEvent], continuize <$> newDarts)
+    ds <- krSwitch (pure []) . delay ([],NoEvent) -< (hitds, continuize <$> newDarts)
 
   -- dAs <- accumE (++) [] . popDart -< [d0w]
   -- ds <- rSwitch (pure []) -< (NoEvent,sequenceA <$> dAs)
@@ -73,6 +73,10 @@ simpleStage1 w h a0s gen = proc _ -> do
   --   ds <- manageDarts -< ds
   returnA -< Stage w h (catMaybes as) (catMaybes ds)
   where
+    -- continuize' dWire dsWire = proc hitds -> do
+    --   d <- dWire -< hitds
+    --   ds <- dsWire -< hitds
+    --   returnA -< d:ds
     continuize dWire dsWire = proc hitds -> do
       case hitds of
         (hit:hits) -> do
@@ -95,7 +99,7 @@ simpleStage1 w h a0s gen = proc _ -> do
     --   popped <- became (> 5) . stdNoiseR 1 (0,10) gen -< ()
     --   returnA -< popped <$ d
     -- popDart = periodic 5
-    popDart g = now . stdWackelkontakt 0.1 (1 - 1/50) g --> popDart (g+1)
+    popDart g = now . stdWackelkontakt 0.1 (1 - 1/75) g --> popDart (g+1)
     -- popDart g = proc dW -> do
     --   popped <- became (> 5) . stdNoiseR 1 (0,10) g -< ()
     --   now -< dW
@@ -103,7 +107,7 @@ simpleStage1 w h a0s gen = proc _ -> do
     d0w = dartWire (V3 (w/2) (h/2) 0) (V3 5 5 0)
 
 
--- hitWatcher :: [Maybe Archer] -> [Maybe Dart] -> ()
+hitWatcher :: [Maybe Archer] -> [Maybe Dart] -> ([Event Dart],[Event Archer])
 hitWatcher as ds = (hitas, hitds)
   where
     hitMatrix = map hitad as
@@ -302,7 +306,7 @@ hitWire = proc ad ->
 --   alive <- W.until -< (x, h)
 --   returnA -< alive
 
-testStage :: Wire (Timed Double ()) () IO () Stage -> IO ()
+testStage :: Wire (Timed Double ()) () Identity () Stage -> IO ()
 testStage w =
 #ifdef WINDOWS
   runBackend

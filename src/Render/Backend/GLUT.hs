@@ -19,8 +19,8 @@ import qualified Data.Sequence   as S
 
 data GLUTStateRefs e a = GLUTStateRefs
                            { glutStateA        :: IORef (Maybe (Either e a))
-                           , glutStateWire     :: IORef (Wire (Timed Double ()) e IO (Event RenderEvent) a)
-                           , glutStateSession  :: IORef (Session IO (Timed Double ()))
+                           , glutStateWire     :: IORef (Wire (Timed Double ()) e Identity (Event RenderEvent) a)
+                           , glutStateSession  :: IORef (Session Identity (Timed Double ()))
                            , glutStateEQueue   :: IORef (S.Seq RenderEvent)
                            , glutStateStatus   :: IORef String
                            , glutStateLastTime :: IORef UTCTime
@@ -35,11 +35,11 @@ glutBackend :: forall e a. GLUTRenderable a
     -> Double                 -- simulation time/real time ratio
     -> (Int,Int)              -- width and height
     -> (Word8, Word8, Word8)  -- background color
-    -> Backend (Timed Double ()) e IO (IO ()) a
+    -> Backend (Timed Double ()) e Identity (IO ()) a
 glutBackend simDt tScale (wd,ht) (cr,cg,cb) = Backend runGLUT
   where
-    sess :: Session IO (Timed Double ())
-    sess = countSession_ simDt
+    sess :: Session Identity (Timed Double ())
+    sess = countSession simDt <*> pure ()
 
     iLimit :: Int
     iLimit = round (tScale * fromIntegral iterationLimit)
@@ -53,8 +53,7 @@ glutBackend simDt tScale (wd,ht) (cr,cg,cb) = Backend runGLUT
     runGLUT r wr = do
         (progName,_) <- getArgsAndInitialize
 
-        
-        stateRefs <- initState
+        stateRefs <- initializeState
 
         initialWindowSize $= Size (fromIntegral wd) (fromIntegral ht)
         initialDisplayMode $= [ RGBMode, WithDepthBuffer, DoubleBuffered ]
@@ -67,8 +66,8 @@ glutBackend simDt tScale (wd,ht) (cr,cg,cb) = Backend runGLUT
         mainLoop
 
       where
-        initState :: IO (GLUTStateRefs e a)
-        initState = do
+        initializeState :: IO (GLUTStateRefs e a)
+        initializeState = do
           a          <- newIORef Nothing
           wire       <- newIORef wr
           session    <- newIORef sess
@@ -95,7 +94,7 @@ glutBackend simDt tScale (wd,ht) (cr,cg,cb) = Backend runGLUT
               renderGLUT mx'
 
               stat <- readIORef status
-              currentRasterPosition $= Vertex4 (-0.95) (0.95) 0 1
+              currentRasterPosition $= Vertex4 (-0.95) 0.95 0 1
               renderString Fixed8By13 stat
 
               r mx'
@@ -107,23 +106,24 @@ glutBackend simDt tScale (wd,ht) (cr,cg,cb) = Backend runGLUT
           s'' <- readIORef session
           w'' <- readIORef wire
 
-
           lastT <- readIORef lastTime
-          now <- getCurrentTime
+          nowT <- getCurrentTime
 
           let
-            tdiff = realToFrac (now `diffUTCTime` lastT)
+            tdiff = realToFrac (nowT `diffUTCTime` lastT)
             iters' = max 0 (floor (tScale * tdiff / simDt)) :: Int
             iters = min iLimit iters'
-            newLast = (realToFrac (simDt * fromIntegral iters' / tScale)) `addUTCTime` lastT
+            newLast = realToFrac (simDt * fromIntegral iters' / tScale) `addUTCTime` lastT
 
 
-          writeIORef status ((show . round) (1/tdiff))
+          writeIORef status ((show . (round :: Double -> Int)) (1/tdiff))
 
-          (s',w') <- stepN (iters-1) (s'',w'')
+          let
+            (s',w') = stepN (iters-1) (s'',w'')
 
           M.when (iters > 0) $ do
-            (ds,s) <- stepSession s'
+            let
+              (ds,s) = runIdentity (stepSession s')
 
             evseq <- readIORef evs
             ev <- case S.viewl evseq of
@@ -137,7 +137,8 @@ glutBackend simDt tScale (wd,ht) (cr,cg,cb) = Backend runGLUT
             --   NoEvent -> return ()
             --   Event e -> writeIORef status (show e)
 
-            (mx,w) <- stepWire w' ds (Right ev)
+            let
+              (mx,w) = runIdentity (stepWire w' ds (Right ev))
 
             writeIORef wire w
             writeIORef session s
@@ -149,18 +150,18 @@ glutBackend simDt tScale (wd,ht) (cr,cg,cb) = Backend runGLUT
 
         stepN ::
                Int
-            -> (Session IO (Timed Double ()),Wire (Timed Double ()) e IO (Event RenderEvent) a)
-            -> IO (Session IO (Timed Double ()),Wire (Timed Double ()) e IO (Event RenderEvent) a)
+            -> (Session Identity (Timed Double ()),Wire (Timed Double ()) e Identity (Event RenderEvent) a)
+            -> (Session Identity (Timed Double ()),Wire (Timed Double ()) e Identity (Event RenderEvent) a)
         stepN n (s',w')
-          | n <= 0    = return (s',w')
-          | otherwise = do
+          | n <= 0    = (s',w')
+          | otherwise = runIdentity $ do
               (ds,s) <- stepSession s'
               (_,w) <- stepWire w' ds (Right NoEvent)
-              stepN (n-1) (s,w)
+              return $ stepN (n-1) (s,w)
 
 
         keyboardMouse :: GLUTStateRefs e a -> KeyboardMouseCallback
-        keyboardMouse (GLUTStateRefs _ _ _ evs _ _) key kstate mods (Position x y) = do
+        keyboardMouse (GLUTStateRefs _ _ _ evs _ _) key kstate mods (Position x y) =
             case ev of
               RenderNullEvent -> return ()
               ev'             -> modifyIORef' evs (S.|> ev')
@@ -179,7 +180,7 @@ glutBackend simDt tScale (wd,ht) (cr,cg,cb) = Backend runGLUT
                              WheelUp -> RenderMouseWheelUp   -- doesn't work for some reason
                              WheelDown -> RenderMouseWheelDown
                              _ -> RenderMouseButtonUnknown
-                  in  (upDown (RenderMouseDown,RenderMouseUp)) pos b'
+                  in  upDown (RenderMouseDown,RenderMouseUp) pos b'
                 SpecialKey _ -> RenderUnknownEvent
                 GLUT.Char c ->
                   let mods' = zip
@@ -187,7 +188,7 @@ glutBackend simDt tScale (wd,ht) (cr,cg,cb) = Backend runGLUT
                                 [RenderKeyShift ..]
                       modList = map snd . filter ((== Down) . fst) $ mods'
                       kData = RenderKeyData (ord c) modList
-                  in  (upDown (RenderKeyDown,RenderKeyUp)) kData
+                  in  upDown (RenderKeyDown,RenderKeyUp) kData
 
 
 -- data RenderEvent = RenderKeyDown RenderKeyData

@@ -132,7 +132,7 @@ manyBody' bodyList igr = proc e -> do
 --   where
 --     w = map (pMaker p) <$> manyFixedBody [Body 1 zero] [(b0,v0)] verlet
 
-runTest :: Int -> Wire (Timed Double ()) () IO (Event RenderEvent) (Double, [Planet]) -> IO ()
+runTest :: Int -> Wire (Timed Double ()) () Identity (Event RenderEvent) (Double, [Planet]) -> IO ()
 runTest _ w =
 #ifdef WINDOWS
   runBackend (glutBackend (1/30) 3 (600,600) (31,31,31)) (const . return $ ()) (uncurry PlanetList <$> w)
