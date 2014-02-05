@@ -64,7 +64,7 @@ simpleStage1 w h a0s gen = proc _ -> do
       (hitas, hitds) = hitWatcher as ds
     as <- zipArrow (map (uncurry archerWire) a0s) . delay [] -< hitas
     newDarts <- popDart gen -< d0w
-    ds <- krSwitch (pure []) -< (NoEvent, continuize <$> newDarts)
+    ds <- krSwitch (pure []) -< ([NoEvent], continuize <$> newDarts)
 
   -- dAs <- accumE (++) [] . popDart -< [d0w]
   -- ds <- rSwitch (pure []) -< (NoEvent,sequenceA <$> dAs)
@@ -74,9 +74,15 @@ simpleStage1 w h a0s gen = proc _ -> do
   returnA -< Stage w h (catMaybes as) (catMaybes ds)
   where
     continuize dWire dsWire = proc hitds -> do
-      d <- dWire -< hitds
-      ds <- dsWire -< hitds
-      returnA -< d:ds
+      case hitds of
+        (hit:hits) -> do
+          d <- dWire -< hit
+          ds <- dsWire -< hits
+          returnA -< d:ds
+        [] -> do
+          d <- dWire . never -< []
+          ds <- dsWire . arr (:[]) . never -< []
+          returnA -< d:ds
     -- manageDarts = proc ds -> do
     --   accumE [] -<
     -- popDart = never . stdWackelkontakt 1 (1/2) gen <|> now
