@@ -52,7 +52,7 @@ main = do
     genVel :: RandomGen g => Rand g (V3 Double)
     genVel = V3 <$> getRandomR (-20,20) <*> getRandomR (-20,20) <*> pure 0
 
-simpleStage1 :: (MonadFix m, Monoid e, HasTime t s)
+simpleStage1 :: forall m e t s. (MonadFix m, Monoid e, HasTime t s)
     => Double
     -> Double
     -> [(V3D,Int)]
@@ -60,14 +60,26 @@ simpleStage1 :: (MonadFix m, Monoid e, HasTime t s)
     -> Wire s e m () Stage
 simpleStage1 w h a0s gen = proc _ -> do
   as <- zipArrow (map (uncurry archerWire) a0s) . pure [] -< ()
-  -- ds <- hold . accumE (++) [] . popDart -< [Dart (Body 1 (V3 8 8 0)) 0]
+  newDarts <- popDart -< d0w
+  ds <- krSwitch (pure []) -< (NoEvent, continuize <$> newDarts)
+  -- dAs <- accumE (++) [] . popDart -< [d0w]
+  -- ds <- rSwitch (pure []) -< (NoEvent,sequenceA <$> dAs)
+  -- ds <- sequenceA dAs -<< NoEvent
   -- rec
   --   ds <- manageDarts -< ds
-  returnA -< Stage w h (catMaybes as) []
+  returnA -< Stage w h (catMaybes as) (catMaybes ds)
   where
+    continuize dWire dsWire = proc hitds -> do
+      d <- dWire -< hitds
+      ds <- dsWire -< hitds
+      returnA -< d:ds
     -- manageDarts = proc ds -> do
     --   accumE [] -< 
-    -- popDart = never . stdWackelkontakt 1 (1/100) gen <|> now
+    -- popDart = never . stdWackelkontakt 1 (1/2) gen <|> now
+    -- popDart = (once --> popDart) . stdWackelkontakt 1 (1/2) gen
+    popDart = periodic 10
+    d0w :: Wire s e m (Event Archer) (Maybe Dart)
+    d0w = dartWire (V3 (w/2) (h/2) 0) (V3 5 5 0)
 
 
 
