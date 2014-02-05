@@ -38,7 +38,7 @@ import Experiment.Archers.Instances.SDL ()
 main :: IO ()
 main = do
     a0s <- evalRandIO . replicateM 20 $ (,) <$> genPos <*> getRandom
-    d0s <- evalRandIO . replicateM 20 $ (,) <$> ((^+^ (V3 (w/4) (h/4) 0)) . (^/ 2) <$> genPos) <*> genVel
+    -- d0s <- evalRandIO . replicateM 20 $ (,) <$> ((^+^ (V3 (w/4) (h/4) 0)) . (^/ 2) <$> genPos) <*> genVel
     gen <- evalRandIO getRandom
     -- print a0s
     -- print d0s
@@ -49,10 +49,10 @@ main = do
     h = 300
     genPos :: RandomGen g => Rand g (V3 Double)
     genPos = V3 <$> getRandomR (0,w) <*> getRandomR (0,h) <*> pure 0
-    genVel :: RandomGen g => Rand g (V3 Double)
-    genVel = V3 <$> getRandomR (-20,20) <*> getRandomR (-20,20) <*> pure 0
+    -- genVel :: RandomGen g => Rand g (V3 Double)
+    -- genVel = V3 <$> getRandomR (-20,20) <*> getRandomR (-20,20) <*> pure 0
 
-simpleStage1 :: forall m e t s. (MonadFix m, Monoid e, HasTime t s)
+simpleStage1 :: forall m e t s. (MonadFix m, Monoid e, HasTime t s, Fractional t)
     => Double
     -> Double
     -> [(V3D,Int)]
@@ -60,7 +60,7 @@ simpleStage1 :: forall m e t s. (MonadFix m, Monoid e, HasTime t s)
     -> Wire s e m () Stage
 simpleStage1 w h a0s gen = proc _ -> do
   as <- zipArrow (map (uncurry archerWire) a0s) . pure [] -< ()
-  newDarts <- popDart -< d0w
+  newDarts <- popDart gen -< d0w
   ds <- krSwitch (pure []) -< (NoEvent, continuize <$> newDarts)
   -- dAs <- accumE (++) [] . popDart -< [d0w]
   -- ds <- rSwitch (pure []) -< (NoEvent,sequenceA <$> dAs)
@@ -76,8 +76,19 @@ simpleStage1 w h a0s gen = proc _ -> do
     -- manageDarts = proc ds -> do
     --   accumE [] -< 
     -- popDart = never . stdWackelkontakt 1 (1/2) gen <|> now
-    -- popDart = (once --> popDart) . stdWackelkontakt 1 (1/2) gen
-    popDart = periodic 10
+    -- popDart = (once . now . stdWackelkontakt 1 (1/10) gen) <|> never
+    -- popDart = W.until . arr (\e -> (e,e)) . now . stdWackelkontakt 1 (1/2) gen <|> never
+    -- popDart = proc d -> do
+    --   popped <- now . stdWackelkontakt 1 (1/2) gen -< d
+    --   now -< d
+    -- popDart = proc d -> do
+    --   popped <- became (> 5) . stdNoiseR 1 (0,10) gen -< ()
+    --   returnA -< popped <$ d
+    -- popDart = periodic 5
+    popDart g = now . stdWackelkontakt 0.1 (1 - 1/50) g --> popDart (g+1)
+    -- popDart g = proc dW -> do
+    --   popped <- became (> 5) . stdNoiseR 1 (0,10) g -< ()
+    --   now -< dW
     d0w :: Wire s e m (Event Archer) (Maybe Dart)
     d0w = dartWire (V3 (w/2) (h/2) 0) (V3 5 5 0)
 
