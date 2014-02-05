@@ -19,7 +19,7 @@ sdlBackend :: SDLRenderable a
     => Int
     -> Int
     -> (Word8, Word8, Word8)
-    -> Backend (Timed Double ()) e IO (SDL.Surface -> IO ()) a
+    -> Backend (Timed Double ()) e Identity (SDL.Surface -> IO ()) a
 sdlBackend ht wd (cr,cg,cb) = Backend runSdl
   where
     fr = 30
@@ -32,7 +32,7 @@ sdlBackend ht wd (cr,cg,cb) = Backend runSdl
       Framerate.set frameRate fr
 
       -- go screen clockSession_ wr frameRate
-      go screen (countSession_ simDt) wr frameRate
+      go screen (countSession simDt <*> pure ()) wr frameRate
 
       where
         go screen s' w' frameRate = do
@@ -43,8 +43,12 @@ sdlBackend ht wd (cr,cg,cb) = Backend runSdl
           --   NoEvent -> return ()
           --   Event e -> print e
 
-          (ds, s) <- stepSession s'
-          (mx, w) <- stepWire w' ds (Right renderEvent)
+          let
+            (ds, s) = runIdentity (stepSession s')
+            (mx, w) = runIdentity (stepWire w' ds (Right renderEvent))
+
+          -- (ds, s) <- runIdentitystepSession s'
+          -- (mx, w) <- stepWire w' ds (Right renderEvent)
 
           case mx of
             Right mx' -> do
