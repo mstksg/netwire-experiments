@@ -5,6 +5,7 @@ module Main where
 
 import Control.Category
 import Control.Monad
+import Data.Monoid as M
 import Control.Wire.Unsafe.Event
 import Control.Monad.Fix
 import Control.Wire                     as W
@@ -54,27 +55,43 @@ simpleStage :: forall m t s e. (MonadFix m, HasTime t s, Monoid e, Fractional t)
     -> [(V3D,V3D)]      -- darts
     -> Wire s e m () Stage
 simpleStage w h a0s d0s = proc _ -> do
-    (as,ds) <- hitInteraction' -< ()
-    returnA -< Stage w h as ds
+    -- (as,ds) <- hitInteraction' -< ()
+    rec
+      let
+        (hitas, hitds) = hitWatcher as ds
+      as <- zipArrow (map (uncurry archerWire) a0s) -< hitas
+      ds <- zipArrow (map (uncurry dartWire) d0s) -< hitds
+    returnA -< Stage w h (catMaybes as) (catMaybes ds)
   where
-    aCount = length a0s
-    dCount = length d0s
+    hitWatcher as ds = (hitas, hitds)
+      where
+        hitMatrix = map hitad as
+        hitad a   = map (collision a) ds
+        collision (Just a@(Archer (Body _ pa) _)) (Just d@(Dart (Body _ pd) _))
+                  | norm (pa ^-^ pd) < 5  = Event (a,d)
+                  | otherwise             = NoEvent
+        collision _ _ = NoEvent
+        hitas     = map ((snd <$>) . mergeEs) hitMatrix
+        hitds     = map ((fst <$>) . mergeEs) (transpose hitMatrix)
 
-    hitInteraction' :: Wire s e m () ([Archer], [Dart])
-    hitInteraction' = proc _ -> do
-      rec
-        let
-          chunked = chunks dCount hits
-          transposed = transpose chunked
-          hitas = map (fmap snd . mergeEs) chunked
-          hitds = map (fmap fst . mergeEs) transposed
+    -- aCount = length a0s
+    -- dCount = length d0s
 
-        as <- zipArrow (map (uncurry archerWire) a0s) -< hitas
-        ds <- zipArrow (map (uncurry dartWire) d0s) -< hitds
+    -- hitInteraction' :: Wire s e m () ([Archer], [Dart])
+    -- hitInteraction' = proc _ -> do
+    --   rec
+    --     let
+    --       chunked = chunks dCount hits
+    --       transposed = transpose chunked
+    --       hitas = map (fmap snd . mergeEs) chunked
+    --       hitds = map (fmap fst . mergeEs) transposed
 
-        hits <- zipHits hitWire aCount dCount -< (as, ds)
+    --     as <- zipArrow (map (uncurry archerWire) a0s) -< hitas
+    --     ds <- zipArrow (map (uncurry dartWire) d0s) -< hitds
 
-      returnA -< (catMaybes as, catMaybes ds)
+    --     hits <- zipHits hitWire aCount dCount -< (as, ds)
+
+    --   returnA -< (catMaybes as, catMaybes ds)
 
 mergeEs :: [Event a] -> Event a
 mergeEs = foldl (merge const) NoEvent
