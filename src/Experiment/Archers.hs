@@ -59,9 +59,13 @@ simpleStage1 :: forall m e t s. (MonadFix m, Monoid e, HasTime t s, Fractional t
     -> Int
     -> Wire s e m () Stage
 simpleStage1 w h a0s gen = proc _ -> do
-  as <- zipArrow (map (uncurry archerWire) a0s) . pure [] -< ()
-  newDarts <- popDart gen -< d0w
-  ds <- krSwitch (pure []) -< (NoEvent, continuize <$> newDarts)
+  rec
+    let
+      (hitas, hitds) = hitWatcher as ds
+    as <- zipArrow (map (uncurry archerWire) a0s) . delay [] -< hitas
+    newDarts <- popDart gen -< d0w
+    ds <- krSwitch (pure []) -< (NoEvent, continuize <$> newDarts)
+
   -- dAs <- accumE (++) [] . popDart -< [d0w]
   -- ds <- rSwitch (pure []) -< (NoEvent,sequenceA <$> dAs)
   -- ds <- sequenceA dAs -<< NoEvent
@@ -74,7 +78,7 @@ simpleStage1 w h a0s gen = proc _ -> do
       ds <- dsWire -< hitds
       returnA -< d:ds
     -- manageDarts = proc ds -> do
-    --   accumE [] -< 
+    --   accumE [] -<
     -- popDart = never . stdWackelkontakt 1 (1/2) gen <|> now
     -- popDart = (once . now . stdWackelkontakt 1 (1/10) gen) <|> never
     -- popDart = W.until . arr (\e -> (e,e)) . now . stdWackelkontakt 1 (1/2) gen <|> never
@@ -93,6 +97,18 @@ simpleStage1 w h a0s gen = proc _ -> do
     d0w = dartWire (V3 (w/2) (h/2) 0) (V3 5 5 0)
 
 
+-- hitWatcher :: [Maybe Archer] -> [Maybe Dart] -> ()
+hitWatcher as ds = (hitas, hitds)
+  where
+    hitMatrix = map hitad as
+    hitad a   = map (collision a) ds
+    collision (Just a@(Archer (Body _ pa) _))
+              (Just d@(Dart (Body _ pd) _))
+              | norm (pa ^-^ pd) < 5  = Event (a,d)
+              | otherwise             = NoEvent
+    collision _ _ = NoEvent
+    hitas     = map ((snd <$>) . mergeEs) hitMatrix
+    hitds     = map ((fst <$>) . mergeEs) (transpose hitMatrix)
 
 simpleStage0 :: forall m t s e. (MonadFix m, HasTime t s, Monoid e, Fractional t)
     => Double           -- width
@@ -109,17 +125,17 @@ simpleStage0 w h a0s d0s = proc _ -> do
       ds <- zipArrow (map (uncurry dartWire) d0s) -< hitds
     returnA -< Stage w h (catMaybes as) (catMaybes ds)
   where
-    hitWatcher as ds = (hitas, hitds)
-      where
-        hitMatrix = map hitad as
-        hitad a   = map (collision a) ds
-        collision (Just a@(Archer (Body _ pa) _))
-                  (Just d@(Dart (Body _ pd) _))
-                  | norm (pa ^-^ pd) < 5  = Event (a,d)
-                  | otherwise             = NoEvent
-        collision _ _ = NoEvent
-        hitas     = map ((snd <$>) . mergeEs) hitMatrix
-        hitds     = map ((fst <$>) . mergeEs) (transpose hitMatrix)
+    -- hitWatcher as ds = (hitas, hitds)
+    --   where
+    --     hitMatrix = map hitad as
+    --     hitad a   = map (collision a) ds
+    --     collision (Just a@(Archer (Body _ pa) _))
+    --               (Just d@(Dart (Body _ pd) _))
+    --               | norm (pa ^-^ pd) < 5  = Event (a,d)
+    --               | otherwise             = NoEvent
+    --     collision _ _ = NoEvent
+    --     hitas     = map ((snd <$>) . mergeEs) hitMatrix
+    --     hitds     = map ((fst <$>) . mergeEs) (transpose hitMatrix)
 
 mergeEs :: [Event a] -> Event a
 mergeEs = foldl (merge const) NoEvent
