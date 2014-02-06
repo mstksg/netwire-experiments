@@ -21,6 +21,11 @@ type Angle = Double
 data Archer = Archer Body Angle
 data Dart = Dart Body Angle
 
+data Message = Die
+
+isDie :: Message -> Bool
+isDie Die = True
+
 instance HasSurface Dart where
   toSurface (Dart (Body _ (V3 x y _)) ang) =
     Surface (V2 x y) (transRotate ang) [EntSprite spr]

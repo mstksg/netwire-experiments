@@ -62,21 +62,14 @@ simpleStage1 w h a0s gen = proc _ -> do
   rec
     let
       (hitas, hitds) = hitWatcher as ds
+      dieds = borderWatcher ds
+      dmess = zipWith mergeL hitds dieds
     as <- zipArrow (map (uncurry archerWire) a0s) . delay [] -< hitas
     newDarts <- popDart gen -< d0w
-    ds <- krSwitch (pure []) . delay ([],NoEvent) -< (hitds, continuize <$> newDarts)
+    ds <- krSwitch (pure []) . delay ([],NoEvent) -< (dmess, continuize <$> newDarts)
 
-  -- dAs <- accumE (++) [] . popDart -< [d0w]
-  -- ds <- rSwitch (pure []) -< (NoEvent,sequenceA <$> dAs)
-  -- ds <- sequenceA dAs -<< NoEvent
-  -- rec
-  --   ds <- manageDarts -< ds
   returnA -< Stage w h (catMaybes as) (catMaybes ds)
   where
-    -- continuize' dWire dsWire = proc hitds -> do
-    --   d <- dWire -< hitds
-    --   ds <- dsWire -< hitds
-    --   returnA -< d:ds
     continuize dWire dsWire = proc hitds -> do
       case hitds of
         (hit:hits) -> do
@@ -87,38 +80,30 @@ simpleStage1 w h a0s gen = proc _ -> do
           d <- dWire . never -< []
           ds <- dsWire . arr (:[]) . never -< []
           returnA -< d:ds
-    -- manageDarts = proc ds -> do
-    --   accumE [] -<
-    -- popDart = never . stdWackelkontakt 1 (1/2) gen <|> now
-    -- popDart = (once . now . stdWackelkontakt 1 (1/10) gen) <|> never
-    -- popDart = W.until . arr (\e -> (e,e)) . now . stdWackelkontakt 1 (1/2) gen <|> never
-    -- popDart = proc d -> do
-    --   popped <- now . stdWackelkontakt 1 (1/2) gen -< d
-    --   now -< d
-    -- popDart = proc d -> do
-    --   popped <- became (> 5) . stdNoiseR 1 (0,10) gen -< ()
-    --   returnA -< popped <$ d
-    -- popDart = periodic 5
     popDart g = now . stdWackelkontakt 0.1 (1 - 1/75) g --> popDart (g+1)
-    -- popDart g = proc dW -> do
-    --   popped <- became (> 5) . stdNoiseR 1 (0,10) g -< ()
-    --   now -< dW
-    d0w :: Wire s e m (Event Archer) (Maybe Dart)
-    d0w = dartWire (V3 (w/2) (h/2) 0) (V3 5 5 0)
+    borderWatcher :: [Maybe Dart] -> [Event Message]
+    borderWatcher = map outOfBounds
+      where
+        outOfBounds (Just (Dart (Body _ (V3 x y _)) _)) =
+          if or [x < 0, y < 0, x > w, y > h]
+            then Event Die
+            else NoEvent
+        outOfBounds _ = NoEvent
+    d0w :: Wire s e m (Event Message) (Maybe Dart)
+    d0w = dartWire (V3 (w/2) (h/2) 0) (V3 10 10 0)
 
-
-hitWatcher :: [Maybe Archer] -> [Maybe Dart] -> ([Event Dart],[Event Archer])
+hitWatcher :: [Maybe Archer] -> [Maybe Dart] -> ([Event Message],[Event Message])
 hitWatcher as ds = (hitas, hitds)
   where
     hitMatrix = map hitad as
     hitad a   = map (collision a) ds
-    collision (Just a@(Archer (Body _ pa) _))
-              (Just d@(Dart (Body _ pd) _))
-              | norm (pa ^-^ pd) < 5  = Event (a,d)
+    collision (Just (Archer (Body _ pa) _))
+              (Just (Dart (Body _ pd) _))
+              | norm (pa ^-^ pd) < 5  = Event Die
               | otherwise             = NoEvent
     collision _ _ = NoEvent
-    hitas     = map ((snd <$>) . mergeEs) hitMatrix
-    hitds     = map ((fst <$>) . mergeEs) (transpose hitMatrix)
+    hitas     = map mergeEs hitMatrix
+    hitds     = map mergeEs (transpose hitMatrix)
 
 simpleStage0 :: forall m t s e. (MonadFix m, HasTime t s, Monoid e, Fractional t)
     => Double           -- width
@@ -183,26 +168,26 @@ zipHits wr ac dc = go ((,) <$> [0..(ac-1)] <*> [0..(dc-1)])
       hs <- go adis -< ads
       returnA -< h:hs
 
-data Hit = Hit
-
 archerWire :: (Monad m, Monoid e, HasTime t s)
     => V3D
     -> Int
-    -> Wire s e m (Event Dart) (Maybe Archer)
-archerWire x0 gen = proc h -> do
+    -> Wire s e m (Event Message) (Maybe Archer)
+archerWire x0 gen = proc mess -> do
+  die <- filterE isDie -< mess
   (vx,vy) <- hold . stdNoiseR 2 ((-10,-10),(10,10)) gen -< ()
   xa <- integral x0 -< V3 vx vy 0
   W.until --> pure Nothing
-    -< (Just (Archer (Body 1 xa) 0), h)
+    -< (Just (Archer (Body 1 xa) 0), die)
 
 dartWire :: (Monad m, Monoid e, HasTime t s)
     => V3D
     -> V3D
-    -> Wire s e m (Event Archer) (Maybe Dart)
-dartWire x0 v0@(V3 vx vy _) = proc h -> do
+    -> Wire s e m (Event Message) (Maybe Dart)
+dartWire x0 v0@(V3 vx vy _) = proc mess -> do
+  die <- filterE isDie -< mess
   pos <- integral x0 -< v0
   W.until --> pure Nothing
-    -< (Just (Dart (Body 1 pos) (atan2 vy vx)), h)
+    -< (Just (Dart (Body 1 pos) (atan2 vy vx)), die)
 
 hitWire :: (Monad m, Monoid e) => Wire s e m (Maybe Archer, Maybe Dart) (Event (Archer, Dart))
 hitWire = proc ad ->
