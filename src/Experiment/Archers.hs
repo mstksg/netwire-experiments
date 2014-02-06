@@ -10,7 +10,7 @@ import Data.Monoid as M
 import Control.Wire.Unsafe.Event
 import Control.Monad.Fix
 import Control.Wire                     as W
-import Data.Maybe                       (catMaybes)
+import Data.Maybe                       (catMaybes, isJust, isNothing)
 import Experiment.Archers.Types
 import Data.Traversable
 import FRP.Netwire
@@ -38,7 +38,7 @@ import Experiment.Archers.Instances.SDL ()
 
 main :: IO ()
 main = do
-    a0s <- evalRandIO . replicateM 2 $ (,) <$> genPos <*> getRandom
+    a0s <- evalRandIO . replicateM 3 $ (,) <$> genPos <*> getRandom
     -- d0s <- evalRandIO . replicateM 20 $ (,) <$> ((^+^ (V3 (w/4) (h/4) 0)) . (^/ 2) <$> genPos) <*> genVel
     gen <- evalRandIO getRandom
     -- print a0s
@@ -222,7 +222,7 @@ archerWire :: forall m e t s. (MonadFix m, Monoid e, HasTime t s)
     => V3D
     -> Int
     -> Wire s e m (Event Messages, [Maybe Archer]) (Maybe Archer, Event [(V3D,V3D)])
-archerWire x0 _ = (shoot --> coolDown) . seek --> dead
+archerWire x0 _ = shootCycle . seek --> dead
   where
     range = 50
     speed = 10
@@ -241,29 +241,55 @@ archerWire x0 _ = (shoot --> coolDown) . seek --> dead
                         ) others'
           target | null otherPs = Nothing
                  | otherwise    = Just $ minimumBy (comparing fst) otherPs
-          vel =
+          (vel,target') =
             case target of
               Just (dist,targDir)
-                | dist > range -> targDir ^* speed
-              _ -> zero
+                | dist > range -> (targDir ^* speed, Nothing)
+                | otherwise    -> (zero, Just targDir)
+              _                -> (zero, Nothing)
           angle = 0
         pos <- integral x0 -< vel
-      returnA -< (Just (Archer (Body 1 pos) angle), snd <$> target)
+      returnA -< (Just (Archer (Body 1 pos) angle), target')
 
-    shoot :: Wire s e m (Maybe Archer, Maybe V3D) (Maybe Archer, Event [(V3D,V3D)])
-    shoot = proc (self, targetDir) -> do
-      case (self, targetDir) of
-        (Just (Archer (Body _ p) 0), Just tDir) -> do
-          let
-            dartData = [(p, tDir ^* dartSpeed)]
-          shot <- now -< dartData
-          returnA -< (self, shot)
-        _ -> do
-          returnA -< (self, NoEvent)
+    shootCycle :: Wire s e m (Maybe Archer, Maybe V3D) (Maybe Archer, Event [(V3D,V3D)])
+    shootCycle = waiting --> shoot --> shootCycle
+      where
+        waiting :: Wire s e m (Maybe Archer, Maybe V3D) (Maybe Archer, Event [(V3D,V3D)])
+        waiting = second never . W.when (isNothing . snd)
+        shoot :: Wire s e m (Maybe Archer, Maybe V3D) (Maybe Archer, Event [(V3D,V3D)])
+        shoot = proc (self, targetDir) -> do
+          case (self, targetDir) of
+            (Just (Archer (Body _ p) 0), Just tDir) -> do
+              let
+                dartData = [(p ^+^ (tDir ^* 8), tDir ^* dartSpeed)]
+              shot <- now -< dartData
+              returnA . W.for coolDownTime -< (self, shot)
+            _ -> do
+              let
+                dartData = [(V3 0 0 0, V3 10 10 0)]
+              shot <- W.for coolDownTime . now -< dartData
+              returnA . W.for coolDownTime -< (self, shot)
 
 
-    coolDown :: Wire s e m (Maybe Archer, Maybe V3D) (Maybe Archer, Event [(V3D,V3D)])
-    coolDown = W.for coolDownTime . second (pure NoEvent) --> (shoot --> coolDown)
+    -- waiting :: Wire s e m (Maybe Archer, Maybe V3D) (Maybe Archer, Event [(V3D,V3D)])
+    -- waiting = proc (self, targetDir) -> do
+    --   never . W.when isNothing --> W.for coolDownTime . now --> waiting -< targetDir
+
+
+    -- shoot :: Wire s e m (Maybe Archer, Maybe V3D) (Maybe Archer, Event [(V3D,V3D)])
+    -- shoot = proc (self, targetDir) -> do
+    --   case (self, targetDir) of
+    --     (Just (Archer (Body _ p) 0), Just tDir) -> do
+    --       let
+    --         dartData = [(p, tDir ^* dartSpeed)]
+    --       shot <- now -< dartData
+    --       returnA -< (self, shot)
+    --     _ -> do
+    --       returnA -< (self, NoEvent)
+
+
+    -- coolDown :: Wire s e m (Maybe Archer, Maybe V3D) (Maybe Archer, Event [(V3D,V3D)])
+    -- coolDown = W.for coolDownTime . second (pure NoEvent) --> (waiting --> shoot --> coolDown)
     dead :: Wire s e m (Event Messages, [Maybe Archer]) (Maybe Archer, Event [(V3D,V3D)])
     dead = pure (Nothing, NoEvent)
     -- dead = undefined
