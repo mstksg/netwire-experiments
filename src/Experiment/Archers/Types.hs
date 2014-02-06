@@ -18,7 +18,9 @@ data Stage = Stage { stageWidth :: Double
 
 type Angle = Double
 
-data Archer = Archer Body Angle
+data Archer = Archer  { archerBody :: Body
+                      , archerAngle :: Angle
+                      }
 data Dart = Dart Body Angle
 
 data Message = Die
