@@ -224,7 +224,7 @@ archerWire :: forall m e t s. (MonadFix m, Monoid e, HasTime t s)
     -> Wire s e m (Event Messages, [Maybe Archer]) (Maybe Archer, Event [(V3D,V3D)])
 archerWire x0 _ = (shoot --> coolDown) . seek --> dead
   where
-    range = 30
+    range = 50
     speed = 10
     dartSpeed = 20
     coolDownTime = 3
@@ -248,7 +248,7 @@ archerWire x0 _ = (shoot --> coolDown) . seek --> dead
               _ -> zero
           angle = 0
         pos <- integral x0 -< vel
-      returnA . W.for 1 -< (Just (Archer (Body 1 pos) angle), snd <$> target)
+      returnA -< (Just (Archer (Body 1 pos) angle), snd <$> target)
 
     shoot :: Wire s e m (Maybe Archer, Maybe V3D) (Maybe Archer, Event [(V3D,V3D)])
     shoot = proc (self, targetDir) -> do
@@ -266,6 +266,7 @@ archerWire x0 _ = (shoot --> coolDown) . seek --> dead
     coolDown = W.for coolDownTime . second (pure NoEvent) --> (shoot --> coolDown)
     dead :: Wire s e m (Event Messages, [Maybe Archer]) (Maybe Archer, Event [(V3D,V3D)])
     dead = pure (Nothing, NoEvent)
+    -- dead = undefined
 
 -- proc (mess,as) -> do
   -- die <- filterE (any isDie) -< mess
