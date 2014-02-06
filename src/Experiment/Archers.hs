@@ -38,7 +38,7 @@ import Experiment.Archers.Instances.SDL ()
 
 main :: IO ()
 main = do
-    a0s <- evalRandIO . replicateM 15 $ (,) <$> genPos <*> getRandom
+    a0s <- evalRandIO . replicateM 7 $ (,) <$> genPos <*> getRandom
     -- d0s <- evalRandIO . replicateM 20 $ (,) <$> ((^+^ (V3 (w/4) (h/4) 0)) . (^/ 2) <$> genPos) <*> genVel
     gen <- evalRandIO getRandom
     -- print a0s
@@ -266,10 +266,7 @@ archerWire x0 _ = shootCycle . seek --> dead
               shot <- now -< dartData
               returnA . W.for coolDownTime -< (self, shot)
             _ -> do
-              let
-                dartData = [(V3 0 0 0, V3 10 10 0)]
-              shot <- W.for coolDownTime . now -< dartData
-              returnA . W.for coolDownTime -< (self, shot)
+              inhibit mempty -< ()
 
 
     dead :: Wire s e m (Event Messages, [Maybe Archer]) (Maybe Archer, Event [(V3D,V3D)])
