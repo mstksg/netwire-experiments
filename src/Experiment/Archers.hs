@@ -10,7 +10,7 @@ import Data.Monoid as M
 import Control.Wire.Unsafe.Event
 import Control.Monad.Fix
 import Control.Wire                     as W
-import Data.Maybe                       (catMaybes, isJust, isNothing)
+import Data.Maybe                       (catMaybes, isNothing)
 import Experiment.Archers.Types
 import Data.Traversable
 import FRP.Netwire
@@ -38,7 +38,7 @@ import Experiment.Archers.Instances.SDL ()
 
 main :: IO ()
 main = do
-    a0s <- evalRandIO . replicateM 3 $ (,) <$> genPos <*> getRandom
+    a0s <- evalRandIO . replicateM 15 $ (,) <$> genPos <*> getRandom
     -- d0s <- evalRandIO . replicateM 20 $ (,) <$> ((^+^ (V3 (w/4) (h/4) 0)) . (^/ 2) <$> genPos) <*> genVel
     gen <- evalRandIO getRandom
     -- print a0s
@@ -230,6 +230,7 @@ archerWire x0 _ = shootCycle . seek --> dead
     coolDownTime = 3
     seek :: Wire s e m (Event Messages, [Maybe Archer]) (Maybe Archer, Maybe V3D)
     seek = proc (mess,others) -> do
+      die <- filterE (any isDie) -< mess
       rec
         let
           others' = catMaybes others
@@ -249,7 +250,7 @@ archerWire x0 _ = shootCycle . seek --> dead
               _                -> (zero, Nothing)
           angle = 0
         pos <- integral x0 -< vel
-      returnA -< (Just (Archer (Body 1 pos) angle), target')
+      W.until -< ((Just (Archer (Body 1 pos) angle), target'), die)
 
     shootCycle :: Wire s e m (Maybe Archer, Maybe V3D) (Maybe Archer, Event [(V3D,V3D)])
     shootCycle = waiting --> shoot --> shootCycle
@@ -271,28 +272,8 @@ archerWire x0 _ = shootCycle . seek --> dead
               returnA . W.for coolDownTime -< (self, shot)
 
 
-    -- waiting :: Wire s e m (Maybe Archer, Maybe V3D) (Maybe Archer, Event [(V3D,V3D)])
-    -- waiting = proc (self, targetDir) -> do
-    --   never . W.when isNothing --> W.for coolDownTime . now --> waiting -< targetDir
-
-
-    -- shoot :: Wire s e m (Maybe Archer, Maybe V3D) (Maybe Archer, Event [(V3D,V3D)])
-    -- shoot = proc (self, targetDir) -> do
-    --   case (self, targetDir) of
-    --     (Just (Archer (Body _ p) 0), Just tDir) -> do
-    --       let
-    --         dartData = [(p, tDir ^* dartSpeed)]
-    --       shot <- now -< dartData
-    --       returnA -< (self, shot)
-    --     _ -> do
-    --       returnA -< (self, NoEvent)
-
-
-    -- coolDown :: Wire s e m (Maybe Archer, Maybe V3D) (Maybe Archer, Event [(V3D,V3D)])
-    -- coolDown = W.for coolDownTime . second (pure NoEvent) --> (waiting --> shoot --> coolDown)
     dead :: Wire s e m (Event Messages, [Maybe Archer]) (Maybe Archer, Event [(V3D,V3D)])
     dead = pure (Nothing, NoEvent)
-    -- dead = undefined
 
 -- proc (mess,as) -> do
   -- die <- filterE (any isDie) -< mess
