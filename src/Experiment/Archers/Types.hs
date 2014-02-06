@@ -18,8 +18,17 @@ data Stage = Stage { stageWidth :: Double
 
 type Angle = Double
 
-data Archer = Archer Body Angle
+data Archer = Archer  { archerBody :: Body
+                      , archerAngle :: Angle
+                      }
 data Dart = Dart Body Angle
+
+data Message = Die
+
+type Messages = [Message]
+
+isDie :: Message -> Bool
+isDie Die = True
 
 instance HasSurface Dart where
   toSurface (Dart (Body _ (V3 x y _)) ang) =
