@@ -23,6 +23,8 @@ data Dart = Dart Body Angle
 
 data Message = Die
 
+type Messages = [Message]
+
 isDie :: Message -> Bool
 isDie Die = True
 
