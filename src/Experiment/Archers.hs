@@ -39,7 +39,7 @@ import Experiment.Archers.Instances.SDL ()
 
 main :: IO ()
 main = do
-    a0s <- evalRandIO . replicateM 7 $ (,) <$> genPos <*> getRandom
+    a0s <- evalRandIO . replicateM 5 $ (,) <$> genPos <*> getRandom
     -- d0s <- evalRandIO . replicateM 20 $ (,) <$> ((^+^ (V3 (w/4) (h/4) 0)) . (^/ 2) <$> genPos) <*> genVel
     gen <- evalRandIO getRandom
     print a0s
@@ -75,9 +75,9 @@ simpleStage3 w h a0s _ = proc _ -> do
     -- asds <- zipArrow (map (uncurry archerWire) a0s) . delay mempty -< zip hitas (unDupSelf as)
     -- asds <- zipArrow (map (uncurry archerWire) a0s) -< unDupSelf as
     -- starta0s <- now -< map (uncurry archerWire) a0s
-    -- asnds <- wireBox [] . delay ((NoEvent,[]),[]) -< ((starta0s,hitas'),unDupSelf as)
-    asnds <- wireBox (map (uncurry archerWire) a0s) . delay ((NoEvent,replicate 100 NoEvent),replicate 100 []) -< ((NoEvent,hitas'),unDupSelf as)
-    ds <- wireBox [] -< ((newDartWires,hitds'),replicate 100 ())
+    -- asnds <- wireBox [] . delay ((NoEvent,repeat NoEvent),repeat []) -< ((starta0s,hitas'),unDupSelf as)
+    asnds <- wireBox (map (uncurry archerWire) a0s) . delay ((NoEvent,repeat NoEvent),repeat []) -< ((NoEvent,hitas'),unDupSelf as)
+    ds <- wireBox [] -< ((newDartWires,hitds'),repeat ())
   returnA -< Stage w h as ds
   where
   hitWatcher' :: [Archer] -> [Dart] -> ([Event Messages],[Event Messages])
@@ -339,7 +339,7 @@ archerWire :: forall m e t s. (MonadFix m, Monoid e, HasTime t s)
     -> Wire s e m [Archer] (Archer, Event [(V3D,V3D)])
 archerWire x0 _ = shootCycle . seek
   where
-    range = 50
+    range = 30
     speed = 10
     dartSpeed = 20
     coolDownTime = 3
@@ -382,8 +382,8 @@ archerWire x0 _ = shootCycle . seek
               inhibit mempty -< ()
 
 
-    dead :: Wire s e m (Event Messages, [Maybe Archer]) (Maybe Archer, Event [(V3D,V3D)])
-    dead = pure (Nothing, NoEvent)
+    -- dead :: Wire s e m (Event Messages, [Maybe Archer]) (Maybe Archer, Event [(V3D,V3D)])
+    -- dead = pure (Nothing, NoEvent)
 
 -- proc (mess,as) -> do
   -- die <- filterE (any isDie) -< mess
