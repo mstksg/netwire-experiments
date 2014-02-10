@@ -4,7 +4,7 @@
 module Main where
 
 import Control.Category
-import Control.Monad
+import Control.Monad hiding (sequence)
 import Data.Ord (comparing)
 import Data.Monoid as M
 import Control.Wire.Unsafe.Event
@@ -20,7 +20,7 @@ import Linear.Metric
 import Linear.V3
 import Linear.Vector
 import Physics
-import Prelude hiding                   ((.),id)
+import Prelude hiding                   ((.),id,sequence)
 import Render.Render
 
 #ifdef WINDOWS
@@ -44,7 +44,7 @@ main = do
     -- print a0s
     -- print d0s
     -- testStage (simpleStage0 w h a0s d0s)
-    testStage (simpleStage1 w h a0s gen)
+    testStage (simpleStage2 w h a0s gen)
   where
     w = 400
     h = 300
@@ -52,6 +52,78 @@ main = do
     genPos = V3 <$> getRandomR (0,w) <*> getRandomR (0,h) <*> pure 0
     -- genVel :: RandomGen g => Rand g (V3 Double)
     -- genVel = V3 <$> getRandomR (-20,20) <*> getRandomR (-20,20) <*> pure 0
+
+simpleStage2 :: forall m e t s. (MonadFix m, Monoid e, HasTime t s, Fractional t)
+    => Double
+    -> Double
+    -> [(V3D,Int)]
+    -> Int
+    -> Wire s e m () Stage
+simpleStage2 w h a0s gen = proc _ -> do
+  rec
+    let
+      as = map fst asds
+      newDartEvents = map snd asds
+      newDarts :: Event [(V3D,V3D)]
+      newDarts = mconcat newDartEvents
+      dartWirer :: (V3D, V3D) -> Wire s e m (Event Messages) (Maybe Dart)
+      dartWirer = uncurry dartWire
+      newDartWires = map dartWirer <$> newDarts
+      (hitas, hitds) = hitWatcher as ds
+      dieds = borderWatcher ds
+      dmess = zipWith (M.<>) hitds dieds
+    asds <- zipArrow (map (uncurry archerWire) a0s) . delay mempty -< zip hitas (unDupSelf as)
+    -- newDarts <- popDart gen -< d0w
+    ds <- krSwitch (pure []) . delay ([],NoEvent) -< (dmess, continuize <$> newDartWires)
+    -- ds <- undefined -< undefined
+
+  returnA -< Stage w h (catMaybes as) (catMaybes ds)
+  where
+    continuize ::
+           [Wire s e m (Event Messages) (Maybe Dart)]
+        -> Wire s e m [Event Messages] [Maybe Dart]
+        -> Wire s e m [Event Messages] [Maybe Dart]
+    continuize [] oldWires = proc mess -> do
+      ds <- oldWires -< mess
+      returnA -< ds
+    continuize (dw:dws) oldWires = proc mess -> do
+      case mess of
+        (m:ms) -> do
+          d <- dw -< m
+          ds <- continuize dws oldWires -< ms
+          returnA -< d:ds
+        [] -> do
+          d <- dw . never -< []
+          ds <- continuize dws oldWires . arr (:[]) . never -< []
+          returnA -< d:ds
+    -- continuize dWire dsWire = proc hitds -> do
+    --   case hitds of
+    --     (hit:hits) -> do
+    --       d <- dWire -< hit
+    --       ds <- dsWire -< hits
+    --       returnA -< d:ds
+    --     [] -> do
+    --       d <- dWire . never -< []
+    --       ds <- dsWire . arr (:[]) . never -< []
+    --       returnA -< d:ds
+    -- popDart g = now . stdWackelkontakt 0.1 (1 - 1/75) g --> popDart (g+1)
+    borderWatcher :: [Maybe Dart] -> [Event Messages]
+    borderWatcher = map outOfBounds
+      where
+        outOfBounds (Just (Dart (Body _ (V3 x y _)) _)) =
+          if or [x < 0, y < 0, x > w, y > h]
+            then Event [Die]
+            else NoEvent
+        outOfBounds _ = NoEvent
+    d0w :: Wire s e m (Event Messages) (Maybe Dart)
+    d0w = dartWire (V3 (w/2) (h/2) 0) (V3 10 10 0)
+
+type DartData = (V3D,V3D)
+
+manageDarts :: Monad m => Wire s e m (Event [DartData], [Event Messages]) [Maybe Dart]
+manageDarts = proc (dds, hitds) -> do
+  undefined -< undefined
+
 
 simpleStage1 :: forall m e t s. (MonadFix m, Monoid e, HasTime t s, Fractional t)
     => Double
@@ -419,3 +491,35 @@ testStage w =
     (const . return . return $ ())
     (w . pure ())
 #endif
+
+
+wrappedWire :: (Monoid e, Monoid s, Monad m) => Wire s e m a b -> Wire s e m a (Wire s e m a b)
+wrappedWire w' = mkGen $ \ds a -> do
+  (_, w) <- stepWire w' ds (Right a)
+  return (Right w, wrappedWire w)
+
+
+wireBox :: forall s e m a b. (Monoid s, Monad m) => Wire s e m ((Event [Wire s e m a b], [Event ()]),[a]) [b]
+wireBox = go []
+  where
+    -- go :: [Wire s e m a b] -> Wire s e m ((Event (Wire s e m a b), [Event ()]),[a]) [b]
+    go ws = mkGen $ \ds ((add,delete),as) -> do
+      stepped <- zipWithM (\w' a' -> stepWire w' ds (Right a')) ws as
+      let
+        results :: [Either e b]
+        results = map fst stepped
+        updateds :: [Wire s e m a b]
+        updateds = catMaybes $ zipWith deletor (map snd stepped) delete
+        deletor :: Wire s e m a b -> Event () -> Maybe (Wire s e m a b)
+        deletor _ (Event _) = Nothing
+        deletor w NoEvent   = Just w
+        news :: [Wire s e m a b]
+        news = case add of
+                 Event nws -> nws
+                 NoEvent -> []
+      return (sequence results, go (news ++ updateds))
+
+  
+
+
+
