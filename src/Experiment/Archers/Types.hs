@@ -20,8 +20,8 @@ type Angle = Double
 
 data Archer = Archer  { archerBody :: Body
                       , archerAngle :: Angle
-                      }
-data Dart = Dart Body Angle
+                      } deriving Show
+data Dart = Dart Body Angle deriving Show
 
 data Message = Die
 
