@@ -74,10 +74,11 @@ simpleStage3 w h a0s _ = proc _ -> do
       newDartWires = map (uncurry dartWire) <$> newDarts
     -- asds <- zipArrow (map (uncurry archerWire) a0s) . delay mempty -< zip hitas (unDupSelf as)
     -- asds <- zipArrow (map (uncurry archerWire) a0s) -< unDupSelf as
-    -- starta0s <- now -< map (uncurry archerWire) a0s
-    -- asnds <- wireBox [] . delay ((NoEvent,repeat NoEvent),repeat []) -< ((starta0s,hitas'),unDupSelf as)
-    asnds <- wireBox (map (uncurry archerWire) a0s) . delay ((NoEvent,repeat NoEvent),repeat []) -< ((NoEvent,hitas'),unDupSelf as)
-    ds <- wireBox [] -< ((newDartWires,hitds'),repeat ())
+    starta0s <- now -< map (uncurry archerWire) a0s
+    -- asnds <- wireBox [] -< ((starta0s,hitas'),unDupSelf as)
+    asnds <- dWireBox' [] -< ((starta0s,hitas'),unDupSelf as)
+    -- asnds <- wireBox (map (uncurry archerWire) a0s) . delay ((NoEvent,repeat NoEvent),repeat []) -< ((NoEvent,hitas'),unDupSelf as)
+    ds    <- wireBox' () -< ((newDartWires,hitds'),repeat ())
   returnA -< Stage w h as ds
   where
   hitWatcher' :: [Archer] -> [Dart] -> ([Event Messages],[Event Messages])
@@ -541,18 +542,27 @@ wrappedWire w' = mkGen $ \ds a -> do
   return (Right w, wrappedWire w)
 
 
-wireBox :: forall m e a b s. (Monoid s, Monad m) => [Wire s e m a b] -> Wire s e m ((Event [Wire s e m a b], [Event ()]),[a]) [b]
-wireBox = go
+dWireBox' :: forall m e a b s. (Monoid s, Monad m) => a -> Wire s e m ((Event [Wire s e m a b], [Event ()]),[a]) [b]
+dWireBox' fill = wireBox fill [] . delay ((NoEvent,[]),[])
+
+dWireBox :: forall m e a b s. (Monoid s, Monad m) => a -> [Wire s e m a b] -> Wire s e m ((Event [Wire s e m a b], [Event ()]),[a]) [b]
+dWireBox fill ws = wireBox fill ws . delay ((NoEvent,[]),[])
+
+wireBox' :: forall m e a b s. (Monoid s, Monad m) => a -> Wire s e m ((Event [Wire s e m a b], [Event ()]),[a]) [b]
+wireBox' fill = wireBox fill []
+
+wireBox :: forall m e a b s. (Monoid s, Monad m) => a -> [Wire s e m a b] -> Wire s e m ((Event [Wire s e m a b], [Event ()]),[a]) [b]
+wireBox fill = go
   where
     -- go :: [Wire s e m a b] -> Wire s e m ((Event (Wire s e m a b), [Event ()]),[a]) [b]
     go ws = mkGen $ \ds ((adds,deletes),as) -> do
       -- M.when (length ws > length as) (error "hey")
-      stepped <- zipWithM (\w' a' -> stepWire w' ds (Right a')) ws as
+      stepped <- zipWithM (\w' a' -> stepWire w' ds (Right a')) ws (as ++ repeat fill)
       let
         results :: [Either e b]
         results = map fst stepped
         updateds :: [Wire s e m a b]
-        updateds = catMaybes $ zipWith deletor (map snd stepped) deletes
+        updateds = catMaybes $ zipWith deletor (map snd stepped) (deletes ++ repeat NoEvent)
         deletor :: Wire s e m a b -> Event () -> Maybe (Wire s e m a b)
         deletor _ (Event _) = Nothing
         deletor w NoEvent   = Just w
@@ -562,5 +572,6 @@ wireBox = go
                  NoEvent -> []
       -- return ((length results, length ws, length as) `traceShow` sequence results, go (news ++ updateds))
       return (sequence results, go (news ++ updateds))
+      -- return (sequence results, go (updateds ++ news))
 
 
