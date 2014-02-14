@@ -12,7 +12,7 @@ import Control.Monad.Random
 import Control.Wire              as W
 import Control.Wire.Unsafe.Event
 import Data.List                 (unfoldr, transpose, minimumBy)
-import Data.Maybe                (isNothing)
+import Data.Maybe                (isNothing, fromJust)
 import Data.Ord                  (comparing)
 import Data.Traversable
 import Experiment.Archers.Types
@@ -340,51 +340,102 @@ archerWire :: forall m e t s. (MonadFix m, Monoid e, HasTime t s)
     => V3D
     -> Int
     -> Wire s e m ([Archer], Event ()) (Archer, Event [(V3D,V3D)])
-archerWire x0 _ = shootCycle . seek
+archerWire x0 _ = proc (others,hit) -> do
+    rec
+      let
+        target = seek others pos
+        newD   = target >>= newDart pos 
+        vel    = case target of
+          Just (tDist, tDir)
+            | tDist > range  -> tDir ^* speed
+          _                  -> 0
+      pos <- integral x0 -< vel
+    shot <- shoot -< newD
+    health <- hold . accumE (-) startingHealth <|> pure startingHealth -< 2 <$ hit
+    -- health <- integral 10 -< 
+    let
+      angle = 0
+      a = Archer (Body 1 pos) angle
+    
+    W.when (> 0) -< health
+    -- arr fst . second (W.when (> 0)) -< ((a,shot),health)
+    returnA -< (a,shot)
+    -- W.until -< ((a,shot),hit)
   where
-    range = 30
-    speed = 10
-    dartSpeed = 20
-    coolDownTime = 3
-    seek :: Wire s e m ([Archer], Event()) (Archer, Maybe V3D)
-    seek = proc (others,die) -> do
-      rec
-        let
-          otherPs :: [(Double,V3D)]
-          otherPs = map ( (fst &&& uncurry (flip (^/)))
-                        . (norm &&& id)
-                        . (^-^ pos)
-                        . bodyPos
-                        . archerBody
-                        ) others
-          target | null otherPs = Nothing
-                 | otherwise    = Just $ minimumBy (comparing fst) otherPs
-          (vel,target') =
-            case target of
-              Just (dist,targDir)
-                | dist > range -> (targDir ^* speed, Nothing)
-                -- | dist < 1     -> error $ "what is going on " ++ show dist
-                | otherwise    -> (zero, Just targDir)
-              _                -> (zero, Nothing)
-          angle = 0
-        pos <- integral x0 -< vel
-      W.until -< ((Archer (Body 1 pos) angle, target'), die)
-
-    shootCycle :: Wire s e m (Archer, Maybe V3D) (Archer, Event [(V3D,V3D)])
-    shootCycle = waiting --> shoot --> shootCycle
+    newDart p (tDist, tDir)
+      | tDist > range = Nothing
+      | otherwise     = Just $ (p ^+^ tDir ^* 8, tDir ^* dartSpeed)
+    range = 50
+    startingHealth = 10 :: Double
+    speed = 7.5
+    dartSpeed = 30
+    coolDownTime = 5
+    seek others pos | null otherPs = Nothing
+                    | otherwise    = Just $ minimumBy (comparing fst) otherPs
       where
-        waiting :: Wire s e m (Archer, Maybe V3D) (Archer, Event [(V3D,V3D)])
-        waiting = second never . W.when (isNothing . snd)
-        shoot :: Wire s e m (Archer, Maybe V3D) (Archer, Event [(V3D,V3D)])
-        shoot = proc (self, targetDir) -> do
-          case (self, targetDir) of
-            (Archer (Body _ p) 0, Just tDir) -> do
-              let
-                dartData = [(p ^+^ (tDir ^* 8), tDir ^* dartSpeed)]
-              shot <- now -< dartData
-              returnA . W.for coolDownTime -< (self, shot)
-            _ -> do
-              inhibit mempty -< ()
+        otherPs = map ( (fst &&& uncurry (flip (^/)))
+                      . (norm &&& id)
+                      . (^-^ pos)
+                      . bodyPos
+                      . archerBody
+                      ) others
+    shoot = (proc newD -> do
+      case newD of
+        Nothing -> never -< ()
+        Just d  -> do
+          shot <- W.for coolDownTime . now -< [d]
+          returnA -< shot
+      ) --> shoot
+        -- shoot = undefined
+      
+
+
+
+-- archerWire' x0 _ = shootCycle . seek
+--   where
+--     range = 30
+--     speed = 10
+--     dartSpeed = 20
+--     coolDownTime = 3
+--     seek :: Wire s e m ([Archer], Event()) (Archer, Maybe V3D)
+--     seek = proc (others,die) -> do
+--       rec
+--         let
+--           otherPs :: [(Double,V3D)]
+--           otherPs = map ( (fst &&& uncurry (flip (^/)))
+--                         . (norm &&& id)
+--                         . (^-^ pos)
+--                         . bodyPos
+--                         . archerBody
+--                         ) others
+--           target | null otherPs = Nothing
+--                  | otherwise    = Just $ minimumBy (comparing fst) otherPs
+--           (vel,target') =
+--             case target of
+--               Just (dist,targDir)
+--                 | dist > range -> (targDir ^* speed, Nothing)
+--                 -- | dist < 1     -> error $ "what is going on " ++ show dist
+--                 | otherwise    -> (zero, Just targDir)
+--               _                -> (zero, Nothing)
+--           angle = 0
+--         pos <- integral x0 -< vel
+--       W.until -< ((Archer (Body 1 pos) angle, target'), die)
+
+--     shootCycle :: Wire s e m (Archer, Maybe V3D) (Archer, Event [(V3D,V3D)])
+--     shootCycle = waiting --> shoot --> shootCycle
+--       where
+--         waiting :: Wire s e m (Archer, Maybe V3D) (Archer, Event [(V3D,V3D)])
+--         waiting = second never . W.when (isNothing . snd)
+--         shoot :: Wire s e m (Archer, Maybe V3D) (Archer, Event [(V3D,V3D)])
+--         shoot = proc (self, targetDir) -> do
+--           case (self, targetDir) of
+--             (Archer (Body _ p) 0, Just tDir) -> do
+--               let
+--                 dartData = [(p ^+^ (tDir ^* 8), tDir ^* dartSpeed)]
+--               shot <- now -< dartData
+--               returnA . W.for coolDownTime -< (self, shot)
+--             _ -> do
+--               inhibit mempty -< ()
 
 
     -- dead :: Wire s e m (Event Messages, [Maybe Archer]) (Maybe Archer, Event [(V3D,V3D)])
