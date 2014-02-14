@@ -3,6 +3,8 @@
 
 module Main where
 
+-- import Data.Monoid            as M
+-- import Debug.Trace
 import Control.Category
 import Control.Monad as M hiding (sequence)
 import Control.Monad.Fix
@@ -10,11 +12,9 @@ import Control.Monad.Random
 import Control.Wire              as W
 import Control.Wire.Unsafe.Event
 import Data.List                 (unfoldr, transpose, minimumBy)
-import Data.Maybe                (catMaybes, isNothing)
-import Data.Monoid               as M
+import Data.Maybe                (isNothing)
 import Data.Ord                  (comparing)
 import Data.Traversable
-import Debug.Trace
 import Experiment.Archers.Types
 import FRP.Netwire
 import Linear.Metric
@@ -40,7 +40,7 @@ import Experiment.Archers.Instances.SDL ()
 
 main :: IO ()
 main = do
-    a0s <- evalRandIO . replicateM 5 $ (,) <$> genPos <*> getRandom
+    a0s <- evalRandIO . replicateM 13 $ (,) <$> genPos <*> getRandom
     -- d0s <- evalRandIO . replicateM 20 $ (,) <$> ((^+^ (V3 (w/4) (h/4) 0)) . (^/ 2) <$> genPos) <*> genVel
     gen <- evalRandIO getRandom
     print a0s
@@ -73,13 +73,14 @@ simpleStage3 w h a0s _ = proc _ -> do
       newDarts = mconcat (map snd asnds)
       -- newDartWires :: Event [Wire s e m () Dart]
       newDartWires = map (uncurry dartWire) <$> newDarts
+      -- starta0s :: Event [Wire s e m ([Archer],Event ()) (Archer, Event [(V3D,V3D)])]
     -- asds <- zipArrow (map (uncurry archerWire) a0s) . delay mempty -< zip hitas (unDupSelf as)
     -- asds <- zipArrow (map (uncurry archerWire) a0s) -< unDupSelf as
     starta0s <- now -< map (uncurry archerWire) a0s
     -- asnds <- wireBox [] -< ((starta0s,hitas'),unDupSelf as)
-    asnds <- dWireBox' [] -< ((starta0s,hitas'),unDupSelf as)
+    asnds <- dWireBox' ([], NoEvent) -< (starta0s,zip (unDupSelf as) hitas')
     -- asnds <- wireBox (map (uncurry archerWire) a0s) . delay ((NoEvent,repeat NoEvent),repeat []) -< ((NoEvent,hitas'),unDupSelf as)
-    ds    <- wireBox' () -< ((newDartWires,hitds'),repeat ())
+    ds    <- dWireBox' NoEvent -< (newDartWires,hitds')
   returnA -< Stage w h as ds
   where
   hitWatcher' :: [Archer] -> [Dart] -> ([Event Messages],[Event Messages])
@@ -165,9 +166,9 @@ simpleStage3 w h a0s _ = proc _ -> do
 
 type DartData = (V3D,V3D)
 
-manageDarts :: Monad m => Wire s e m (Event [DartData], [Event Messages]) [Maybe Dart]
-manageDarts = proc (dds, hitds) -> do
-  undefined -< undefined
+-- manageDarts :: Monad m => Wire s e m (Event [DartData], [Event Messages]) [Maybe Dart]
+-- manageDarts = proc (dds, hitds) -> do
+--   undefined -< undefined
 
 
 -- simpleStage1 :: forall m e t s. (MonadFix m, Monoid e, HasTime t s, Fractional t)
@@ -338,19 +339,20 @@ zipHits wr ac dc = go ((,) <$> [0..(ac-1)] <*> [0..(dc-1)])
 archerWire :: forall m e t s. (MonadFix m, Monoid e, HasTime t s)
     => V3D
     -> Int
-    -> Wire s e m [Archer] (Archer, Event [(V3D,V3D)])
+    -> Wire s e m ([Archer], Event ()) (Archer, Event [(V3D,V3D)])
 archerWire x0 _ = shootCycle . seek
   where
     range = 30
     speed = 10
     dartSpeed = 20
     coolDownTime = 3
-    seek :: Wire s e m [Archer] (Archer, Maybe V3D)
-    seek = proc others -> do
+    seek :: Wire s e m ([Archer], Event()) (Archer, Maybe V3D)
+    seek = proc (others,die) -> do
       rec
         let
           otherPs :: [(Double,V3D)]
-          otherPs = map ( (norm &&& signorm)
+          otherPs = map ( (fst &&& uncurry (flip (^/)))
+                        . (norm &&& id)
                         . (^-^ pos)
                         . bodyPos
                         . archerBody
@@ -361,11 +363,12 @@ archerWire x0 _ = shootCycle . seek
             case target of
               Just (dist,targDir)
                 | dist > range -> (targDir ^* speed, Nothing)
+                -- | dist < 1     -> error $ "what is going on " ++ show dist
                 | otherwise    -> (zero, Just targDir)
               _                -> (zero, Nothing)
           angle = 0
         pos <- integral x0 -< vel
-      returnA -< (Archer (Body 1 pos) angle, target')
+      W.until -< ((Archer (Body 1 pos) angle, target'), die)
 
     shootCycle :: Wire s e m (Archer, Maybe V3D) (Archer, Event [(V3D,V3D)])
     shootCycle = waiting --> shoot --> shootCycle
@@ -412,11 +415,11 @@ archerWire x0 _ = shootCycle . seek
 dartWire :: forall m e t s. (Monad m, Monoid e, HasTime t s)
     => V3D
     -> V3D
-    -> Wire s e m () Dart
-dartWire x0 v0@(V3 vx vy _) = proc _ -> do
+    -> Wire s e m (Event ()) Dart
+dartWire x0 v0@(V3 vx vy _) = proc die -> do
   -- die <- filterE (any isDie) -< mess
   pos <- integral x0 -< v0
-  returnA -< Dart (Body 1 pos) (atan2 vy vx)
+  W.until -< (Dart (Body 1 pos) (atan2 vy vx), die)
   -- W.until --> pure Nothing
   --   -< (Just (Dart (Body 1 pos) (atan2 vy vx)), die)
 
