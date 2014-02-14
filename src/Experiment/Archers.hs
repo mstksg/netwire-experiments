@@ -12,7 +12,7 @@ import Control.Monad.Random
 import Control.Wire              as W
 import Control.Wire.Unsafe.Event
 import Data.List                 (unfoldr, transpose, minimumBy)
--- import Data.Maybe                (isNothing, fromJust)
+import Data.Maybe                (mapMaybe)
 import Data.Ord                  (comparing)
 import Data.Traversable
 import Experiment.Archers.Types
@@ -66,7 +66,6 @@ simpleStage3 w h a0s _ = proc _ -> do
   rec
     let
       (hitas,hitds) = hitWatcher' as ds
-      hitas' = map (() <$) hitas
       hitds' = map (() <$) hitds
       outds  = map (() <$) (borderWatcher ds)
       allds  = zipWith (<>) outds hitds'
@@ -80,7 +79,7 @@ simpleStage3 w h a0s _ = proc _ -> do
     -- asds <- zipArrow (map (uncurry archerWire) a0s) -< unDupSelf as
     starta0s <- now -< map (uncurry archerWire) a0s
     -- asnds <- wireBox [] -< ((starta0s,hitas'),unDupSelf as)
-    asnds <- dWireBox' ([], NoEvent) -< (starta0s,zip (unDupSelf as) hitas')
+    asnds <- dWireBox' ([], NoEvent) -< (starta0s,zip (unDupSelf as) hitas)
     -- asnds <- wireBox (map (uncurry archerWire) a0s) . delay ((NoEvent,repeat NoEvent),repeat []) -< ((NoEvent,hitas'),unDupSelf as)
     ds    <- dWireBox' NoEvent -< (newDartWires,allds)
   returnA -< Stage w h as ds
@@ -91,8 +90,8 @@ simpleStage3 w h a0s _ = proc _ -> do
       hitMatrix = map hitad as
       hitad a   = map (collision a) ds
       collision (Archer pa _ _)
-                (Dart pd _)
-                | norm (pa ^-^ pd) < 5  = Event [Die]
+                (Dart pd dd _)
+                | norm (pa ^-^ pd) < 5  = Event [Hit dd]
                 | otherwise             = NoEvent
       -- collision _ _ = NoEvent
       hitas     = map mergeEs hitMatrix
@@ -100,7 +99,7 @@ simpleStage3 w h a0s _ = proc _ -> do
   borderWatcher :: [Dart] -> [Event Messages]
   borderWatcher = map outOfBounds
     where
-      outOfBounds (Dart (V3 x y _) _)
+      outOfBounds (Dart (V3 x y _) _ _)
         | or [x < 0, y < 0, x > w, y > h] = Event [Die]
         | otherwise                       = NoEvent
 
@@ -250,7 +249,7 @@ hitWatcher as ds = (hitas, hitds)
     hitMatrix = map hitad as
     hitad a   = map (collision a) ds
     collision (Just (Archer pa  _ _))
-              (Just (Dart pd _))
+              (Just (Dart pd _ _))
               | norm (pa ^-^ pd) < 5  = Event [Die]
               | otherwise             = NoEvent
     collision _ _ = NoEvent
@@ -347,8 +346,8 @@ zipHits wr ac dc = go ((,) <$> [0..(ac-1)] <*> [0..(dc-1)])
 archerWire :: forall m e t s. (MonadFix m, Monoid e, HasTime t s)
     => V3D
     -> Int
-    -> Wire s e m ([Archer], Event ()) (Archer, Event [(V3D,V3D)])
-archerWire x0 _ = proc (others,hit) -> do
+    -> Wire s e m ([Archer], Event Messages) (Archer, Event [(V3D,V3D)])
+archerWire x0 _ = proc (others,mess) -> do
     rec
       let
         target = seek others pos
@@ -357,9 +356,11 @@ archerWire x0 _ = proc (others,hit) -> do
           Just (tDist, tDir)
             | tDist > range  -> tDir ^* speed
           _                  -> 0
+        hit =
+          getSum . mconcat . fmap Sum . mapMaybe maybeHit <$> mess
       pos <- integral x0 -< vel
     shot <- shoot -< newD
-    health <- hold . accumE (-) startingHealth <|> pure startingHealth -< 2 <$ hit
+    health <- hold . accumE (-) startingHealth <|> pure startingHealth -< hit
     let
       angle = 0
       a = Archer pos (health / startingHealth) angle
@@ -473,19 +474,19 @@ dartWire :: forall m e t s. (Monad m, Monoid e, HasTime t s)
 dartWire x0 v0@(V3 vx vy _) = proc die -> do
   -- die <- filterE (any isDie) -< mess
   pos <- integral x0 -< v0
-  W.until -< (Dart pos (atan2 vy vx), die)
+  W.until -< (Dart pos 2 (atan2 vy vx), die)
   -- W.until --> pure Nothing
   --   -< (Just (Dart (Body 1 pos) (atan2 vy vx)), die)
 
-hitWire :: (Monad m, Monoid e) => Wire s e m (Maybe Archer, Maybe Dart) (Event (Archer, Dart))
-hitWire = proc ad ->
-  case ad of
-    (Just a@(Archer xa _ _), Just d@(Dart xd _)) ->
-      never . W.unless ((< 5) . norm) . arr fst --> now . arr snd
-        -< (xa ^-^ xd, (a,d))
-    _ ->
-      never
-        -< ()
+-- hitWire :: (Monad m, Monoid e) => Wire s e m (Maybe Archer, Maybe Dart) (Event (Archer, Dart))
+-- hitWire = proc ad ->
+--   case ad of
+--     (Just a@(Archer xa _ _), Just d@(Dart xd _ _)) ->
+--       never . W.unless ((< 5) . norm) . arr fst --> now . arr snd
+--         -< (xa ^-^ xd, (a,d))
+--     _ ->
+--       never
+--         -< ()
 
 
 -- archersAndDarts :: Monad m => Wire s e m ([Archer],[Dart]) ([Archer],[Dart])

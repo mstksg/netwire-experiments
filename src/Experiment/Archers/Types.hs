@@ -22,19 +22,24 @@ data Archer = Archer  { archerPos    :: V3 Double
                       , archerHealth :: Double
                       , archerAngle  :: Angle
                       } deriving Show
-data Dart   = Dart    { dartPos   :: V3 Double
-                      , dartAngle :: Angle
+data Dart   = Dart    { dartPos     :: V3 Double
+                      , dartDamage  :: Double
+                      , dartAngle   :: Angle
                       } deriving Show
 
-data Message = Die
+data Message = Die | Hit Double
 
 type Messages = [Message]
 
 isDie :: Message -> Bool
 isDie Die = True
 
+maybeHit :: Message -> Maybe Double
+maybeHit (Hit d) = Just d
+maybeHit _       = Nothing
+
 instance HasSurface Dart where
-  toSurface (Dart (V3 x y _) ang) =
+  toSurface (Dart (V3 x y _) _ ang) =
     Surface (V2 x y) (transRotate ang) [EntSprite spr]
     where
       spr = Sprite zero (Line (V2 (-2) 0) (V2 2 0)) (0,0,0)
