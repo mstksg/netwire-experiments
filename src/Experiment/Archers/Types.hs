@@ -22,6 +22,7 @@ data Archer = Archer  { archerPos    :: V3 Double
                       , archerHealth :: Double
                       , archerAngle  :: Angle
                       } deriving Show
+
 data Dart   = Dart    { dartPos     :: V3 Double
                       , dartDamage  :: Double
                       , dartAngle   :: Angle
