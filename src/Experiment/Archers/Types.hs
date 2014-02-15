@@ -2,13 +2,13 @@
 
 module Experiment.Archers.Types where
 
-import Physics
+-- import Physics
+import Control.Monad.Random
 import Linear.V2
 import Linear.V3
-import Control.Monad.Random
+import Linear.Vector
 import Render.Sprite
 import Render.Surface
-import Linear.Vector
 
 data Stage = Stage { stageWidth :: Double
                    , stageHeight :: Double
@@ -18,29 +18,42 @@ data Stage = Stage { stageWidth :: Double
 
 type Angle = Double
 
-data Archer = Archer  { archerBody :: Body
-                      , archerAngle :: Angle
+data Archer = Archer  { archerPos    :: V3 Double
+                      , archerHealth :: Double
+                      , archerAngle  :: Angle
                       } deriving Show
-data Dart = Dart Body Angle deriving Show
 
-data Message = Die
+data Dart   = Dart    { dartPos     :: V3 Double
+                      , dartDamage  :: Double
+                      , dartAngle   :: Angle
+                      } deriving Show
+
+data Message = Die | Hit Double
 
 type Messages = [Message]
 
 isDie :: Message -> Bool
 isDie Die = True
 
+maybeHit :: Message -> Maybe Double
+maybeHit (Hit d) = Just d
+maybeHit _       = Nothing
+
 instance HasSurface Dart where
-  toSurface (Dart (Body _ (V3 x y _)) ang) =
+  toSurface (Dart (V3 x y _) _ ang) =
     Surface (V2 x y) (transRotate ang) [EntSprite spr]
     where
       spr = Sprite zero (Line (V2 (-2) 0) (V2 2 0)) (0,0,0)
 
 instance HasSurface Archer where
-  toSurface (Archer (Body _ (V3 x y _)) ang) =
+  toSurface (Archer (V3 x y _) health ang) =
     Surface (V2 x y) (transRotate ang) [EntSprite spr]
     where
-      spr = Sprite zero (Circle 3 Unfilled) (0,0,0)
+      spr = Sprite zero (Circle 3 Unfilled) $ mapTup (round . (* health)) (255,255,255)
+
+mapTup :: (a -> b) -> (a,a,a) -> (b,b,b)
+mapTup f (x,y,z) = (f x, f y, f z)
+
 
 instance HasSurface Stage where
   toSurface (Stage w h arcs arrs) =
