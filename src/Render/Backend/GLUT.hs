@@ -1,13 +1,15 @@
 
 module Render.Backend.GLUT where
 
-import Control.Monad as M
-import Data.Time.Clock
+import Control.Monad             as M
 import Control.Wire
 import Control.Wire.Unsafe.Event
-import Data.IORef
-import Data.Word
 import Data.Char
+import Data.Colour
+import Data.Colour.SRGB          as C
+import Data.IORef
+import Data.Time.Clock
+import Data.Word
 import Graphics.UI.GLUT          as GLUT
 import Linear.V2
 import Linear.Vector
@@ -225,7 +227,7 @@ instance GLUTRenderable Surface where
 
 
 instance GLUTRenderable Sprite where
-  renderGLUT s@(Sprite o sh (cr,cg,cb)) =
+  renderGLUT s@(Sprite o sh colour) =
     case sh of
       Sprite.Polygon vs f ->
         let shapeType =
@@ -241,11 +243,12 @@ instance GLUTRenderable Sprite where
           vertex (v2ToVertex2 (o ^+^ v1))
       _ -> renderGLUT (s {spriteShape = toPolygon sh})
     where
+      C.RGB cr cg cb = toSRGB colour
       col :: Color3 GLfloat
       col = Color3
-              (fromIntegral cr / 255)
-              (fromIntegral cg / 255)
-              (fromIntegral cb / 255)
+              (realToFrac cr * 255)
+              (realToFrac cg * 255)
+              (realToFrac cb * 255)
 
 v2ToVertex2 :: Real a => V2 a -> Vertex2 GLfloat
 v2ToVertex2 (V2 x y) = Vertex2 (realToFrac x) (realToFrac y)
