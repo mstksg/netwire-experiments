@@ -11,6 +11,7 @@ import Control.Monad.Fix
 import Control.Monad.Random
 import Control.Wire              as W
 import Control.Wire.Unsafe.Event
+import Data.Colour.Names
 import Data.List                 (unfoldr, transpose, minimumBy)
 import Data.Maybe                (mapMaybe)
 import Data.Ord                  (comparing)
@@ -40,14 +41,18 @@ import Experiment.Archers.Instances.SDL ()
 
 main :: IO ()
 main = do
-    a0s <- evalRandIO . replicateM 13 $ (,) <$> genPos <*> getRandom
+    t1a0s <- evalRandIO . replicateM 13 $ (,) <$> genPos <*> getRandom
+    t2a0s <- evalRandIO . replicateM 13 $ (,) <$> genPos <*> getRandom
     -- d0s <- evalRandIO . replicateM 20 $ (,) <$> ((^+^ (V3 (w/4) (h/4) 0)) . (^/ 2) <$> genPos) <*> genVel
-    gen <- evalRandIO getRandom
-    print a0s
+    -- gen <- evalRandIO getRandom
+    -- print a0s
     -- print d0s
     -- testStage (simpleStage0 w h a0s d0s)
-    testStage (simpleStage3 w h a0s gen)
+    -- testStage (simpleStage3 w h a0s gen)
+    testStage (simpleStage4 w h (t1flag,t1a0s) (t2flag,t2a0s))
   where
+    t1flag = TeamFlag red
+    t2flag = TeamFlag blue
     w = 400
     h = 300
     genPos :: RandomGen g => Rand g (V3 Double)
@@ -59,10 +64,56 @@ main = do
 simpleStage4 ::
      Double
   -> Double
-  -> [(V3D,Int)]
-  -> [(V3D,Int)]
+  -> (TeamFlag, [(V3D,Int)])
+  -> (TeamFlag, [(V3D,Int)])
   -> Wire' () Stage
-simpleStage4 w h team1 team2 = undefined
+simpleStage4 w h (t1flag,t1a0s) (t2flag,t2a0s) = proc _ -> do
+    rec
+      let
+        (t1ahits,t2dhits) = hitWatcher t1as t2ds
+        (t2ahits,t1dhits) = hitWatcher t2as t1ds
+        t1douts = borderWatcher t1ds
+        t2douts = borderWatcher t2ds
+        t1devts  = zipWith (<>) t1douts t1dhits
+        t2devts  = zipWith (<>) t2douts t2dhits
+      team1@(Team _ t1as t1ds) <- teamWire t1flag t1a0s -< (team2, (t1ahits,t1devts))
+      team2@(Team _ t2as t2ds) <- teamWire t2flag t2a0s -< (team1, (t2ahits,t2devts))
+    returnA -< Stage w h (t1as ++ t2as) (t1ds ++ t2ds)
+  where
+    hitWatcher :: [Archer] -> [Dart] -> ([Event Messages],[Event ()])
+    hitWatcher as ds = (hitas, hitds)
+      where
+        hitMatrix = map hitad as
+        hitad a   = map (collision a) ds
+        collision (Archer pa _ _ _)
+                  (Dart pd dd _)
+                  | norm (pa ^-^ pd) < 5  = Event [Hit dd]
+                  | otherwise             = NoEvent
+        hitas     = map mergeEs hitMatrix
+        hitds     = map ((() <$) . mergeEs) (transpose hitMatrix)
+    borderWatcher :: [Dart] -> [Event ()]
+    borderWatcher = map outOfBounds
+      where
+        outOfBounds (Dart (V3 x y _) _ _)
+          | or [x < 0, y < 0, x > w, y > h] = Event ()
+          | otherwise                       = NoEvent
+
+
+teamWire :: (MonadFix m, Monoid e, HasTime t s)
+  => TeamFlag
+  -> [(V3D,Int)]
+  -> Wire s e m (Team, ([Event Messages],[Event ()])) Team
+teamWire f a0s = proc (Team _ others _, (messAs,messDs)) -> do
+    starta0s <- now -< map archerWire aDatas
+    asnds <- dWireBox' ([], NoEvent) -< (starta0s,zip (repeat others) messAs)
+    let
+      newDarts = mconcat (map snd asnds)
+      newDartWires = map (uncurry . uncurry $ dartWire) <$> newDarts
+      as = map fst asnds
+    ds    <- dWireBox' NoEvent -< (newDartWires,messDs)
+    returnA -< Team f as ds
+  where
+    aDatas = map (\(x0,gen) -> ArcherData x0 gen (Just f)) a0s
 
 simpleStage3 ::
      Double
@@ -80,47 +131,46 @@ simpleStage3 w h a0s _ = proc _ -> do
       as = map fst asnds
       newDarts = mconcat (map snd asnds)
       newDartWires = map (uncurry . uncurry $ dartWire) <$> newDarts
-    starta0s <- now -< map (uncurry archerWire) a0s
+    starta0s <- now -< map archerWire aDatas
     asnds <- dWireBox' ([], NoEvent) -< (starta0s,zip (unDupSelf as) hitas)
     ds    <- dWireBox' NoEvent -< (newDartWires,allds)
   returnA -< Stage w h as ds
   where
-  hitWatcher' :: [Archer] -> [Dart] -> ([Event Messages],[Event Messages])
-  hitWatcher' as ds = (hitas, hitds)
-    where
-      hitMatrix = map hitad as
-      hitad a   = map (collision a) ds
-      collision (Archer pa _ _)
-                (Dart pd dd _)
-                | norm (pa ^-^ pd) < 5  = Event [Hit dd]
-                | otherwise             = NoEvent
-      -- collision _ _ = NoEvent
-      hitas     = map mergeEs hitMatrix
-      hitds     = map mergeEs (transpose hitMatrix)
-  borderWatcher :: [Dart] -> [Event Messages]
-  borderWatcher = map outOfBounds
-    where
-      outOfBounds (Dart (V3 x y _) _ _)
-        | or [x < 0, y < 0, x > w, y > h] = Event [Die]
-        | otherwise                       = NoEvent
+    aDatas = map (\(x0,gen) -> ArcherData x0 gen Nothing) a0s
+    hitWatcher' :: [Archer] -> [Dart] -> ([Event Messages],[Event Messages])
+    hitWatcher' as ds = (hitas, hitds)
+      where
+        hitMatrix = map hitad as
+        hitad a   = map (collision a) ds
+        collision (Archer pa _ _ _)
+                  (Dart pd dd _)
+                  | norm (pa ^-^ pd) < 5  = Event [Hit dd]
+                  | otherwise             = NoEvent
+        -- collision _ _ = NoEvent
+        hitas     = map mergeEs hitMatrix
+        hitds     = map mergeEs (transpose hitMatrix)
+    borderWatcher :: [Dart] -> [Event Messages]
+    borderWatcher = map outOfBounds
+      where
+        outOfBounds (Dart (V3 x y _) _ _)
+          | or [x < 0, y < 0, x > w, y > h] = Event [Die]
+          | otherwise                       = NoEvent
 
 
 
 
-type DartData = (V3D,V3D)
-
-hitWatcher :: [Maybe Archer] -> [Maybe Dart] -> ([Event Messages],[Event Messages])
-hitWatcher as ds = (hitas, hitds)
-  where
-    hitMatrix = map hitad as
-    hitad a   = map (collision a) ds
-    collision (Just (Archer pa  _ _))
-              (Just (Dart pd _ _))
-              | norm (pa ^-^ pd) < 5  = Event [Die]
-              | otherwise             = NoEvent
-    collision _ _ = NoEvent
-    hitas     = map mergeEs hitMatrix
-    hitds     = map mergeEs (transpose hitMatrix)
+-- hitWatcher :: [Maybe Archer] -> [Maybe Dart] -> ([Event Messages],[Event Messages])
+-- hitWatcher as ds = (hitas, hitds)
+--   where
+--     hitMatrix = map hitad as
+--     hitad a   = map (collision a) ds
+--     collision (Just (Archer pa _ _ _))
+--               (Just (Dart pd _ _))
+--               | norm (pa ^-^ pd) < 5  = Event [Die]
+--               | otherwise             = NoEvent
+--     collision _ _ = NoEvent
+--     hitas     = map mergeEs hitMatrix
+--     hitds     = map mergeEs (transpose hitMatrix)
 
 unDupSelf :: [a] -> [[a]]
 unDupSelf = go []
@@ -165,10 +215,9 @@ zipHits wr ac dc = go ((,) <$> [0..(ac-1)] <*> [0..(dc-1)])
       returnA -< h:hs
 
 archerWire :: forall m e t s. (MonadFix m, Monoid e, HasTime t s)
-    => V3D
-    -> Int
-    -> Wire s e m ([Archer], Event Messages) (Archer, Event [((V3D,V3D),Double)])
-archerWire x0 gen = proc (others,mess) -> do
+    => ArcherData
+    -> Wire s e m ([Archer], Event Messages) (Archer, Event [DartData])
+archerWire (ArcherData x0 gen flag) = proc (others,mess) -> do
     rec
       let
         target = seek others pos
@@ -189,7 +238,7 @@ archerWire x0 gen = proc (others,mess) -> do
       recov <- integral 0 . ((pure recovery . W.when (< startingHealth)) <|> pure 0) . delay startingHealth -< health
     let
       angle = 0
-      a = Archer pos (health / startingHealth) angle
+      a = Archer pos (health / startingHealth) angle flag
     W.when (> 0) -< health
     returnA -< (a,shot')
   where

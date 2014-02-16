@@ -23,9 +23,10 @@ data Stage = Stage { stageWidth :: Double
 
 type Angle = Double
 
-data Archer = Archer  { archerPos    :: V3 Double
-                      , archerHealth :: Double
-                      , archerAngle  :: Angle
+data Archer = Archer  { archerPos     :: V3 Double
+                      , archerHealth  :: Double
+                      , archerAngle   :: Angle
+                      , archerFlag    :: Maybe TeamFlag
                       } deriving Show
 
 data Dart   = Dart    { dartPos     :: V3 Double
@@ -33,11 +34,19 @@ data Dart   = Dart    { dartPos     :: V3 Double
                       , dartAngle   :: Angle
                       } deriving Show
 
+data TeamFlag = TeamFlag { teamFlagColor :: Color } deriving (Show, Eq)
+
+data Team =  Team TeamFlag [Archer] [Dart]
+
 data Message = Die | Hit Double
 
 type Messages = [Message]
 
 type Wire' = Wire (Timed Double ()) () Identity
+
+type DartData = ((V3 Double,V3 Double), Double)
+
+data ArcherData = ArcherData (V3 Double) Int (Maybe TeamFlag)
 
 isDie :: Message -> Bool
 isDie Die = True
@@ -53,10 +62,11 @@ instance HasSurface Dart where
       spr = Sprite zero (Line (V2 (-2) 0) (V2 2 0)) black
 
 instance HasSurface Archer where
-  toSurface (Archer (V3 x y _) health ang) =
+  toSurface (Archer (V3 x y _) health ang flag) =
     Surface (V2 x y) (transRotate ang) [EntSprite spr]
     where
-      spr = Sprite zero (Circle 3 Filled) (health `darken` white)
+      col = maybe white teamFlagColor flag
+      spr = Sprite zero (Circle 3 Filled) (health `darken` col)
 
 -- mapTup :: (a -> b) -> (a,a,a) -> (b,b,b)
 -- mapTup f (x,y,z) = (f x, f y, f z)
