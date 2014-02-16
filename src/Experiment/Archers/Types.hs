@@ -49,11 +49,10 @@ instance HasSurface Archer where
   toSurface (Archer (V3 x y _) health ang) =
     Surface (V2 x y) (transRotate ang) [EntSprite spr]
     where
-      spr = Sprite zero (Circle 3 Unfilled) $ mapTup (round . (* health)) (255,255,255)
+      spr = Sprite zero (Circle 3 Filled) $ mapTup (round . (* health)) (255,255,255)
 
 mapTup :: (a -> b) -> (a,a,a) -> (b,b,b)
 mapTup f (x,y,z) = (f x, f y, f z)
-
 
 instance HasSurface Stage where
   toSurface (Stage w h arcs arrs) =

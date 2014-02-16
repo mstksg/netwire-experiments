@@ -42,7 +42,7 @@ import Experiment.Archers.Instances.SDL ()
 
 main :: IO ()
 main = do
-    a0s <- evalRandIO . replicateM 13 $ (,) <$> genPos <*> getRandom
+    a0s <- evalRandIO . replicateM 25 $ (,) <$> genPos <*> getRandom
     -- d0s <- evalRandIO . replicateM 20 $ (,) <$> ((^+^ (V3 (w/4) (h/4) 0)) . (^/ 2) <$> genPos) <*> genVel
     gen <- evalRandIO getRandom
     print a0s
@@ -50,8 +50,8 @@ main = do
     -- testStage (simpleStage0 w h a0s d0s)
     testStage (simpleStage3 w h a0s gen)
   where
-    w = 400
-    h = 300
+    w = 800
+    h = 600
     genPos :: RandomGen g => Rand g (V3 Double)
     genPos = V3 <$> getRandomR (0,w) <*> getRandomR (0,h) <*> pure 0
     -- genVel :: RandomGen g => Rand g (V3 Double)
