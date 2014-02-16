@@ -5,8 +5,13 @@ module Experiment.Archers.Types where
 -- import Physics
 import Control.Monad.Random
 import Linear.V2
+import Data.Colour.Names
+import Data.Colour.SRGB
+import Data.Colour
 import Linear.V3
 import Linear.Vector
+import Prelude hiding ((.),id)
+import Control.Wire
 import Render.Sprite
 import Render.Surface
 
@@ -32,6 +37,8 @@ data Message = Die | Hit Double
 
 type Messages = [Message]
 
+type Wire' = Wire (Timed Double ()) () Identity
+
 isDie :: Message -> Bool
 isDie Die = True
 
@@ -43,23 +50,23 @@ instance HasSurface Dart where
   toSurface (Dart (V3 x y _) _ ang) =
     Surface (V2 x y) (transRotate ang) [EntSprite spr]
     where
-      spr = Sprite zero (Line (V2 (-2) 0) (V2 2 0)) (0,0,0)
+      spr = Sprite zero (Line (V2 (-2) 0) (V2 2 0)) black
 
 instance HasSurface Archer where
   toSurface (Archer (V3 x y _) health ang) =
     Surface (V2 x y) (transRotate ang) [EntSprite spr]
     where
-      spr = Sprite zero (Circle 3 Unfilled) $ mapTup (round . (* health)) (255,255,255)
+      spr = Sprite zero (Circle 3 Filled) (health `darken` white)
 
-mapTup :: (a -> b) -> (a,a,a) -> (b,b,b)
-mapTup f (x,y,z) = (f x, f y, f z)
+-- mapTup :: (a -> b) -> (a,a,a) -> (b,b,b)
+-- mapTup f (x,y,z) = (f x, f y, f z)
 
 
 instance HasSurface Stage where
   toSurface (Stage w h arcs arrs) =
       Surface zero idTrans ents
     where
-      back  = Sprite (V2 (w/2) (h/2)) (Rectangle (V2 w h) Filled) (1,142,14)
+      back  = Sprite (V2 (w/2) (h/2)) (Rectangle (V2 w h) Filled) (sRGB24 1 142 14)
       arrEnts = map (EntSurface . toSurface) arrs
       arcEnts = map (EntSurface . toSurface) arcs
       ents = EntSprite back:(arcEnts ++ arrEnts)

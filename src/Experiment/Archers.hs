@@ -37,6 +37,7 @@ import Experiment.Archers.Instances.SDL ()
 
 
 
+
 main :: IO ()
 main = do
     a0s <- evalRandIO . replicateM 13 $ (,) <$> genPos <*> getRandom
@@ -55,12 +56,20 @@ main = do
     -- genVel = V3 <$> getRandomR (-20,20) <*> getRandomR (-20,20) <*> pure 0
 
 
-simpleStage3 :: forall m e t s. (MonadFix m, Monoid e, HasTime t s, Fractional t)
-  => Double
+simpleStage4 ::
+     Double
+  -> Double
+  -> [(V3D,Int)]
+  -> [(V3D,Int)]
+  -> Wire' () Stage
+simpleStage4 w h team1 team2 = undefined
+
+simpleStage3 ::
+     Double
   -> Double
   -> [(V3D,Int)]
   -> Int
-  -> Wire s e m () Stage
+  -> Wire' () Stage
 simpleStage3 w h a0s _ = proc _ -> do
   rec
     let
@@ -174,7 +183,10 @@ archerWire x0 gen = proc (others,mess) -> do
     shot <- shoot -< newD
     shotR <- couple (noisePrimR (0.67,1.5) gen') -< shot
     let shot' = (\(ds,r) -> map (,dartDmg / r) ds) <$> shotR
-    health <- hold . accumE (-) startingHealth <|> pure startingHealth -< hit
+    damage <- hold . accumE (+) 0 <|> pure 0 -< hit
+    rec
+      let health = min (startingHealth + recov - damage) startingHealth
+      recov <- integral 0 . ((pure recovery . W.when (< startingHealth)) <|> pure 0) . delay startingHealth -< health
     let
       angle = 0
       a = Archer pos (health / startingHealth) angle
@@ -188,7 +200,7 @@ archerWire x0 gen = proc (others,mess) -> do
     range = 50
     startingHealth = 10
     speed = 7.5
-    -- recovery = 0.1
+    recovery = 0.1
     dartDmg = 2
     dartSpeed = 30
     coolDownTime = 4
@@ -220,7 +232,7 @@ dartWire x0 v0@(V3 vx vy _) damage = proc die -> do
   pos <- integral x0 -< v0
   W.until -< (Dart pos damage (atan2 vy vx), die)
 
-testStage :: Wire (Timed Double ()) () Identity () Stage -> IO ()
+testStage :: Wire' () Stage -> IO ()
 testStage w =
 #ifdef WINDOWS
   runBackend
