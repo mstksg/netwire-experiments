@@ -46,7 +46,11 @@ type Wire' = Wire (Timed Double ()) () Identity
 
 type DartData = ((V3 Double,V3 Double), Double)
 
-data ArcherData = ArcherData (V3 Double) Int (Maybe TeamFlag)
+data ArcherData = ArcherData  { archerDataX0    :: V3 Double
+                              , archerDataGen   :: StdGen
+                              , archerDataFlag  :: Maybe TeamFlag
+                              } deriving Show
+
 
 isDie :: Message -> Bool
 isDie Die = True

@@ -41,8 +41,8 @@ import Experiment.Archers.Instances.SDL ()
 
 main :: IO ()
 main = do
-    t1a0s <- evalRandIO . replicateM 13 $ (,) <$> genPos <*> getRandom
-    t2a0s <- evalRandIO . replicateM 13 $ (,) <$> genPos <*> getRandom
+    t1a0s <- evalRandIO . replicateM 13 $ (,) <$> genPos <*> (mkStdGen <$> getRandom)
+    t2a0s <- evalRandIO . replicateM 13 $ (,) <$> genPos <*> (mkStdGen <$> getRandom)
     -- d0s <- evalRandIO . replicateM 20 $ (,) <$> ((^+^ (V3 (w/4) (h/4) 0)) . (^/ 2) <$> genPos) <*> genVel
     -- gen <- evalRandIO getRandom
     -- print a0s
@@ -64,8 +64,8 @@ main = do
 simpleStage4 ::
      Double
   -> Double
-  -> (TeamFlag, [(V3D,Int)])
-  -> (TeamFlag, [(V3D,Int)])
+  -> (TeamFlag, [(V3D,StdGen)])
+  -> (TeamFlag, [(V3D,StdGen)])
   -> Wire' () Stage
 simpleStage4 w h (t1flag,t1a0s) (t2flag,t2a0s) = proc _ -> do
     rec
@@ -101,7 +101,7 @@ simpleStage4 w h (t1flag,t1a0s) (t2flag,t2a0s) = proc _ -> do
 
 teamWire :: (MonadFix m, Monoid e, HasTime t s)
   => TeamFlag
-  -> [(V3D,Int)]
+  -> [(V3D,StdGen)]
   -> Wire s e m (Team, ([Event Messages],[Event ()])) Team
 teamWire f a0s = proc (Team _ others _, (messAs,messDs)) -> do
     starta0s <- now -< map archerWire aDatas
@@ -118,7 +118,7 @@ teamWire f a0s = proc (Team _ others _, (messAs,messDs)) -> do
 simpleStage3 ::
      Double
   -> Double
-  -> [(V3D,Int)]
+  -> [(V3D,StdGen)]
   -> Int
   -> Wire' () Stage
 simpleStage3 w h a0s _ = proc _ -> do
@@ -230,7 +230,7 @@ archerWire (ArcherData x0 gen flag) = proc (others,mess) -> do
           getSum . mconcat . fmap Sum . mapMaybe maybeHit <$> mess
       pos <- integral x0 -< vel
     shot <- shoot -< newD
-    shotR <- couple (noisePrimR (0.67,1.5) gen') -< shot
+    shotR <- couple (noisePrimR (0.67,1.5) gen) -< shot
     let shot' = (\(ds,r) -> map (,dartDmg / r) ds) <$> shotR
     damage <- hold . accumE (+) 0 <|> pure 0 -< hit
     rec
@@ -242,7 +242,6 @@ archerWire (ArcherData x0 gen flag) = proc (others,mess) -> do
     W.when (> 0) -< health
     returnA -< (a,shot')
   where
-    gen' = mkStdGen gen
     newDart p (tDist, tDir)
       | tDist > range = Nothing
       | otherwise     = Just $ (p ^+^ tDir ^* 8, tDir ^* dartSpeed)
