@@ -53,8 +53,8 @@ main = do
   where
     t1flag = TeamFlag red
     t2flag = TeamFlag blue
-    w = 400
-    h = 300
+    w = 600
+    h = 450
     genPos :: RandomGen g => Rand g (V3 Double)
     genPos = V3 <$> getRandomR (0,w) <*> getRandomR (0,h) <*> pure 0
     -- genVel :: RandomGen g => Rand g (V3 Double)
@@ -72,10 +72,10 @@ simpleStage4 w h (t1flag,t1a0s) (t2flag,t2a0s) = proc _ -> do
       let
         (t1ahits,t2dhits) = hitWatcher t1as t2ds
         (t2ahits,t1dhits) = hitWatcher t2as t1ds
-        t1douts = borderWatcher t1ds
-        t2douts = borderWatcher t2ds
-        t1devts  = zipWith (<>) t1douts t1dhits
-        t2devts  = zipWith (<>) t2douts t2dhits
+        t1douts           = borderWatcher t1ds
+        t2douts           = borderWatcher t2ds
+        t1devts           = zipWith (<>) t1douts t1dhits
+        t2devts           = zipWith (<>) t2douts t2dhits
       team1@(Team _ t1as t1ds) <- teamWire t1flag t1a0s -< (team2, (t1ahits,t1devts))
       team2@(Team _ t2as t2ds) <- teamWire t2flag t2a0s -< (team1, (t2ahits,t2devts))
     returnA -< Stage w h (t1as ++ t2as) (t1ds ++ t2ds)
