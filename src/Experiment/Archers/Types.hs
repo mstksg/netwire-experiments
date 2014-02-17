@@ -75,7 +75,6 @@ instance HasSurface Archer where
 -- mapTup :: (a -> b) -> (a,a,a) -> (b,b,b)
 -- mapTup f (x,y,z) = (f x, f y, f z)
 
-
 instance HasSurface Stage where
   toSurface (Stage w h arcs arrs) =
       Surface zero idTrans ents

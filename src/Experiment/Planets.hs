@@ -139,7 +139,7 @@ manyBody' bodyList igr = proc e -> do
 runTest :: Int -> Wire (Timed Double ()) () Identity (Event RenderEvent) (Double, [Planet]) -> IO ()
 runTest _ w =
 #ifdef WINDOWS
-  runBackend (glutBackend (1/30) 3 (600,600) (31,31,31)) (const . return $ ()) (uncurry PlanetList <$> w)
+  runBackend (glutBackend (1/30) 2.5 (600,600) (31,31,31)) (const . return $ ()) (uncurry PlanetList <$> w)
 #else
   runBackend (sdlBackend 600 600 (31,31,31)) (const . return . return $ ()) (uncurry PlanetList <$> w)
 #endif
