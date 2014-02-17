@@ -1,17 +1,18 @@
 
 module Experiment.Planets.Types where
 
-import Data.Word
+-- import Data.Word
 import Linear.V2
 import Linear.V3
 import Linear.Vector
 import Physics
 import Render.Sprite
 import Render.Surface
+-- import Data.Colour
 
 data Planet = Planet  { planetName    :: String
                       , planetRadius  :: Double
-                      , planetColor   :: (Word8,Word8,Word8)
+                      , planetColor   :: Color
                       , planetBody    :: Body
                       } deriving (Show)
 

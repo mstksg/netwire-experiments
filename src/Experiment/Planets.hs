@@ -13,6 +13,9 @@ import Experiment.Planets.Types
 import Linear.V3
 import Linear.Vector
 import Physics
+-- import Data.Colour
+import Data.Colour.Names
+import Data.Colour.SRGB
 import Prelude hiding                       ((.), id)
 import Render.Backend.GNUPlot
 import Render.Render
@@ -41,13 +44,14 @@ processPlanetData nStr dStr = zipWith mergeData nData dData
       let (m:px:py:pz:vx:vy:vz:_) = map read dat
           b                       = Body (mConst * m) (V3 px py pz)
           v0                      = V3 vx vy vz
-      in  (Planet name 5 (0,0,0) b, v0)
+      in  (Planet name 5 black b, v0)
     dData                        = map processLineD $ lines dStr
     processLineD                 = drop 1 . words
     mergeData (p,v0) (rad:col) =
-      ( p { planetRadius = rConst * read rad, planetColor = read (unwords col) }
+      ( p { planetRadius = rConst * read rad, planetColor = colTup (read (unwords col)) }
       , v0)
     rConst = 0.04
+    colTup (cr,cg,cb) = sRGB24 cr cg cb
 
 
 main :: IO ()
@@ -76,11 +80,11 @@ runManyMouse planets = runTest (length planets + 1) wz
       zoom <- hold . accumE (*) 1 <|> pure 1 -< fromJust <$> zoomE
       returnA -< (zoom,bs)
     planetMakers = map (pMaker . fst) (planets ++ [extraPlanet])
-    extraPlanet = (Planet "Bob" 0.1 (255,255,255) (Body 0 zero), zero)
+    extraPlanet = (Planet "Bob" 0.1 white (Body 0 zero), zero)
 
     zoomEvent (RenderMouseDown _ RenderMouseWheelUp)    = Just (1/1.2)
     zoomEvent (RenderMouseDown _ RenderMouseWheelDown)  = Just (1.2)
-    zoomEvent (RenderKeyDown (RenderKeyData c mods))
+    zoomEvent (RenderKeyDown (RenderKeyData c _))
       | c == ord '+'                                    = Just (1.2)
       | c == ord '-'                                    = Just (1/1.2)
       | otherwise                                       = Nothing
@@ -132,10 +136,10 @@ manyBody' bodyList igr = proc e -> do
 --   where
 --     w = map (pMaker p) <$> manyFixedBody [Body 1 zero] [(b0,v0)] verlet
 
-runTest :: Int -> Wire (Timed Double ()) () IO (Event RenderEvent) (Double, [Planet]) -> IO ()
+runTest :: Int -> Wire (Timed Double ()) () Identity (Event RenderEvent) (Double, [Planet]) -> IO ()
 runTest _ w =
 #ifdef WINDOWS
-  runBackend (glutBackend (1/30) 3 (600,600) (31,31,31)) (const . return $ ()) (uncurry PlanetList <$> w)
+  runBackend (glutBackend (1/30) 2.5 (600,600) (31,31,31)) (const . return $ ()) (uncurry PlanetList <$> w)
 #else
   runBackend (sdlBackend 600 600 (31,31,31)) (const . return . return $ ()) (uncurry PlanetList <$> w)
 #endif

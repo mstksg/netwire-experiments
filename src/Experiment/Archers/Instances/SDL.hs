@@ -1,3 +1,4 @@
+{-# OPTIONS -fno-warn-orphans #-}
 
 module Experiment.Archers.Instances.SDL where
 

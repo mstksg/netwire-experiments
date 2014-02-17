@@ -1,10 +1,11 @@
 module Render.Sprite where
 
 import Linear.V2
-import Data.Word
+-- import Data.Word
 import Control.Applicative (pure, (<*>), (<$>))
 import Linear.Vector
 import Linear.Matrix
+import Data.Colour
 
 data Sprite = Sprite { spritePos   :: V2 Double
                      , spriteShape :: SpriteShape
@@ -16,7 +17,8 @@ data SpriteShape = Circle Double Filling
                  | Rectangle (V2 Double) Filling
                  | Polygon [V2 Double] Filling
                  | Line (V2 Double) (V2 Double)
-type Color = (Word8,Word8,Word8)
+
+type Color = Colour Double
 
 data Filling = Unfilled | Filled
 

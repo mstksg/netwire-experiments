@@ -8,6 +8,7 @@ import Data.Bits
 import Data.Maybe                           (mapMaybe)
 import Data.Word
 import Linear.V2
+import Data.Colour.SRGB
 import Render.Render
 import Render.Sprite
 import Render.Surface
@@ -19,7 +20,7 @@ sdlBackend :: SDLRenderable a
     => Int
     -> Int
     -> (Word8, Word8, Word8)
-    -> Backend (Timed Double ()) e IO (SDL.Surface -> IO ()) a
+    -> Backend (Timed Double ()) e Identity (SDL.Surface -> IO ()) a
 sdlBackend ht wd (cr,cg,cb) = Backend runSdl
   where
     fr = 30
@@ -32,7 +33,7 @@ sdlBackend ht wd (cr,cg,cb) = Backend runSdl
       Framerate.set frameRate fr
 
       -- go screen clockSession_ wr frameRate
-      go screen (countSession_ simDt) wr frameRate
+      go screen (countSession simDt <*> pure ()) wr frameRate
 
       where
         go screen s' w' frameRate = do
@@ -43,8 +44,12 @@ sdlBackend ht wd (cr,cg,cb) = Backend runSdl
           --   NoEvent -> return ()
           --   Event e -> print e
 
-          (ds, s) <- stepSession s'
-          (mx, w) <- stepWire w' ds (Right renderEvent)
+          let
+            (ds, s) = runIdentity (stepSession s')
+            (mx, w) = runIdentity (stepWire w' ds (Right renderEvent))
+
+          -- (ds, s) <- runIdentitystepSession s'
+          -- (mx, w) <- stepWire w' ds (Right renderEvent)
 
           case mx of
             Right mx' -> do
@@ -74,7 +79,7 @@ instance SDLRenderable Surface where
   renderSDL scr = mapM_ (renderSDL scr) . toSpriteList'
 
 instance SDLRenderable Sprite where
-  renderSDL scr (Sprite (V2 x y) sh (cr,cg,cb)) = void (drawer col)
+  renderSDL scr (Sprite (V2 x y) sh colour) = void (drawer col)
     where
       drawer = case sh of
         Circle r f ->
@@ -104,6 +109,7 @@ instance SDLRenderable Sprite where
               SDL.line scr
                 (round (x+x0)) (round (y+y0))
                 (round (x+x1)) (round (y+y1))
+      RGB cr cg cb = toSRGB24 colour
       col = rgbColor cr cg cb
 
 rgbColor :: Word8 -> Word8 -> Word8 -> SDL.Pixel
