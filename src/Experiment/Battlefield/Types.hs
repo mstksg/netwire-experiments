@@ -5,6 +5,8 @@ import Control.Wire
 import Linear.V3
 import System.Random
 
+type Wire' = Wire (Timed Double ()) () Identity
+
 data Stage = Stage { stageWidth    :: Double
                    , stageHeight   :: Double
                    , stageSoldiers :: [Soldier]
