@@ -1,4 +1,4 @@
-module Experiment.Battlefield.Attack (maybeAttacked, attackWire) where
+module Experiment.Battlefield.Attack (maybeAttacked, maybeAttack, attackWire) where
 
 import Control.Wire                 as W
 import Data.Maybe                   (fromMaybe)
@@ -35,6 +35,10 @@ attackWire (AttackData x0 vu@(V3 vx vy _) (Attack weap dmg)) =
     attack   = ArticleAttack (Attack weap dmg)
     duration = maybe returnA W.for (weaponDuration weap)
 
+maybeAttack :: SoldierOutEvent -> Maybe AttackData
+maybeAttack (AttackEvent atk) = Just atk
+-- maybeAttack _ = Nothing
+
 maybeAttacked :: SoldierInEvent -> Maybe Double
 maybeAttacked (AttackedEvent dmg) = Just dmg
-maybeAttacked _                   = Nothing
+-- maybeAttacked _                   = Nothing

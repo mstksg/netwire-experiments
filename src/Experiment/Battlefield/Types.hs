@@ -28,6 +28,11 @@ data Weapon = Sword | Axe | Bow | Longbow
 data Mount = Foot | Horse
                       deriving Show
 
+data Team = Team { teamFlag     :: TeamFlag
+                 , teamSoldiers :: [Soldier]
+                 , teamArticles :: [Article]
+                 } deriving Show
+
 data TeamFlag = TeamFlag  { teamFlagColor :: Color
                           } deriving Show
 
@@ -46,7 +51,7 @@ data SoldierOutEvent = AttackEvent AttackData
 data Attack = Attack { attackWeapon :: Weapon
                      , attackDamage :: Double
                      } deriving Show
-                     
+
 data AttackData = AttackData { attackDataX0     :: V3 Double
                              , attackDataDir    :: V3 Double
                              , attackDataAttack :: Attack
@@ -55,6 +60,7 @@ data AttackData = AttackData { attackDataX0     :: V3 Double
 type SoldierOutEvents = Event [SoldierOutEvent]
 
 data SoldierInEvent = AttackedEvent Double
+                        deriving Show
 
 type SoldierInEvents = Event [SoldierInEvent]
 
@@ -64,4 +70,4 @@ data SoldierData = SoldierData { soldierDataX0     :: V3 Double
                                , soldierDataWeapon :: Weapon
                                , soldierDataMount  :: Mount
                                , soldierDataGen    :: StdGen
-                               }
+                               } deriving Show
