@@ -37,8 +37,6 @@ import Experiment.Archers.Instances.SDL ()
 #endif
 
 
-
-
 main :: IO ()
 main = do
     t1a0s <- evalRandIO . replicateM 13 $ (,) <$> genPos <*> (mkStdGen <$> getRandom)
@@ -59,7 +57,6 @@ main = do
     genPos = V3 <$> getRandomR (0,w) <*> getRandomR (0,h) <*> pure 0
     -- genVel :: RandomGen g => Rand g (V3 Double)
     -- genVel = V3 <$> getRandomR (-20,20) <*> getRandomR (-20,20) <*> pure 0
-
 
 simpleStage4 ::
      Double
