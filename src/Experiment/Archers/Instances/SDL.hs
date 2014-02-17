@@ -11,7 +11,7 @@ import qualified Graphics.UI.SDL as SDL
 instance SDLRenderable Stage where
   renderSDL scr stg@(Stage w h _ _) = mapM_ (renderSDL scr) sList
     where
-      sList = toSpriteList zero (transScale scale) (toSurface stg)
+      sList = toSpriteList zero (transScale scale) 1 (toSurface stg)
       ht    = fromIntegral $ SDL.surfaceGetHeight scr
       wd    = fromIntegral $ SDL.surfaceGetWidth scr
       scale = min (ht / h) (wd / w)

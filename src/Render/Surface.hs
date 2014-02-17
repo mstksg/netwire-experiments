@@ -12,6 +12,7 @@ data Entity = EntSurface Surface
 
 data Surface = Surface { surfacePos         :: V2 Double
                        , surfaceTrans       :: Transformation2
+                       , surfaceOpacity     :: Double
                        , surfaceEntities    :: [Entity]
                        }
 
@@ -19,21 +20,22 @@ class HasSurface s where
   toSurface :: s -> Surface
 
 instance HasSurface Sprite where
-  toSurface s = Surface zero idTrans [EntSprite s]
+  toSurface s = Surface zero idTrans 1 [EntSprite s]
 
-toSpriteList :: V2 Double -> Transformation2 -> Surface -> [Sprite]
-toSpriteList p t (Surface psur tsur ents) =
+toSpriteList :: V2 Double -> Transformation2 -> Double -> Surface -> [Sprite]
+toSpriteList p t o (Surface psur tsur osur ents) =
     concatMap placeEntity ents
   where
     totP = (t !* psur) ^+^ p
     totT = t !*! tsur
+    totO = o * osur
     placeEntity (EntSurface s) = placeSurface s
     placeEntity (EntSprite s) = [placeSprite s]
-    placeSprite = transSprite totP totT
-    placeSurface = toSpriteList totP totT
+    placeSprite = dimSprite totO . transSprite totP totT
+    placeSurface = toSpriteList totP totT totO
 
 toSpriteList' :: Surface -> [Sprite]
-toSpriteList' = toSpriteList zero idTrans
+toSpriteList' = toSpriteList zero idTrans 1
 
 idTrans :: Transformation2
 idTrans = V2 (V2 1 0)

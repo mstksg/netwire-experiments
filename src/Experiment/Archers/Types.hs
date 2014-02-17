@@ -59,25 +59,25 @@ maybeHit _       = Nothing
 
 instance HasSurface Dart where
   toSurface (Dart (V3 x y _) _ ang) =
-    Surface (V2 x y) (transRotate ang) [EntSprite spr]
+    Surface (V2 x y) (transRotate ang) 1 [EntSprite spr]
     where
-      spr = Sprite zero (Line (V2 (-2) 0) (V2 2 0)) black
+      spr = Sprite zero (Line (V2 (-2) 0) (V2 2 0)) black 1
 
 instance HasSurface Archer where
   toSurface (Archer (V3 x y _) health ang flag) =
-    Surface (V2 x y) (transRotate ang) [EntSprite spr]
+    Surface (V2 x y) (transRotate ang) 1 [EntSprite spr]
     where
       col = maybe white teamFlagColor flag
-      spr = Sprite zero (Circle 3 Filled) (health `darken` col)
+      spr = Sprite zero (Circle 3 Filled) (health `darken` col) 1
 
 -- mapTup :: (a -> b) -> (a,a,a) -> (b,b,b)
 -- mapTup f (x,y,z) = (f x, f y, f z)
 
 instance HasSurface Stage where
   toSurface (Stage w h arcs arrs) =
-      Surface zero idTrans ents
+      Surface zero idTrans 1 ents
     where
-      back  = Sprite (V2 (w/2) (h/2)) (Rectangle (V2 w h) Filled) (sRGB24 1 142 14)
+      back  = Sprite (V2 (w/2) (h/2)) (Rectangle (V2 w h) Filled) (sRGB24 1 142 14) 1
       arrEnts = map (EntSurface . toSurface) arrs
       arcEnts = map (EntSurface . toSurface) arcs
       ents = EntSprite back:(arcEnts ++ arrEnts)

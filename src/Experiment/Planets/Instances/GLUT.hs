@@ -15,10 +15,10 @@ instance GLUTRenderable PlanetList where
 
       let
         ratio = fromIntegral ww / fromIntegral wh
-        scale = V2 (V2 (1/ratio) 0)
+        scl = V2 (V2 (1/ratio) 0)
                    (V2 0 1) ^/ 10
 
-        sList = toSpriteList zero scale (toSurface pl)
+        sList = toSpriteList zero scl 1 (toSurface pl)
 
       mapM_ renderGLUT sList
 
