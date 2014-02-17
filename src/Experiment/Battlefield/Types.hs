@@ -35,21 +35,26 @@ data Article = Article { articlePosAng :: PosAng
                        , articleType   :: ArticleType
                        } deriving Show
 
-data ArticleType = Dart deriving Show
+data ArticleType = ArticleAttack Attack deriving Show
 
 data PosAng = PosAng { posAngPos :: V3 Double
                      , posAngAng :: Double
                      } deriving Show
 
-data SoldierOutEvent = AttackEvent { attackEventPos    :: V3 Double
-                                   , attackEventDir    :: V3 Double
-                                   , attackEventWeapon :: Weapon
-                                   , attackEventDamage :: Double
-                                   } deriving Show
+data SoldierOutEvent = AttackEvent AttackData
+
+data Attack = Attack { attackWeapon :: Weapon
+                     , attackDamage :: Double
+                     } deriving Show
+                     
+data AttackData = AttackData { attackDataX0     :: V3 Double
+                             , attackDataDir    :: V3 Double
+                             , attackDataAttack :: Attack
+                             } deriving Show
 
 type SoldierOutEvents = Event [SoldierOutEvent]
 
-data SoldierInEvent = HitEvent
+data SoldierInEvent = AttackedEvent Double
 
 type SoldierInEvents = Event [SoldierInEvent]
 

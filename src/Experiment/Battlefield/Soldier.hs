@@ -1,23 +1,24 @@
-module Experiment.Battlefield.Soldier where
+module Experiment.Battlefield.Soldier (soldierWire) where
 
--- import Experiment.Battlefield.Article
 import Control.Monad.Fix
-import Control.Wire                      as W
-import Data.List                         (minimumBy)
-import Data.Maybe                        (mapMaybe)
-import Data.Ord                          (comparing)
+import Control.Wire                  as W
+import Data.List                     (minimumBy)
+import Data.Maybe                    (mapMaybe)
+import Data.Ord                      (comparing)
+import Experiment.Battlefield.Attack
 import Experiment.Battlefield.Types
 import FRP.Netwire.Move
 import Linear
-import Prelude hiding                    ((.),id)
+import Prelude hiding                ((.),id)
 import Utils.Wire.Misc
 import Utils.Wire.Noise
 
-genSoldierWire :: (MonadFix m, HasTime t s, Monoid e, Fractional t)
+soldierWire :: (MonadFix m, HasTime t s, Monoid e, Fractional t)
     => SoldierData
     -> Wire s e m ([Soldier], SoldierInEvents) (Soldier, SoldierOutEvents)
-genSoldierWire (SoldierData x0 fl bod weap mnt gen) =
+soldierWire (SoldierData x0 fl bod weap mnt gen) =
   proc (targets,mess) -> do
+
     rec
       let
         target = seek targets pos
@@ -26,26 +27,34 @@ genSoldierWire (SoldierData x0 fl bod weap mnt gen) =
           Just (tDist, tDir)
             | tDist > range  -> tDir ^* speed
           _                  -> 0
-        hit =
-          getSum . mconcat . fmap Sum . mapMaybe maybeHit <$> mess
-        maybeHit = undefined
+        hit = getSum . mconcat . fmap Sum . mapMaybe maybeAttacked <$> mess
+
       pos <- integral x0 -< vel
-    shot <- shoot -< newD
+
+    shot  <- shoot -< newD
     shotR <- couple (noisePrimR (0.67 :: Double,1.5) gen) -< shot
-    let shot' = (\(atk,r) -> [atk (r * baseDamage)]) <$> shotR
+
+    let
+      shot' = (\(atk,r) -> [atk (r * baseDamage)]) <$> shotR
+
     damage <- hold . accumE (+) 0 <|> pure 0 -< hit
+
     rec
-      let health = min (startingHealth + recov - damage) startingHealth
+      let
+        health = min (startingHealth + recov - damage) startingHealth
       recov <- integral 0 . ((pure recovery . W.when (< startingHealth)) <|> pure 0) . delay startingHealth -< health
+
     let
       angle = atan2 vy vx
       soldier = Soldier (PosAng pos angle) (health / startingHealth) fl bod weap mnt
+
     W.when (> 0) -< health
     returnA -< (soldier,shot')
+
   where
     newAtk p (tDist, tDir)
       | tDist > range = Nothing
-      | otherwise     = Just $ AttackEvent (p ^+^ (tDir ^* 6)) tDir weap
+      | otherwise     = Just $ AttackEvent . AttackData (p ^+^ (tDir ^* 6)) tDir . Attack weap
     range = weaponRange weap
     startingHealth = bodyHealth bod * mountHealthMod mnt
     speed = mountSpeed mnt * bodySpeedMod bod
