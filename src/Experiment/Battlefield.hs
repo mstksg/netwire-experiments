@@ -14,10 +14,10 @@ main = return ()
 simpleStage ::
      Double
   -> Double
-  -> (TeamFlag, [SoldierData])
-  -> (TeamFlag, [SoldierData])
+  -> TeamWire'
+  -> TeamWire'
   -> Wire' () Stage
-simpleStage w h (t1flag,t1a0s) (t2flag,t2a0s) = proc _ -> do
+simpleStage w h t1w t2w = proc _ -> do
     rec
       let
         (t1ahits,t2dhits) = hitWatcher t1as t2ds
@@ -26,8 +26,8 @@ simpleStage w h (t1flag,t1a0s) (t2flag,t2a0s) = proc _ -> do
         t2douts           = borderWatcher t2ds
         t1devts           = zipWith (<>) t1douts t1dhits
         t2devts           = zipWith (<>) t2douts t2dhits
-      team1@(Team _ t1as t1ds) <- teamWire t1flag t1a0s -< (team2, (t1ahits,t1devts))
-      team2@(Team _ t2as t2ds) <- teamWire t2flag t2a0s -< (team1, (t2ahits,t2devts))
+      team1@(Team _ t1as t1ds) <- t1w -< (team2, (t1ahits,t1devts))
+      team2@(Team _ t2as t2ds) <- t2w -< (team1, (t2ahits,t2devts))
     returnA -< Stage w h (t1as ++ t2as) (t1ds ++ t2ds)
   where
     hitWatcher :: [Soldier] -> [Article] -> ([SoldierInEvents],[Event ()])
@@ -38,8 +38,7 @@ simpleStage w h (t1flag,t1a0s) (t2flag,t2a0s) = proc _ -> do
         collision (Soldier (PosAng ps _) _ _ _ _ _)
                   (Article (PosAng pa _) (ArticleAttack (Attack _ dmg)))
                   | norm (ps ^-^ pa) < 5  = Event [AttackedEvent dmg]
-                  | otherwise             = NoEvent
-        -- collision _ _ = NoEvent
+        collision _ _ = NoEvent
         hitas     = map mconcat hitMatrix
         hitds     = map ((() <$) . mconcat) (transpose hitMatrix)
     borderWatcher :: [Article] -> [Event ()]
@@ -47,5 +46,4 @@ simpleStage w h (t1flag,t1a0s) (t2flag,t2a0s) = proc _ -> do
       where
         outOfBounds (Article (PosAng (V3 x y _) _) (ArticleAttack _))
           | or [x < 0, y < 0, x > w, y > h] = Event ()
-          | otherwise                       = NoEvent
-        -- outOfBounds _                       = NoEvent
+        outOfBounds _                       = NoEvent
