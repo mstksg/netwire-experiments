@@ -89,7 +89,7 @@ mountHealthMod Horse = 1.5
 
 mountSpeed :: Mount -> Double
 mountSpeed Foot   = 5
-mountSpeed Horse  = 25
+mountSpeed Horse  = 15
 
 bodySpeedMod :: SoldierBody -> Double
 bodySpeedMod MeleeBody  = 1
