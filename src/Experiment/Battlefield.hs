@@ -78,7 +78,7 @@ testStage w =
     (w . pure ())
 #else
   runBackend
-    (sdlBackend 600 600 (50,50,50))
+    (sdlBackend (1/45) 30 (600,600) (50,50,50))
     (const . return . return $ ())
     (w . pure ())
 #endif
