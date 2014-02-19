@@ -40,10 +40,10 @@ genTeam :: (Monoid e, HasTime t s, MonadFix m, Fractional t)
 genTeam (w,h) fl (cswd,carc,caxe,clbw,chrs,char) = do
   swds <- replicateM cswd (genSoldier MeleeBody Sword Foot)
   arcs <- replicateM carc (genSoldier RangedBody Bow Foot)
-  axes <- replicateM caxe (genSoldier MeleeBody Sword Foot)
-  lbws <- replicateM clbw (genSoldier MeleeBody Sword Foot)
-  hrss <- replicateM chrs (genSoldier MeleeBody Sword Foot)
-  hars <- replicateM char (genSoldier MeleeBody Sword Foot)
+  axes <- replicateM caxe (genSoldier TankBody Axe Foot)
+  lbws <- replicateM clbw (genSoldier MeleeBody Longbow Foot)
+  hrss <- replicateM chrs (genSoldier MeleeBody Sword Horse)
+  hars <- replicateM char (genSoldier MeleeBody Bow Horse)
   let
     datas = concat [swds,arcs,axes,lbws,hrss,hars]
   return $ teamWire fl datas
