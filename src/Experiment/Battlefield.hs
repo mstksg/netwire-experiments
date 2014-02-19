@@ -73,7 +73,7 @@ testStage :: Wire' () Stage -> IO ()
 testStage w =
 #ifdef WINDOWS
   runBackend
-    (glutBackend (1/30) 5 (600,600) (50,50,50))
+    (glutBackend (1/30) 5 (1500,800) (50,50,50))
     (const . return $ ())
     (w . pure ())
 #else
