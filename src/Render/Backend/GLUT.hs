@@ -5,7 +5,6 @@ import Control.Monad             as M
 import Control.Wire
 import Control.Wire.Unsafe.Event
 import Data.Char
-import Data.Colour
 import Data.Colour.SRGB          as C
 import Data.IORef
 import Data.Time.Clock
@@ -227,7 +226,7 @@ instance GLUTRenderable Surface where
 
 
 instance GLUTRenderable Sprite where
-  renderGLUT s@(Sprite o sh colour) =
+  renderGLUT s@(Sprite o sh colour _) =
     case sh of
       Sprite.Polygon vs f ->
         let shapeType =
