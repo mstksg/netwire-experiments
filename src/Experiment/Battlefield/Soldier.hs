@@ -1,9 +1,10 @@
 module Experiment.Battlefield.Soldier (soldierWire) where
 
+import Control.Monad
 import Control.Monad.Fix
 import Control.Wire                  as W
 import Data.List                     (minimumBy)
-import Data.Maybe                    (mapMaybe)
+import Data.Maybe                    (mapMaybe, isJust, fromJust)
 import Data.Ord                      (comparing)
 import Experiment.Battlefield.Attack
 import Experiment.Battlefield.Types
@@ -19,57 +20,87 @@ soldierWire :: (MonadFix m, HasTime t s, Monoid e, Fractional t)
 soldierWire (SoldierData x0 fl bod weap mnt gen) =
   proc (targets,mess) -> do
 
+    let
+      targetsPos = map soldierPos targets
+      attackeds = mapMaybe maybeAttacked <$> mess
+
+    attackers <- curated isJust -< map (findAttacker targetsPos . snd) <$> attackeds
+
+    -- seeking and movement
     rec
       let
-        target = seek targets pos
+        -- find the target and the direction to face
+        targetPool  | null attackers = targetsPos
+                    | otherwise      = map fromJust attackers
+        target = seek targetPool pos
         newD   = target >>= newAtk pos
-        vel@(V3 vx vy _) = case target of
+        dir    = snd <$> target
+
+        -- move to target?
+        vel = case target of
           Just (tDist, tDir)
             | tDist > range  -> tDir ^* speed
           _                  -> 0
-        hit = getSum . mconcat . fmap Sum . mapMaybe maybeAttacked <$> mess
 
       pos <- integral x0 -< vel
 
+    -- shoot!
     shot  <- shoot -< newD
-    shotR <- couple (noisePrimR (0.67 :: Double,1.5) gen) -< shot
-
+    -- this is bad frp but :|
+    shotR <- couple (noisePrimR (0.833,1.2) gen) -< shot
     let
       shot' = (\(atk,r) -> [atk (r * baseDamage)]) <$> shotR
 
+    -- calculate hit damage
+    let
+      hit = getSum . mconcat . map (Sum . fst) <$> attackeds
     damage <- hold . accumE (+) 0 <|> pure 0 -< hit
 
     rec
+      -- calculate health, plus recovery
       let
         health = min (startingHealth + recov - damage) startingHealth
       recov <- integral 0 . ((pure recovery . W.when (< startingHealth)) <|> pure 0) . delay startingHealth -< health
+
+    -- calculate last direction facing.  holdJust breaks FRP.
+    (V3 vx vy _) <- holdJust zero -< dir
 
     let
       angle = atan2 vy vx
       soldier = Soldier (PosAng pos angle) (health / startingHealth) fl bod weap mnt
 
-    W.when (> 0) -< health
+    -- inhibit when health > 0
+    W.unless (<= 0) -< health
     returnA -< (soldier,shot')
 
   where
     newAtk p (tDist, tDir)
       | tDist > range = Nothing
-      | otherwise     = Just $ AttackEvent . AttackData (p ^+^ (tDir ^* 8)) tDir . Attack weap
+      | otherwise     = Just $ AttackEvent . AttackData aX0 tDir . flip (Attack weap) aX0
+          where
+            aX0 = p ^+^ (tDir ^* 7.5)
     range = weaponRange weap
     startingHealth = bodyHealth bod * mountHealthMod mnt
     speed = mountSpeed mnt * bodySpeedMod bod
-    recovery = 0.1
+    recovery = 0.15
     baseDamage = weaponDamage weap * mountDamageMod mnt
     coolDownTime = weaponCooldown weap
-    seek others pos | null otherPs = Nothing
-                    | otherwise    = Just $ minimumBy (comparing fst) otherPs
+    findClosest :: [V3 Double] -> V3 Double -> Maybe ((Double, V3 Double),V3 Double)
+    findClosest [] _       = Nothing
+    findClosest others pos = Just $ minimumBy (comparing fst) otherPs
       where
-        otherPs = map ( (fst &&& uncurry (flip (^/)))
-                      . (norm &&& id)
-                      . (^-^ pos)
-                      . posAngPos
-                      . soldierPosAng
-                      ) others
+        otherPs = map f others
+        f v = ((d,u),v)
+          where
+            dv = v ^-^ pos
+            d  = norm dv
+            u  = dv ^/ d
+    findAttacker :: [V3 Double]  -> V3 Double -> Maybe (V3 Double)
+    findAttacker others pos = snd <$> mfilter (const False) (findClosest others pos)
+    -- seekOrigin :: V3 Double -> Event [V3 Double] -> V3 Double
+    -- seekOrigin pos attackedFrom
+    --   | null <$> attackedFrom = pos
+    seek others = (fst <$>) . findClosest others
     shoot = (proc newA -> do
       case newA of
         Nothing -> never -< ()
@@ -77,11 +108,12 @@ soldierWire (SoldierData x0 fl bod weap mnt gen) =
           shot <- W.for coolDownTime . now -< a
           returnA -< shot
       ) --> shoot
+    -- angle = proc (V3 vx vy _) -> do
 
 bodyHealth :: SoldierBody -> Double
-bodyHealth MeleeBody  = 15
-bodyHealth TankBody   = 30
-bodyHealth RangedBody = 10
+bodyHealth MeleeBody  = 25
+bodyHealth TankBody   = 60
+bodyHealth RangedBody = 12
 
 mountHealthMod :: Mount -> Double
 mountHealthMod Foot  = 1
@@ -99,22 +131,21 @@ bodySpeedMod RangedBody = 1
 weaponDamage :: Weapon -> Double
 weaponDamage Sword   = 4
 weaponDamage Axe     = 8
-weaponDamage Bow     = 3
-weaponDamage Longbow = 3
+weaponDamage Bow     = 2.5
+weaponDamage Longbow = 2.5
 
 mountDamageMod :: Mount -> Double
 mountDamageMod Foot  = 1
 mountDamageMod Horse = 1.25
 
 weaponRange :: Weapon -> Double
-weaponRange Sword   = 6
-weaponRange Axe     = 6
+weaponRange Sword   = 7.5
+weaponRange Axe     = 7.5
 weaponRange Bow     = 50
 weaponRange Longbow = 100
 
 weaponCooldown :: Fractional a => Weapon -> a
 weaponCooldown Sword   = 3
 weaponCooldown Axe     = 6
-weaponCooldown Bow     = 4
-weaponCooldown Longbow = 4
-
+weaponCooldown Bow     = 3.5
+weaponCooldown Longbow = 4.5
