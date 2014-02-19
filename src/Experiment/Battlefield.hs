@@ -57,8 +57,8 @@ simpleStage dim@(w,h) t1w t2w = proc _ -> do
         hitMatrix = map hitad as
         hitad a   = map (collision a) ds
         collision (Soldier (PosAng ps _) _ _ _ _ _)
-                  (Article (PosAng pa _) (ArticleAttack (Attack _ dmg)))
-                  | norm (ps ^-^ pa) < 5  = Event [AttackedEvent dmg]
+                  (Article (PosAng pa _) (ArticleAttack (Attack _ dmg o)))
+                  | norm (ps ^-^ pa) < 5  = Event [AttackedEvent dmg o]
         collision _ _ = NoEvent
         hitas     = map mconcat hitMatrix
         hitds     = map ((() <$) . mconcat) (transpose hitMatrix)

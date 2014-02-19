@@ -3,6 +3,7 @@
 module Utils.Wire.Misc where
 
 import Control.Wire
+import Control.Wire.Unsafe.Event
 
 -- might break FRP.
 --
@@ -31,3 +32,15 @@ holdJust i = mkPureN $ \x ->
   case x of
     Just x' -> (Right x', holdJust x')
     Nothing -> (Right i , holdJust i)
+
+curated :: (a -> Bool) -> Wire s e m (Event [a]) [a]
+curated p = go []
+  where
+    go xs = mkSFN $ \news ->
+              case news of
+                NoEvent  ->
+                  let xs' = filter p xs
+                  in  (xs', go xs')
+                Event ys ->
+                  let ys' = filter p (ys ++ xs)
+                  in  (ys', go ys')

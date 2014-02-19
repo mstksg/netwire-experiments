@@ -1,9 +1,10 @@
 module Experiment.Battlefield.Soldier (soldierWire) where
 
+import Control.Monad
 import Control.Monad.Fix
 import Control.Wire                  as W
 import Data.List                     (minimumBy)
-import Data.Maybe                    (mapMaybe)
+import Data.Maybe                    (mapMaybe, isJust, fromJust)
 import Data.Ord                      (comparing)
 import Experiment.Battlefield.Attack
 import Experiment.Battlefield.Types
@@ -19,11 +20,19 @@ soldierWire :: (MonadFix m, HasTime t s, Monoid e, Fractional t)
 soldierWire (SoldierData x0 fl bod weap mnt gen) =
   proc (targets,mess) -> do
 
+    let
+      targetsPos = map soldierPos targets
+      attackeds = mapMaybe maybeAttacked <$> mess
+
+    attackers <- curated isJust -< map (findAttacker targetsPos . snd) <$> attackeds
+
     -- seeking and movement
     rec
       let
         -- find the target and the direction to face
-        target = seek targets pos
+        targetPool  | null attackers = targetsPos
+                    | otherwise      = map fromJust attackers
+        target = seek targetPool pos
         newD   = target >>= newAtk pos
         dir    = snd <$> target
 
@@ -38,13 +47,13 @@ soldierWire (SoldierData x0 fl bod weap mnt gen) =
     -- shoot!
     shot  <- shoot -< newD
     -- this is bad frp but :|
-    shotR <- couple (noisePrimR (0.75 :: Double,1.5) gen) -< shot
+    shotR <- couple (noisePrimR (0.833,1.2) gen) -< shot
     let
       shot' = (\(atk,r) -> [atk (r * baseDamage)]) <$> shotR
 
     -- calculate hit damage
     let
-      hit = getSum . mconcat . fmap Sum . mapMaybe maybeAttacked <$> mess
+      hit = getSum . mconcat . map (Sum . fst) <$> attackeds
     damage <- hold . accumE (+) 0 <|> pure 0 -< hit
 
     rec
@@ -67,22 +76,31 @@ soldierWire (SoldierData x0 fl bod weap mnt gen) =
   where
     newAtk p (tDist, tDir)
       | tDist > range = Nothing
-      | otherwise     = Just $ AttackEvent . AttackData (p ^+^ (tDir ^* 8)) tDir . Attack weap
+      | otherwise     = Just $ AttackEvent . AttackData aX0 tDir . flip (Attack weap) aX0
+          where
+            aX0 = p ^+^ (tDir ^* 7.5)
     range = weaponRange weap
     startingHealth = bodyHealth bod * mountHealthMod mnt
     speed = mountSpeed mnt * bodySpeedMod bod
     recovery = 0.15
     baseDamage = weaponDamage weap * mountDamageMod mnt
     coolDownTime = weaponCooldown weap
-    seek others pos | null otherPs = Nothing
-                    | otherwise    = Just $ minimumBy (comparing fst) otherPs
+    findClosest :: [V3 Double] -> V3 Double -> Maybe ((Double, V3 Double),V3 Double)
+    findClosest [] _       = Nothing
+    findClosest others pos = Just $ minimumBy (comparing fst) otherPs
       where
-        otherPs = map ( (fst &&& uncurry (flip (^/)))
-                      . (norm &&& id)
-                      . (^-^ pos)
-                      . posAngPos
-                      . soldierPosAng
-                      ) others
+        otherPs = map f others
+        f v = ((d,u),v)
+          where
+            dv = v ^-^ pos
+            d  = norm dv
+            u  = dv ^/ d
+    findAttacker :: [V3 Double]  -> V3 Double -> Maybe (V3 Double)
+    findAttacker others pos = snd <$> mfilter (const False) (findClosest others pos)
+    -- seekOrigin :: V3 Double -> Event [V3 Double] -> V3 Double
+    -- seekOrigin pos attackedFrom
+    --   | null <$> attackedFrom = pos
+    seek others = (fst <$>) . findClosest others
     shoot = (proc newA -> do
       case newA of
         Nothing -> never -< ()
