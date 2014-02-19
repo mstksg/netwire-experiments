@@ -12,7 +12,7 @@ import qualified Graphics.UI.SDL as SDL
 instance SDLRenderable PlanetList where
   renderSDL scr = mapM_ (renderSDL scr) . sList
     where
-      sList pl = toSpriteList ctr (transScale scale) (toSurface pl)
+      sList pl = toSpriteList ctr (transScale scale) 1 (toSurface pl)
       ht       = fromIntegral $ SDL.surfaceGetHeight scr
       wd       = fromIntegral $ SDL.surfaceGetHeight scr
       ctr      = V2 ht wd ^/ 2
