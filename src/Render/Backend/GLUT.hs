@@ -245,9 +245,9 @@ instance GLUTRenderable Sprite where
       C.RGB cr cg cb = toSRGB colour
       col :: Color3 GLfloat
       col = Color3
-              (realToFrac cr * 255)
-              (realToFrac cg * 255)
-              (realToFrac cb * 255)
+              (realToFrac cr)
+              (realToFrac cg)
+              (realToFrac cb)
 
 v2ToVertex2 :: Real a => V2 a -> Vertex2 GLfloat
 v2ToVertex2 (V2 x y) = Vertex2 (realToFrac x) (realToFrac y)
