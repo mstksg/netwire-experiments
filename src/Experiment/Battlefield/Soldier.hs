@@ -82,7 +82,7 @@ soldierWire (SoldierData x0 fl bod weap mnt gen) =
     range = weaponRange weap
     startingHealth = bodyHealth bod * mountHealthMod mnt
     speed = mountSpeed mnt * bodySpeedMod bod
-    recovery = 0.15
+    recovery = startingHealth / recoveryFactor
     baseDamage = weaponDamage weap * mountDamageMod mnt
     coolDownTime = weaponCooldown weap
     findClosest :: [V3 Double] -> V3 Double -> Maybe ((Double, V3 Double),V3 Double)
@@ -96,6 +96,7 @@ soldierWire (SoldierData x0 fl bod weap mnt gen) =
             d  = norm dv
             u  = dv ^/ d
     findAttacker :: [V3 Double]  -> V3 Double -> Maybe (V3 Double)
+    -- findAttacker others pos = snd <$> mfilter ((< 9) . fst . fst) (findClosest others pos)
     findAttacker others pos = snd <$> mfilter (const False) (findClosest others pos)
     -- seekOrigin :: V3 Double -> Event [V3 Double] -> V3 Double
     -- seekOrigin pos attackedFrom
@@ -120,8 +121,8 @@ mountHealthMod Foot  = 1
 mountHealthMod Horse = 1.5
 
 mountSpeed :: Mount -> Double
-mountSpeed Foot   = 5
-mountSpeed Horse  = 15
+mountSpeed Foot   = 25
+mountSpeed Horse  = 75
 
 bodySpeedMod :: SoldierBody -> Double
 bodySpeedMod MeleeBody  = 1
@@ -130,7 +131,7 @@ bodySpeedMod RangedBody = 1
 
 weaponDamage :: Weapon -> Double
 weaponDamage Sword   = 4
-weaponDamage Axe     = 8
+weaponDamage Axe     = 12
 weaponDamage Bow     = 2.5
 weaponDamage Longbow = 2.5
 
@@ -145,7 +146,10 @@ weaponRange Bow     = 50
 weaponRange Longbow = 100
 
 weaponCooldown :: Fractional a => Weapon -> a
-weaponCooldown Sword   = 3
-weaponCooldown Axe     = 6
-weaponCooldown Bow     = 3.5
-weaponCooldown Longbow = 4.5
+weaponCooldown Sword   = 0.5
+weaponCooldown Axe     = 1.25
+weaponCooldown Bow     = 1
+weaponCooldown Longbow = 1.5
+
+recoveryFactor :: Double
+recoveryFactor = 18
