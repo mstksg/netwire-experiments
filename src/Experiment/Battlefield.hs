@@ -30,7 +30,7 @@ main = do
     dim = (600,400)
     fl1 = TeamFlag red
     fl2 = TeamFlag blue
-    counts = (8,5,3,3,4,2)
+    counts = (9,5,3,3,4,2)
     genTeam' fl = genTeam dim fl counts
 
 simpleStage ::
@@ -73,7 +73,7 @@ testStage :: Wire' () Stage -> IO ()
 testStage w =
 #ifdef WINDOWS
   runBackend
-    (glutBackend (1/30) 5 (1500,800) (50,50,50))
+    (glutBackend (1/45) 1 (1500,800) (50,50,50))
     (const . return $ ())
     (w . pure ())
 #else
