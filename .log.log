@@ -2,3 +2,5 @@
 [Wed Jan 15 04:52:39 PST 2014]	proc x -> f . g -< h x is equivalent to f . g . arr h
 [Thu Jan 16 21:54:02 PST 2014]	let's do some dimensional analysis.  our time unit is 1 day.  our distance unit is 1 AU.  we want G to be 1.  So that means that our mass unit has to be 6.69691 x 10^11 kg. cool.
 [Sun Feb  2 03:04:30 PST 2014]	okay so mostly works now..except...sometimes the arrows dont die when hit
+[Wed Feb 19 13:12:17 PST 2014]	outstanding problems. every attack is splash. cannot attack real attacker
+[Wed Feb 19 13:12:22 PST 2014]	kill count
