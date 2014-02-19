@@ -4,7 +4,7 @@ import Control.Monad
 import Control.Monad.Fix
 import Control.Wire                  as W
 import Data.List                     (minimumBy)
-import Data.Maybe                    (mapMaybe, isJust, fromJust)
+import Data.Maybe                    (mapMaybe)
 import Data.Ord                      (comparing)
 import Experiment.Battlefield.Attack
 import Experiment.Battlefield.Types
@@ -24,14 +24,14 @@ soldierWire (SoldierData x0 fl bod weap mnt gen) =
       targetsPos = map soldierPos targets
       attackeds = mapMaybe maybeAttacked <$> mess
 
-    attackers <- curated isJust -< map (findAttacker targetsPos . snd) <$> attackeds
+    attackers <- curated -< (map snd <$> attackeds, findAttacker targetsPos)
 
     -- seeking and movement
     rec
       let
         -- find the target and the direction to face
         targetPool  | null attackers = targetsPos
-                    | otherwise      = map fromJust attackers
+                    | otherwise      = attackers
         target = seek targetPool pos
         newD   = target >>= newAtk pos
         dir    = snd <$> target
@@ -97,7 +97,7 @@ soldierWire (SoldierData x0 fl bod weap mnt gen) =
             u  = dv ^/ d
     findAttacker :: [V3 Double]  -> V3 Double -> Maybe (V3 Double)
     -- findAttacker others pos = snd <$> mfilter ((< 9) . fst . fst) (findClosest others pos)
-    findAttacker others pos = snd <$> mfilter (const False) (findClosest others pos)
+    findAttacker others pos = snd <$> mfilter ((< 9) . fst . fst) (findClosest others pos)
     -- seekOrigin :: V3 Double -> Event [V3 Double] -> V3 Double
     -- seekOrigin pos attackedFrom
     --   | null <$> attackedFrom = pos

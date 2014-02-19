@@ -2,6 +2,8 @@
 
 module Utils.Wire.Misc where
 
+import Data.Maybe (isJust, fromJust)
+import Prelude hiding ((.),id)
 import Control.Wire
 import Control.Wire.Unsafe.Event
 
@@ -33,14 +35,20 @@ holdJust i = mkPureN $ \x ->
     Just x' -> (Right x', holdJust x')
     Nothing -> (Right i , holdJust i)
 
-curated :: (a -> Bool) -> Wire s e m (Event [a]) [a]
-curated p = go []
+curated :: Wire s e m (Event [a], a -> Maybe b) [b]
+curated = go []
   where
-    go xs = mkSFN $ \news ->
+    go xs = mkSFN $ \(news, f) ->
               case news of
                 NoEvent  ->
-                  let xs' = filter p xs
-                  in  (xs', go xs')
+                  let (out,next) = sortOut f xs
+                  in  (out, go next)
                 Event ys ->
-                  let ys' = filter p (ys ++ xs)
-                  in  (ys', go ys')
+                  let (out,next) = sortOut f (xs ++ ys)
+                  in  (out, go next)
+
+    sortOut f xs = (map fromJust out,next)
+      where
+        mapped = map (f &&& id) xs
+        xs'    = filter (isJust . fst) mapped
+        (out,next) = unzip xs'
