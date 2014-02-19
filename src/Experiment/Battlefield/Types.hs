@@ -56,6 +56,7 @@ data SoldierOutEvent = AttackEvent AttackData
 
 data Attack = Attack { attackWeapon :: Weapon
                      , attackDamage :: Double
+                     , attackOrigin :: V3 Double
                      } deriving Show
 
 data AttackData = AttackData { attackDataX0     :: V3 Double
@@ -65,8 +66,9 @@ data AttackData = AttackData { attackDataX0     :: V3 Double
 
 type SoldierOutEvents = Event [SoldierOutEvent]
 
-data SoldierInEvent = AttackedEvent Double
-                        deriving Show
+data SoldierInEvent = AttackedEvent { attackedEventDamage :: Double
+                                    , attackedEventOrigin :: V3 Double
+                                    } deriving Show
 
 type SoldierInEvents = Event [SoldierInEvent]
 
@@ -119,3 +121,6 @@ instance HasSurface Article where
           Axe     -> EntSprite $ Sprite zero (Circle 2 Filled) yellow 2
           Bow     -> EntSprite $ Sprite zero (Line (V2 (-2) 0) (V2 2 0)) black 1
           Longbow -> EntSprite $ Sprite zero (Line (V2 (-2) 0) (V2 2 0)) black 1
+
+soldierPos :: Soldier -> V3 Double
+soldierPos = posAngPos . soldierPosAng

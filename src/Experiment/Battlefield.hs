@@ -30,7 +30,7 @@ main = do
     dim = (600,400)
     fl1 = TeamFlag red
     fl2 = TeamFlag blue
-    counts = (8,5,3,3,4,2)
+    counts = (9,5,3,3,4,2)
     genTeam' fl = genTeam dim fl counts
 
 simpleStage ::
@@ -57,8 +57,8 @@ simpleStage dim@(w,h) t1w t2w = proc _ -> do
         hitMatrix = map hitad as
         hitad a   = map (collision a) ds
         collision (Soldier (PosAng ps _) _ _ _ _ _)
-                  (Article (PosAng pa _) (ArticleAttack (Attack _ dmg)))
-                  | norm (ps ^-^ pa) < 5  = Event [AttackedEvent dmg]
+                  (Article (PosAng pa _) (ArticleAttack (Attack _ dmg o)))
+                  | norm (ps ^-^ pa) < 5  = Event [AttackedEvent dmg o]
         collision _ _ = NoEvent
         hitas     = map mconcat hitMatrix
         hitds     = map ((() <$) . mconcat) (transpose hitMatrix)
@@ -73,12 +73,12 @@ testStage :: Wire' () Stage -> IO ()
 testStage w =
 #ifdef WINDOWS
   runBackend
-    (glutBackend (1/30) 5 (1500,800) (50,50,50))
+    (glutBackend (1/45) 1 (1500,800) (50,50,50))
     (const . return $ ())
     (w . pure ())
 #else
   runBackend
-    (sdlBackend 600 600 (50,50,50))
+    (sdlBackend (1/45) 30 (600,600) (50,50,50))
     (const . return . return $ ())
     (w . pure ())
 #endif

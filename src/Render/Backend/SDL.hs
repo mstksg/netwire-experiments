@@ -17,14 +17,13 @@ import qualified Graphics.UI.SDL.Framerate  as Framerate
 import qualified Graphics.UI.SDL.Primitives as SDL
 
 sdlBackend :: SDLRenderable a
-    => Int
+    => Double
     -> Int
+    -> (Int,Int)
     -> (Word8, Word8, Word8)
     -> Backend (Timed Double ()) e Identity (SDL.Surface -> IO ()) a
-sdlBackend ht wd (cr,cg,cb) = Backend runSdl
+sdlBackend simDt fr (ht,wd) (cr,cg,cb) = Backend runSdl
   where
-    fr = 30
-    simDt = 1/30
     runSdl r wr = SDL.withInit [SDL.InitEverything] $ do
       screen <- SDL.setVideoMode ht wd 32 [SDL.SWSurface]--, SDL.Fullscreen]
 
