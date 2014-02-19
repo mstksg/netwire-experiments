@@ -22,10 +22,10 @@ data PlanetList = PlanetList { planetListZoom :: Double
 
 instance HasSprite Planet where
   toSprite (Planet _ r c (Body _ (V3 x y _))) =
-    Sprite (V2 x y) (Circle r Filled) c
+    Sprite (V2 x y) (Circle r Filled) c 1
 
 instance HasSurface PlanetList where
   toSurface (PlanetList z ps) =
-    Surface zero (transScale z) (map (EntSprite . toSprite) ps)
+    Surface zero (transScale z) 1 (map (EntSprite . toSprite) ps)
 
 

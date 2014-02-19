@@ -79,7 +79,7 @@ instance SDLRenderable Surface where
   renderSDL scr = mapM_ (renderSDL scr) . toSpriteList'
 
 instance SDLRenderable Sprite where
-  renderSDL scr (Sprite (V2 x y) sh colour) = void (drawer col)
+  renderSDL scr (Sprite (V2 x y) sh colour _) = void (drawer col)
     where
       drawer = case sh of
         Circle r f ->
