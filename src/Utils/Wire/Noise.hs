@@ -4,12 +4,16 @@ import Control.Wire
 import Prelude hiding ((.),id)
 import System.Random
 
+-- definitely breaks FRP.  do not use!
+--
 noisePrim :: (RandomGen g, Random b) => g -> Wire s e m () b
 noisePrim gen = mkSFN (const res)
   where
     res = (out, noisePrim gen')
     (out,gen') = random gen
     
+-- definitely breaks FRP.  do not use!
+--
 noisePrimR :: (RandomGen g, Random b) => (b,b) -> g -> Wire s e m () b
 noisePrimR range gen = mkSFN . const $ (out, noisePrimR range gen')
   where

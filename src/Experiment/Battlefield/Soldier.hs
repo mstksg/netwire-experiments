@@ -19,36 +19,49 @@ soldierWire :: (MonadFix m, HasTime t s, Monoid e, Fractional t)
 soldierWire (SoldierData x0 fl bod weap mnt gen) =
   proc (targets,mess) -> do
 
+    -- seeking and movement
     rec
       let
+        -- find the target and the direction to face
         target = seek targets pos
         newD   = target >>= newAtk pos
-        vel@(V3 vx vy _) = case target of
+        dir    = snd <$> target
+
+        -- move to target?
+        vel = case target of
           Just (tDist, tDir)
             | tDist > range  -> tDir ^* speed
           _                  -> 0
-        hit = getSum . mconcat . fmap Sum . mapMaybe maybeAttacked <$> mess
 
       pos <- integral x0 -< vel
 
+    -- shoot!
     shot  <- shoot -< newD
-    shotR <- couple (noisePrimR (0.67 :: Double,1.5) gen) -< shot
-
+    -- this is bad frp but :|
+    shotR <- couple (noisePrimR (0.75 :: Double,1.5) gen) -< shot
     let
       shot' = (\(atk,r) -> [atk (r * baseDamage)]) <$> shotR
 
+    -- calculate hit damage
+    let
+      hit = getSum . mconcat . fmap Sum . mapMaybe maybeAttacked <$> mess
     damage <- hold . accumE (+) 0 <|> pure 0 -< hit
 
     rec
+      -- calculate health, plus recovery
       let
         health = min (startingHealth + recov - damage) startingHealth
       recov <- integral 0 . ((pure recovery . W.when (< startingHealth)) <|> pure 0) . delay startingHealth -< health
+
+    -- calculate last direction facing.  holdJust breaks FRP.
+    (V3 vx vy _) <- holdJust zero -< dir
 
     let
       angle = atan2 vy vx
       soldier = Soldier (PosAng pos angle) (health / startingHealth) fl bod weap mnt
 
-    W.when (> 0) -< health
+    -- inhibit when health > 0
+    W.unless (<= 0) -< health
     returnA -< (soldier,shot')
 
   where
@@ -58,7 +71,7 @@ soldierWire (SoldierData x0 fl bod weap mnt gen) =
     range = weaponRange weap
     startingHealth = bodyHealth bod * mountHealthMod mnt
     speed = mountSpeed mnt * bodySpeedMod bod
-    recovery = 0.1
+    recovery = 0.15
     baseDamage = weaponDamage weap * mountDamageMod mnt
     coolDownTime = weaponCooldown weap
     seek others pos | null otherPs = Nothing
@@ -77,11 +90,12 @@ soldierWire (SoldierData x0 fl bod weap mnt gen) =
           shot <- W.for coolDownTime . now -< a
           returnA -< shot
       ) --> shoot
+    -- angle = proc (V3 vx vy _) -> do
 
 bodyHealth :: SoldierBody -> Double
-bodyHealth MeleeBody  = 15
-bodyHealth TankBody   = 35
-bodyHealth RangedBody = 10
+bodyHealth MeleeBody  = 25
+bodyHealth TankBody   = 60
+bodyHealth RangedBody = 12
 
 mountHealthMod :: Mount -> Double
 mountHealthMod Foot  = 1
@@ -107,14 +121,13 @@ mountDamageMod Foot  = 1
 mountDamageMod Horse = 1.25
 
 weaponRange :: Weapon -> Double
-weaponRange Sword   = 6
-weaponRange Axe     = 6
+weaponRange Sword   = 7.5
+weaponRange Axe     = 7.5
 weaponRange Bow     = 50
 weaponRange Longbow = 100
 
 weaponCooldown :: Fractional a => Weapon -> a
 weaponCooldown Sword   = 3
 weaponCooldown Axe     = 6
-weaponCooldown Bow     = 4
-weaponCooldown Longbow = 4
-
+weaponCooldown Bow     = 3.5
+weaponCooldown Longbow = 4.5
