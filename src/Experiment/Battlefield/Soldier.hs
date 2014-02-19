@@ -89,7 +89,7 @@ mountHealthMod Horse = 1.5
 
 mountSpeed :: Mount -> Double
 mountSpeed Foot   = 5
-mountSpeed Horse  = 15
+mountSpeed Horse  = 25
 
 bodySpeedMod :: SoldierBody -> Double
 bodySpeedMod MeleeBody  = 1
@@ -107,10 +107,10 @@ mountDamageMod Foot  = 1
 mountDamageMod Horse = 1.25
 
 weaponRange :: Weapon -> Double
-weaponRange Sword   = 10
-weaponRange Axe     = 10
-weaponRange Bow     = 40
-weaponRange Longbow = 80
+weaponRange Sword   = 6
+weaponRange Axe     = 6
+weaponRange Bow     = 50
+weaponRange Longbow = 100
 
 weaponCooldown :: Fractional a => Weapon -> a
 weaponCooldown Sword   = 3

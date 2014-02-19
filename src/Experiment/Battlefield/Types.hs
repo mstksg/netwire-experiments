@@ -87,7 +87,7 @@ instance HasSurface Stage where
       ents = EntSprite back:(sldrEnts ++ artEnts)
 
 instance HasSurface Soldier where
-  toSurface (Soldier (PosAng (V3 x y _) ang) health fl _ _weap mnt) =
+  toSurface (Soldier (PosAng (V3 x y _) ang) health fl _ weap mnt) =
       Surface (V2 x y) (transRotate ang) 1 [mountEnt,bodyEnt,weaponEnt]
     where
       mountEnt  =
@@ -95,8 +95,15 @@ instance HasSurface Soldier where
           Foot  -> EntSurface $ Surface zero idTrans 1 $ map foot [-1.5,1.5]
             where
               foot y' = EntSprite $ Sprite (V2 1 y') (Circle 0.5 Filled) brown 1
-          Horse -> EntSprite $ Sprite zero (Ellipse (V2 6 3) Filled) brown 1
-      weaponEnt = EntSurface emptySurface
+          Horse -> EntSprite $ Sprite zero (Ellipse (V2 5 2) Filled) brown 1
+      weaponEnt =
+        case weap of
+          Sword   -> EntSprite $ Sprite zero (Line (V2 0 1) (V2 4 1)) black 1
+          Bow     -> EntSprite $ Sprite zero (Line (V2 2.5 2) (V2 2.5 (-2))) black 1
+          Longbow -> EntSprite $ Sprite zero (Line (V2 2.5 4) (V2 2.5 (-4))) black 1
+          Axe     -> EntSprite $ Sprite zero axePoly black 1
+            where
+              axePoly = Polygon [V2 0 0, V2 4 2, V2 2 4] Filled
       bodyEnt   = EntSprite $ Sprite zero bodyPoly bodyCol 1
       bodyPoly  = Polygon [V2 (-3) 2, V2 3 0, V2 (-3) (-2)] Filled
       baseCol   = maybe white teamFlagColor fl

@@ -11,8 +11,8 @@ import Prelude hiding               ((.),id)
 weaponSpeed :: Weapon -> Maybe Double
 weaponSpeed Sword   = Nothing
 weaponSpeed Axe     = Nothing
-weaponSpeed Bow     = Just 30
-weaponSpeed Longbow = Just 30
+weaponSpeed Bow     = Just 75
+weaponSpeed Longbow = Just 75
 
 weaponDuration :: Fractional a => Weapon -> Maybe a
 weaponDuration Sword    = Just 1
