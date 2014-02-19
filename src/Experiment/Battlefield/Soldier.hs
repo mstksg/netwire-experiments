@@ -54,7 +54,7 @@ soldierWire (SoldierData x0 fl bod weap mnt gen) =
   where
     newAtk p (tDist, tDir)
       | tDist > range = Nothing
-      | otherwise     = Just $ AttackEvent . AttackData (p ^+^ (tDir ^* 6)) tDir . Attack weap
+      | otherwise     = Just $ AttackEvent . AttackData (p ^+^ (tDir ^* 8)) tDir . Attack weap
     range = weaponRange weap
     startingHealth = bodyHealth bod * mountHealthMod mnt
     speed = mountSpeed mnt * bodySpeedMod bod

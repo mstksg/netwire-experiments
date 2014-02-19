@@ -2,15 +2,19 @@ module Experiment.Battlefield.Types where
 
 import Render.Sprite
 import Control.Wire
-import Linear.V3
+import Prelude hiding ((.),id)
+import Data.Colour
+import Data.Colour.Names
+import Data.Colour.SRGB
+import Render.Surface
+import Linear
 import System.Random
 
 type Wire' = Wire (Timed Double ()) () Identity
 
-data Stage = Stage { stageWidth    :: Double
-                   , stageHeight   :: Double
-                   , stageSoldiers :: [Soldier]
-                   , stageArticles :: [Article]
+data Stage = Stage { stageDimensions :: (Double,Double)
+                   , stageSoldiers   :: [Soldier]
+                   , stageArticles   :: [Article]
                    } deriving Show
 
 data Soldier = Soldier  { soldierPosAng :: PosAng
@@ -73,3 +77,38 @@ data SoldierData = SoldierData { soldierDataX0     :: V3 Double
                                , soldierDataMount  :: Mount
                                , soldierDataGen    :: StdGen
                                } deriving Show
+
+instance HasSurface Stage where
+  toSurface (Stage (w,h) sldrs arts) = Surface zero idTrans 1 ents
+    where
+      back  = Sprite (V2 (w/2) (h/2)) (Rectangle (V2 w h) Filled) (sRGB24 126 126 126) 1
+      sldrEnts = map (EntSurface . toSurface) sldrs
+      artEnts = map (EntSurface . toSurface) arts
+      ents = EntSprite back:(sldrEnts ++ artEnts)
+
+instance HasSurface Soldier where
+  toSurface (Soldier (PosAng (V3 x y _) ang) health fl _ _weap mnt) =
+      Surface (V2 x y) (transRotate ang) 1 [mountEnt,bodyEnt,weaponEnt]
+    where
+      mountEnt  =
+        case mnt of
+          Foot  -> EntSurface $ Surface zero idTrans 1 $ map foot [-1.5,1.5]
+            where
+              foot y' = EntSprite $ Sprite (V2 1 y') (Circle 0.5 Filled) brown 1
+          Horse -> EntSprite $ Sprite zero (Ellipse (V2 6 3) Filled) brown 1
+      weaponEnt = EntSurface emptySurface
+      bodyEnt   = EntSprite $ Sprite zero bodyPoly bodyCol 1
+      bodyPoly  = Polygon [V2 (-3) 2, V2 3 0, V2 (-3) (-2)] Filled
+      baseCol   = maybe white teamFlagColor fl
+      bodyCol   = health `darken` baseCol
+
+instance HasSurface Article where
+  toSurface (Article (PosAng (V3 x y _) ang) aType) =
+      Surface (V2 x y) (transRotate ang) 1 [baseEnt aType]
+    where
+      baseEnt (ArticleAttack atk) =
+        case attackWeapon atk of
+          Sword   -> EntSprite $ Sprite zero (Circle 1 Filled) white 1
+          Axe     -> EntSprite $ Sprite zero (Circle 2 Filled) yellow 2
+          Bow     -> EntSprite $ Sprite zero (Line (V2 (-2) 0) (V2 2 0)) black 1
+          Longbow -> EntSprite $ Sprite zero (Line (V2 (-2) 0) (V2 2 0)) black 1

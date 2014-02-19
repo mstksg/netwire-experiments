@@ -1,23 +1,44 @@
+{-# LANGUAGE CPP #-}
+
 module Main where
 
+import Control.Monad.Random
 import Control.Wire
 import Control.Wire.Unsafe.Event
-import Data.List                         (transpose)
+import Data.Colour.Names
+import Data.List                    (transpose)
 import Experiment.Battlefield.Team
 import Experiment.Battlefield.Types
 import Linear
-import Prelude hiding                    ((.),id)
+import Prelude hiding               ((.),id)
+import Render.Render
+
+#ifdef WINDOWS
+import Render.Backend.GLUT
+import Experiment.Battlefield.Instances.GLUT    ()
+#else
+import Render.Backend.SDL
+import Experiment.Battlefield.Instances.SDL ()
+#endif
 
 main :: IO ()
-main = return ()
+main = do
+  stage <- evalRandIO $
+    simpleStage dim <$> genTeam' fl1 <*> genTeam' fl2
+  testStage stage
+  where
+    dim = (600,400)
+    fl1 = TeamFlag red
+    fl2 = TeamFlag blue
+    counts = (5,5,5,5,5,5)
+    genTeam' fl = genTeam dim fl counts
 
 simpleStage ::
-     Double
-  -> Double
+     (Double, Double)
   -> TeamWire'
   -> TeamWire'
   -> Wire' () Stage
-simpleStage w h t1w t2w = proc _ -> do
+simpleStage dim@(w,h) t1w t2w = proc _ -> do
     rec
       let
         (t1ahits,t2dhits) = hitWatcher t1as t2ds
@@ -28,7 +49,7 @@ simpleStage w h t1w t2w = proc _ -> do
         t2devts           = zipWith (<>) t2douts t2dhits
       team1@(Team _ t1as t1ds) <- t1w -< (team2, (t1ahits,t1devts))
       team2@(Team _ t2as t2ds) <- t2w -< (team1, (t2ahits,t2devts))
-    returnA -< Stage w h (t1as ++ t2as) (t1ds ++ t2ds)
+    returnA -< Stage dim (t1as ++ t2as) (t1ds ++ t2ds)
   where
     hitWatcher :: [Soldier] -> [Article] -> ([SoldierInEvents],[Event ()])
     hitWatcher as ds = (hitas, hitds)
@@ -47,3 +68,17 @@ simpleStage w h t1w t2w = proc _ -> do
         outOfBounds (Article (PosAng (V3 x y _) _) (ArticleAttack _))
           | or [x < 0, y < 0, x > w, y > h] = Event ()
         outOfBounds _                       = NoEvent
+
+testStage :: Wire' () Stage -> IO ()
+testStage w =
+#ifdef WINDOWS
+  runBackend
+    (glutBackend (1/30) 5 (600,600) (50,50,50))
+    (const . return $ ())
+    (w . pure ())
+#else
+  runBackend
+    (sdlBackend 600 600 (50,50,50))
+    (const . return . return $ ())
+    (w . pure ())
+#endif

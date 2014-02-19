@@ -22,6 +22,9 @@ class HasSurface s where
 instance HasSurface Sprite where
   toSurface s = Surface zero idTrans 1 [EntSprite s]
 
+emptySurface :: Surface
+emptySurface = Surface zero idTrans 1 []
+
 toSpriteList :: V2 Double -> Transformation2 -> Double -> Surface -> [Sprite]
 toSpriteList p t o (Surface psur tsur osur ents) =
     concatMap placeEntity ents

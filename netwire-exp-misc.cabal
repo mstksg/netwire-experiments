@@ -143,9 +143,9 @@ executable battlefield
   else
     build-depends:       base >=4.6 && <4.7
                        -- , GLUT ==2.5.0.2
-                       -- , SDL ==0.6.5
+                       , SDL ==0.6.5
                        , MonadRandom ==0.1.12
-                       -- , SDL-gfx ==0.6.0
+                       , SDL-gfx ==0.6.0
                        -- , containers >= 0.5.0.0
                        , linear ==1.0.1
                        -- , mtl ==2.1.2
