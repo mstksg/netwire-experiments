@@ -131,13 +131,13 @@ executable battlefield
   if os(windows)
     Cpp-options: -DWINDOWS
     build-depends:       base >=4.6 && <4.7
-                       -- , GLUT ==2.5.0.2
-                       -- , containers >= 0.5.0.0
+                       , GLUT ==2.5.0.2
+                       , containers >= 0.5.0.0
                        , linear ==1.0.1
                        -- , mtl ==2.1.2
                        , MonadRandom ==0.1.12
                        , netwire ==5.0.0
-                       -- , time ==1.4.0.1
+                       , time ==1.4.0.1
                        , random ==1.0.1.1
                        , colour ==2.3.3
   else

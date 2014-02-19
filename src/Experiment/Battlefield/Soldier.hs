@@ -80,7 +80,7 @@ soldierWire (SoldierData x0 fl bod weap mnt gen) =
 
 bodyHealth :: SoldierBody -> Double
 bodyHealth MeleeBody  = 15
-bodyHealth TankBody   = 30
+bodyHealth TankBody   = 35
 bodyHealth RangedBody = 10
 
 mountHealthMod :: Mount -> Double
@@ -89,7 +89,7 @@ mountHealthMod Horse = 1.5
 
 mountSpeed :: Mount -> Double
 mountSpeed Foot   = 5
-mountSpeed Horse  = 25
+mountSpeed Horse  = 15
 
 bodySpeedMod :: SoldierBody -> Double
 bodySpeedMod MeleeBody  = 1
@@ -99,8 +99,8 @@ bodySpeedMod RangedBody = 1
 weaponDamage :: Weapon -> Double
 weaponDamage Sword   = 4
 weaponDamage Axe     = 8
-weaponDamage Bow     = 3
-weaponDamage Longbow = 3
+weaponDamage Bow     = 2.5
+weaponDamage Longbow = 2.5
 
 mountDamageMod :: Mount -> Double
 mountDamageMod Foot  = 1
