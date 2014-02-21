@@ -12,11 +12,13 @@ import FRP.Netwire.Move
 import Linear
 import Prelude hiding                ((.),id)
 import Utils.Wire.Misc
+import Control.Wire.Unsafe.Event
+import Utils.Wire.Wrapped
 import Utils.Wire.Noise
 
 soldierWire :: (MonadFix m, HasTime t s, Monoid e, Fractional t)
     => SoldierData
-    -> Wire s e m ([Soldier], SoldierInEvents) (Soldier, SoldierOutEvents)
+    -> Wire s e m ([Soldier], SoldierInEvents) ((Soldier,[Article]), (SoldierOutEvents,[SoldierInEvents]))
 soldierWire (SoldierData x0 fl bod weap mnt gen) =
   proc (targets,mess) -> do
 
@@ -50,6 +52,9 @@ soldierWire (SoldierData x0 fl bod weap mnt gen) =
     shotR <- couple (noisePrimR (1/damageVariance,damageVariance) gen) -< shot
     let
       shot' = (\(atk,r) -> [atk (r * baseDamage)]) <$> shotR
+      shotW = map attackWire <$> shot'
+
+    atks <- dWireBox' NoEvent -< (shotW, undefined)
 
     -- calculate hit damage
     let
@@ -71,12 +76,14 @@ soldierWire (SoldierData x0 fl bod weap mnt gen) =
 
     -- inhibit when health > 0
     W.unless (<= 0) -< health
-    returnA -< (soldier,shot')
+
+    outE <- never -< ()
+    returnA -< ((soldier,atks),(outE,[]))
 
   where
     newAtk p (tDist, tDir)
       | tDist > range = Nothing
-      | otherwise     = Just $ AttackEvent . AttackData aX0 tDir . flip (Attack weap) aX0
+      | otherwise     = Just $ AttackData aX0 tDir . flip (Attack weap) aX0
           where
             aX0 = p ^+^ (tDir ^* 7.5)
     range = weaponRange weap

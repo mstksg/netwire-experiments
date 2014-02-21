@@ -136,6 +136,7 @@ executable battlefield
                        , linear ==1.0.1
                        -- , mtl ==2.1.2
                        , MonadRandom ==0.1.12
+                       , transformers >= 0.3.0.0
                        , netwire ==5.0.0
                        , time ==1.4.0.1
                        , random ==1.0.1.1
@@ -146,6 +147,7 @@ executable battlefield
                        , SDL ==0.6.5
                        , MonadRandom ==0.1.12
                        , SDL-gfx ==0.6.0
+                       , transformers >= 0.3.0.0
                        -- , containers >= 0.5.0.0
                        , linear ==1.0.1
                        -- , mtl ==2.1.2
