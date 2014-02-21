@@ -1,17 +1,15 @@
 module Experiment.Battlefield.Team (teamWire, genTeam, TeamWire, TeamWire') where
 
+import Control.Monad
 import Control.Monad.Fix
+import Control.Monad.Random
 import Control.Wire
 import Control.Wire.Unsafe.Event
-import Control.Monad
-import Linear.V3
-import Data.Maybe (mapMaybe)
-import Experiment.Battlefield.Attack
 import Experiment.Battlefield.Soldier
 import Experiment.Battlefield.Types
+import Linear.V3
+import Utils.Helpers                  (foldAcrossl)
 import Utils.Wire.Wrapped
-import Data.List (foldl')
-import Control.Monad.Random
 
 type TeamWire s e m = Wire s e m (Team, [SoldierInEvents]) (Team,[SoldierInEvents])
 type TeamWire' = TeamWire (Timed Double ()) () Identity
@@ -30,15 +28,7 @@ teamWire fl sldrs0 =
       (_outEs,inEs) = unzip outInEvts
       arts' = concat arts
       inEs' = foldAcrossl (<>) mempty inEs
-      -- outEvts = concat (map snd sldrsEs)
-      -- newAtks = mapMaybe maybeAttack <$> outEvts
-      -- newAtkWires = map attackWire <$> newAtks
-    -- atks <- dWireBox' NoEvent -< (newAtkWires, messAtks)
     returnA -< (Team fl sldrs arts',inEs')
-
-
-foldAcrossl :: (a -> b -> a) -> a -> [[b]] -> [a]
-foldAcrossl f x = foldl' (zipWith f) (repeat x)
 
 genTeam :: (Monoid e, HasTime t s, MonadFix m, Fractional t)
   => (Double, Double)               -- stage dimensions

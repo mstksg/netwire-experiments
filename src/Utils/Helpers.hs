@@ -2,7 +2,10 @@
 module Utils.Helpers
   ( selects
   , wee
+  , foldAcrossl
   ) where
+
+import Data.List (foldl')
 
 selects :: [a] -> [(a,[a])]
 selects = go []
@@ -12,3 +15,7 @@ selects = go []
 
 wee :: IO ()
 wee = mapM_ (putStrLn . flip replicate '.' . (6-) . abs) [-5..5]
+
+foldAcrossl :: (a -> b -> a) -> a -> [[b]] -> [a]
+foldAcrossl f x = foldl' (zipWith f) (repeat x)
+
