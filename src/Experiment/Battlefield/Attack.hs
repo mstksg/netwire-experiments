@@ -16,8 +16,8 @@ weaponSpeed Bow     = Just 400
 weaponSpeed Longbow = Just 400
 
 weaponDuration :: Fractional a => Weapon -> Maybe a
-weaponDuration Sword    = Just 0.2
-weaponDuration Axe      = Just 0.3
+weaponDuration Sword    = Just 0.25
+weaponDuration Axe      = Just 0.5
 weaponDuration Bow      = Nothing
 weaponDuration Longbow  = Nothing
 
@@ -38,8 +38,8 @@ attackWire (AttackData x0 vu@(V3 vx vy _) atk) =
     weap      = attackWeapon atk
     angle     = atan2 vy vx
     speed     = fromMaybe 0 (weaponSpeed weap)
-    range     = fromMaybe 0 $ weaponRange weap
-    range'    = range + 2.5
+    range     = fromMaybe 1 (weaponRange weap)
+    range'    = range + hitRadius
     unoptimal = range * unoptimalRange
     vel       = vu ^* speed
     duration  = maybe returnA W.for (weaponDuration weap)
