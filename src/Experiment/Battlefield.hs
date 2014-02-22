@@ -40,7 +40,7 @@ reportClasses = mapM_ (print . report) classScores
     report :: Double -> (Double,Double,Int)
     report score = (1 / score, score, round (classWeight * score))
     classScores = map ((1 /) . classWorth) allClasses
-    classWeight = 100 / sum classScores
+    classWeight = 30 / sum classScores
 
 simpleStage ::
      (Double, Double)

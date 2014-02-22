@@ -223,10 +223,10 @@ classWorth = statsWorth . classStats
   where
     statsWorth (SoldierStats dps hlt spd cld rng) = sum statZipped - shunter
       where
-        shunter    = 0
-        statArr    = [ dps , hlt , spd , 1/cld , fromMaybe 0 rng ]
-        statNorm   = [ 5   , 25  , 33  , 1     , 33              ]
-        statWeight = [ 1.75, 1.5 , 0.75, 0.33  , 1               ]
+        shunter    = 2
+        statArr    = [ dps , hlt , spd , 1/cld , fromMaybe 0   rng ]
+        statNorm   = [ 5   , 25  , 33  , 1     , 25              ]
+        statWeight = [ 1.85, 1.67, 0.75, 0.2   , 1.5              ]
         statZipped = zipWith3 mul3 statArr statNorm statWeight
         mul3 a n z = (a/n)*z
 

@@ -34,7 +34,7 @@ teamWire (w,h) fl gen =
   where
     -- (cswd,carc,caxe,clbw,chrs,char) = (9,5,3,3,4,2)
     classScores = map ((1 /) . classWorth) allClasses
-    classWeight = 35 / sum classScores
+    classWeight = 33 / sum classScores
     cswd:carc:caxe:clbw:chrs:char:_ = map (round . (classWeight *)) classScores
     (sldrs0,_gen') = flip runRand gen $ do
       swds <- replicateM cswd (genSoldier swordsmanClass)

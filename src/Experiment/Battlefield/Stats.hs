@@ -6,7 +6,7 @@ import Data.Maybe (isJust)
 bodyHealth :: SoldierBody -> Double
 bodyHealth MeleeBody  = 25
 bodyHealth TankBody   = 60
-bodyHealth RangedBody = 12
+bodyHealth RangedBody = 15
 
 mountHealthMod :: Mount -> Double
 mountHealthMod Foot  = 1
@@ -19,13 +19,13 @@ mountSpeed Horse  = 75
 bodySpeedMod :: SoldierBody -> Double
 bodySpeedMod MeleeBody  = 1
 bodySpeedMod TankBody   = 0.5
-bodySpeedMod RangedBody = 1
+bodySpeedMod RangedBody = 1.2
 
 weaponDPS :: Weapon -> Double
 weaponDPS Sword   = 7.5
 weaponDPS Axe     = 12.0
-weaponDPS Bow     = 5
-weaponDPS Longbow = 4.5
+weaponDPS Bow     = 3
+weaponDPS Longbow = 2.25
 
 mountDamageMod :: Mount -> Double
 mountDamageMod Foot  = 1
