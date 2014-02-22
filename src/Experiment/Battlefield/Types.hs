@@ -83,13 +83,18 @@ data SoldierInEvent = AttackedEvent { attackedEventDamage :: Double
 
 type SoldierInEvents = Event [SoldierInEvent]
 
+data Base = Base { basePos :: V3 Double }
+
 data SoldierData = SoldierData { soldierDataX0     :: V3 Double
                                , soldierDataFlag   :: Maybe TeamFlag
-                               , soldierDataBody   :: SoldierBody
-                               , soldierDataWeapon :: Weapon
-                               , soldierDataMount  :: Mount
+                               , soldierDataClass  :: SoldierClass
                                , soldierDataGen    :: StdGen
                                } deriving Show
+
+data SoldierClass = SoldierClass { soldierClassBody   :: SoldierBody
+                                 , soldierClassWeapon :: Weapon
+                                 , soldierClassMount  :: Mount
+                                 } deriving Show
 
 instance HasSurface Stage where
   toSurface (Stage (w,h) sldrs arts) = Surface zero idTrans 1 ents

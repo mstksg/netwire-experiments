@@ -23,7 +23,7 @@ import Utils.Wire.Wrapped
 soldierWire :: (MonadFix m, HasTime Double s, Monoid e)
     => SoldierData
     -> Wire s e m ([Maybe Soldier], SoldierInEvents) ((Maybe Soldier,[Article]), (SoldierOutEvents,[SoldierInEvents]))
-soldierWire (SoldierData x0 fl bod weap mnt gen) =
+soldierWire (SoldierData x0 fl (SoldierClass bod weap mnt) gen) =
   proc (targets,mess) -> do
 
     -- it's good to be alive!
@@ -52,8 +52,8 @@ soldierWire (SoldierData x0 fl bod weap mnt gen) =
     rec
       let
         -- find the target and the direction to face
-        targetPool  | null attackers = targetsPos
-                    | otherwise      = attackers
+        targetPool  | null attackers || not isRanged = targetsPos
+                    | otherwise                      = attackers
         target = seek targetPool pos
         newD
           | alive     = target >>= newAtk pos acc
@@ -116,7 +116,7 @@ soldierWire (SoldierData x0 fl bod weap mnt gen) =
     (dmgGen,accGen') = split gen
     (_firstAcc,_accGen) = randomR (-accLimit,accLimit) accGen'
     accLimit = atan $ (hitRadius / rangedAccuracy / 2) / range
-    _isRanged = weaponRanged weap
+    isRanged = weaponRanged weap
     accuracy
       -- | isRanged  = Just <$> (hold . noiseR coolDownTime (-accLimit,accLimit) accGen <|> pure firstAcc)
       | otherwise = pure Nothing

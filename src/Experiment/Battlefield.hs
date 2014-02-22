@@ -21,15 +21,16 @@ import Experiment.Battlefield.Instances.SDL ()
 
 main :: IO ()
 main = do
-  stage <- evalRandIO $
-    simpleStage dim <$> genTeam' fl1 <*> genTeam' fl2
-  testStage stage
+  (t1,t2) <- evalRandIO $ (,)
+      <$> (teamWire dim fl1 <$> getSplit)
+      <*> (teamWire dim fl2 <$> getSplit)
+  testStage $ simpleStage dim t1 t2
   where
     dim = (600,400)
     fl1 = TeamFlag red
     fl2 = TeamFlag blue
-    counts = (9,5,3,3,4,2)
-    genTeam' fl = genTeam dim fl counts
+    -- counts = (9,5,3,3,4,2)
+    -- genTeam' fl = genTeam dim fl counts
 
 simpleStage ::
      (Double, Double)
@@ -39,8 +40,8 @@ simpleStage ::
 simpleStage dim t1w t2w = proc _ -> do
     rec
       let
-      (team1@(Team _ t1ss t1as), t2ahits) <- t1w -< (team2, t1ahits)
-      (team2@(Team _ t2ss t2as), t1ahits) <- t2w -< (team1, t2ahits)
+      (team1@(Team _ t1ss t1as), t2ahits) <- t1w -< (team2, [], t1ahits)
+      (team2@(Team _ t2ss t2as), t1ahits) <- t2w -< (team1, [], t2ahits)
     let
       sldrs = catMaybes (t1ss ++ t2ss)
       arts  = t1as ++ t2as
