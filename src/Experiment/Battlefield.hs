@@ -7,6 +7,7 @@ import Control.Wire
 import Data.Colour.Names
 import Experiment.Battlefield.Team
 import Data.Maybe (catMaybes)
+import Experiment.Battlefield.Soldier
 import Experiment.Battlefield.Types
 import Prelude hiding               ((.),id)
 import Render.Render
@@ -21,6 +22,7 @@ import Experiment.Battlefield.Instances.SDL ()
 
 main :: IO ()
 main = do
+  reportClasses
   (t1,t2) <- evalRandIO $ (,)
       <$> (teamWire dim fl1 <$> getSplit)
       <*> (teamWire dim fl2 <$> getSplit)
@@ -31,6 +33,14 @@ main = do
     fl2 = TeamFlag blue
     -- counts = (9,5,3,3,4,2)
     -- genTeam' fl = genTeam dim fl counts
+
+reportClasses :: IO ()
+reportClasses = mapM_ (print . report) classScores
+  where
+    report :: Double -> (Double,Double,Int)
+    report score = (1 / score, score, round (classWeight * score))
+    classScores = map ((1 /) . classWorth) allClasses
+    classWeight = 100 / sum classScores
 
 simpleStage ::
      (Double, Double)

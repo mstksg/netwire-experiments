@@ -6,6 +6,9 @@ module Experiment.Battlefield.Soldier
   , longbowmanClass
   , horsemanClass
   , horsearcherClass
+  , allClasses
+  , classStats
+  , classWorth
   ) where
 
 import Control.Monad
@@ -104,12 +107,12 @@ soldierWire (SoldierData x0 fl (SoldierClass bod weap mnt) gen) =
 
       wouldKill = (>= health) . attackDamage
       funcs     = SoldierFuncs wouldKill
-      stats     = SoldierStats killCount age
+      score     = SoldierScore killCount age
 
       soldier       = Soldier
                         (PosAng pos angle)
                         (health / startingHealth)
-                        fl stats funcs bod weap mnt
+                        fl score funcs bod weap mnt
       soldier'
         | alive     = Just soldier
         | otherwise = Nothing
@@ -201,3 +204,29 @@ axemanClass      = SoldierClass TankBody Axe Foot
 longbowmanClass  = SoldierClass RangedBody Longbow Foot
 horsemanClass    = SoldierClass MeleeBody Sword Horse
 horsearcherClass = SoldierClass RangedBody Bow Horse
+
+allClasses :: [SoldierClass]
+allClasses = [ swordsmanClass, archerClass, axemanClass
+             , longbowmanClass, horsemanClass, horsearcherClass]
+
+classStats :: SoldierClass -> SoldierStats
+classStats (SoldierClass bod weap mnt) = SoldierStats dps hlt spd cld rng
+  where
+    dps = weaponDPS weap
+    hlt = bodyHealth bod * mountHealthMod mnt
+    spd = mountSpeed mnt * bodySpeedMod bod
+    cld = weaponCooldown weap
+    rng = weaponRange weap
+
+classWorth :: SoldierClass -> Double
+classWorth = statsWorth . classStats
+  where
+    statsWorth (SoldierStats dps hlt spd cld rng) = sum statZipped - shunter
+      where
+        shunter    = 0
+        statArr    = [ dps , hlt , spd , 1/cld , fromMaybe 0 rng ]
+        statNorm   = [ 5   , 25  , 33  , 1     , 33              ]
+        statWeight = [ 1.75, 1.5 , 0.75, 0.33  , 1               ]
+        statZipped = zipWith3 mul3 statArr statNorm statWeight
+        mul3 a n z = (a/n)*z
+

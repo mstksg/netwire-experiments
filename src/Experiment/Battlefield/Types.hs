@@ -21,7 +21,7 @@ data Stage = Stage { stageDimensions :: (Double,Double)
 data Soldier = Soldier  { soldierPosAng :: PosAng
                         , soldierHealth :: Double
                         , soldierFlag   :: Maybe TeamFlag
-                        , soldierStats  :: SoldierStats
+                        , soldierScore  :: SoldierScore
                         , soldierFuncs  :: SoldierFuncs
                         , soldierBody   :: SoldierBody
                         , soldierWeapon :: Weapon
@@ -29,8 +29,8 @@ data Soldier = Soldier  { soldierPosAng :: PosAng
                         } deriving Show
 
 
-data SoldierStats = SoldierStats { soldierStatsKillCount :: Int
-                                 , soldierStatsAge       :: Double
+data SoldierScore = SoldierScore { soldierScoreKillCount :: Int
+                                 , soldierScoreAge       :: Double
                                  } deriving Show
 
 data SoldierFuncs = SoldierFuncs { soldierFuncsWouldKill :: Attack -> Bool
@@ -96,6 +96,13 @@ data SoldierClass = SoldierClass { soldierClassBody   :: SoldierBody
                                  , soldierClassMount  :: Mount
                                  } deriving Show
 
+data SoldierStats = SoldierStats { soldierStatsDPS      :: Double
+                                 , soldierStatsHealth   :: Double
+                                 , soldierStatsSpeed    :: Double
+                                 , soldierStatsCooldown :: Double
+                                 , soldierStatsRange    :: Maybe Double
+                                 }
+
 instance HasSurface Stage where
   toSurface (Stage (w,h) sldrs arts) = Surface zero idTrans 1 ents
     where
@@ -141,8 +148,8 @@ instance HasSurface Article where
 instance Show SoldierFuncs where
   show _ = "Soldier Functions"
 
-instance Default SoldierStats where
-  def = SoldierStats 0 0
+instance Default SoldierScore where
+  def = SoldierScore 0 0
 
 instance Default SoldierFuncs where
   def = SoldierFuncs (const False)

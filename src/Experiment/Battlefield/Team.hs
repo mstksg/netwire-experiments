@@ -32,7 +32,10 @@ teamWire (w,h) fl gen =
       inEs' = foldAcrossl (<>) mempty inEs
     returnA -< (Team fl sldrs arts',inEs')
   where
-    (cswd,carc,caxe,clbw,chrs,char) = (9,5,3,3,4,2)
+    -- (cswd,carc,caxe,clbw,chrs,char) = (9,5,3,3,4,2)
+    classScores = map ((1 /) . classWorth) allClasses
+    classWeight = 35 / sum classScores
+    cswd:carc:caxe:clbw:chrs:char:_ = map (round . (classWeight *)) classScores
     (sldrs0,_gen') = flip runRand gen $ do
       swds <- replicateM cswd (genSoldier swordsmanClass)
       arcs <- replicateM carc (genSoldier archerClass)
@@ -46,25 +49,3 @@ teamWire (w,h) fl gen =
       x0 <- V3 <$> getRandomR (0,w) <*> getRandomR (0,h) <*> return 0
       g <- getSplit
       return $ SoldierData x0 (Just fl) (SoldierClass bod weap mnt) g
-
--- genTeam :: (Monoid e, HasTime Double s, MonadFix m)
---   => (Double, Double)               -- stage dimensions
---   -> TeamFlag                       -- team flag
---   -> (Int,Int,Int,Int,Int,Int)      -- Swordsman, Archers, Axemen, Longbowmen, Horsemen, Horse Archers
---   -> Rand StdGen (TeamWire s e m)
--- genTeam (w,h) fl (cswd,carc,caxe,clbw,chrs,char) = do
---   swds <- replicateM cswd (genSoldier MeleeBody Sword Foot)
---   arcs <- replicateM carc (genSoldier RangedBody Bow Foot)
---   axes <- replicateM caxe (genSoldier TankBody Axe Foot)
---   lbws <- replicateM clbw (genSoldier MeleeBody Longbow Foot)
---   hrss <- replicateM chrs (genSoldier MeleeBody Sword Horse)
---   hars <- replicateM char (genSoldier MeleeBody Bow Horse)
---   let
---     datas = concat [swds,arcs,axes,lbws,hrss,hars]
---   return $ teamWire fl datas
---   where
---     genSoldier :: SoldierBody -> Weapon -> Mount -> Rand StdGen SoldierData
---     genSoldier bod weap mnt = do
---       x0 <- V3 <$> getRandomR (0,w) <*> getRandomR (0,h) <*> return 0
---       gen <- getSplit
---       return $ SoldierData x0 (Just fl) bod weap mnt gen
