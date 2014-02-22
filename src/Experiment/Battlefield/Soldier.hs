@@ -5,7 +5,7 @@ import Control.Monad.Fix
 import Control.Wire                  as W
 import Control.Wire.Unsafe.Event
 import Data.List                     (minimumBy, mapAccumL)
-import Data.Maybe                    (mapMaybe, catMaybes)
+import Data.Maybe                    (mapMaybe, catMaybes, fromMaybe)
 import Data.Ord                      (comparing)
 import Experiment.Battlefield.Attack
 import Experiment.Battlefield.Stats
@@ -23,6 +23,9 @@ soldierWire :: (MonadFix m, HasTime t s, Monoid e, Fractional t)
     -> Wire s e m ([Maybe Soldier], SoldierInEvents) ((Maybe Soldier,[Article]), (SoldierOutEvents,[SoldierInEvents]))
 soldierWire (SoldierData x0 fl bod weap mnt gen) =
   proc (targets,mess) -> do
+
+    -- it's good to be alive!
+    age <- integral 0 -< 1
 
     let
       targetsPos = map soldierPos (catMaybes targets)
@@ -74,18 +77,28 @@ soldierWire (SoldierData x0 fl bod weap mnt gen) =
     rec
       atks    <- dWireBox' NoEvent -< (shotW, atkDies)
       let
-        atkHits = checkAttacks atks targets
+        atkHitsKills = checkAttacks atks targets
+        (kills,atkHits) = unzip atkHitsKills
+        kills' = (length . filter id) kills
+        killE | kills' > 0 = Event kills'
+              | otherwise  = NoEvent
         atkDies = map (mconcat . map (() <$)) atkHits
         atkOuts = foldAcrossl (<>) mempty atkHits
+
+    killCount <- hold . accumE (+) 0 <|> 0 -< killE
 
     let
       angle = atan2 vy vx
       hasAtks = not (null atks)
 
+      wouldKill = (>= health) . attackDamage
+      funcs     = SoldierFuncs wouldKill
+      stats     = SoldierStats killCount age
+
       soldier       = Soldier
                         (PosAng pos angle)
                         (health / startingHealth)
-                        fl bod weap mnt
+                        fl stats funcs bod weap mnt
       soldier'
         | alive     = Just soldier
         | otherwise = Nothing
@@ -132,14 +145,19 @@ soldierWire (SoldierData x0 fl bod weap mnt gen) =
           ) --> oneShot
         coupleRandom = couple (noisePrimR (1/damageVariance,damageVariance) gen)
         applyRandom (atk,r) = [atk (r * baseDamage)]
-    checkAttacks :: [Article] -> [Maybe Soldier] -> [[SoldierInEvents]]
+    checkAttacks :: [Article] -> [Maybe Soldier] -> [(Bool,[SoldierInEvents])]
     checkAttacks atks sldrs = map makeKill atks
       where
-        makeKill :: Article -> [SoldierInEvents]
-        makeKill (Article (PosAng pa _) (ArticleAttack (Attack _ dmg o))) = snd $ mapAccumL f False sldrs
+        makeKill :: Article -> (Bool, [SoldierInEvents])
+        makeKill (Article (PosAng pa _)
+                 (ArticleAttack atk@(Attack _ dmg o)))
+                    = first (fromMaybe False) $ mapAccumL f Nothing sldrs
           where
-            f b      Nothing                      = (b , NoEvent)
-            f True   _                            = (True , NoEvent )
-            f False (Just sldr)
-              | norm (pa ^-^ soldierPos sldr) < 5 = (True , Event [AttackedEvent dmg o])
-              | otherwise                         = (False, NoEvent )
+            f b      Nothing         = (b    , NoEvent)
+            f b@(Just _)   _               = (b, NoEvent)
+            f Nothing (Just sldr)
+              | norm (pa ^-^ ps) < 5 = (Just killed, Event [AttackedEvent dmg o])
+              | otherwise            = (Nothing, NoEvent )
+                  where
+                    ps     = soldierPos sldr
+                    killed = soldierFuncsWouldKill (soldierFuncs sldr) atk
