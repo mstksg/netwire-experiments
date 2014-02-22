@@ -4,6 +4,7 @@ module Main where
 
 import Control.Monad.Random
 import Control.Wire
+import Linear.V3
 import Data.Colour.Names
 import Experiment.Battlefield.Team
 import Data.Maybe (catMaybes)
@@ -47,15 +48,18 @@ simpleStage ::
   -> TeamWire'
   -> TeamWire'
   -> Wire' () Stage
-simpleStage dim t1w t2w = proc _ -> do
+simpleStage dim@(w,h) t1w t2w = proc _ -> do
     rec
       let
-      (team1@(Team _ t1ss t1as), t2ahits) <- t1w -< (team2, [], t1ahits)
-      (team2@(Team _ t2ss t2as), t1ahits) <- t2w -< (team1, [], t2ahits)
+      (team1@(Team _ t1ss t1as), t2ahits) <- t1w -< (team2, b1s, t1ahits)
+      (team2@(Team _ t2ss t2as), t1ahits) <- t2w -< (team1, b2s, t2ahits)
     let
       sldrs = catMaybes (t1ss ++ t2ss)
       arts  = t1as ++ t2as
     returnA -< Stage dim sldrs arts
+  where
+    b1s = [Base (V3 (w/5) (h/5) 0), Base (V3 (w/5) (4*h/5) 0)]
+    b2s = [Base (V3 (4*w/5) (h/5) 0), Base (V3 (4*w/5) (4*h/5) 0)]
 
 testStage :: Wire' () Stage -> IO ()
 testStage w =
@@ -66,7 +70,7 @@ testStage w =
     (w . pure ())
 #else
   runBackend
-    (sdlBackend (1/45) 10 (600,600) (50,50,50))
+    (sdlBackend (1/45) 30 (600,600) (50,50,50))
     (const . return . return $ ())
     (w . pure ())
 #endif

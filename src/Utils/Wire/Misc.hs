@@ -52,3 +52,23 @@ curated = go []
         mapped = map (f &&& id) xs
         xs'    = filter (isJust . fst) mapped
         (out,next) = unzip xs'
+
+zipWires :: (Monad m, Monoid e)
+    => [Wire s e m a b]
+    -> Wire s e m [a] [b]
+zipWires = go
+  where
+    go [] = pure []
+    go (w:ws) = proc inputs -> do
+      case inputs of
+        (x:xs) -> do
+          w' <- w -< x
+          ws' <- go ws -< xs
+          returnA -< w':ws'
+        [] -> do
+          returnA -< error "zipped wire with no input"
+
+zipEvents :: (Monad m, Monoid e, Semigroup b)
+    => [Wire s e m a (Event b)]
+    -> Wire s e m [a] (Event b)
+zipEvents ws = mconcat <$> zipWires ws

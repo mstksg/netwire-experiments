@@ -3,6 +3,7 @@ module Experiment.Battlefield.Team (teamWire, TeamWire, TeamWire') where
 import Control.Monad
 import Control.Monad.Fix
 import Control.Monad.Random
+import Data.Traversable
 import Control.Wire
 import Control.Wire.Unsafe.Event
 import Experiment.Battlefield.Soldier
@@ -10,7 +11,9 @@ import Experiment.Battlefield.Types
 import Linear.V3
 import Prelude hiding                 ((.),id)
 import Utils.Helpers                  (foldAcrossl)
+import Utils.Wire.Debug
 import Utils.Wire.Wrapped
+import Utils.Wire.Misc
 
 type TeamWire s e m = Wire s e m (Team, [Base], [SoldierInEvents]) (Team,[SoldierInEvents])
 type TeamWire' = TeamWire (Timed Double ()) () Identity
@@ -22,8 +25,11 @@ teamWire :: (MonadFix m, Monoid e, HasTime Double s)
     -> TeamWire s e m
 teamWire (w,h) fl gen =
   proc (Team _ others _, bases, messSldrs) -> do
-    startSldrs <- now -< map soldierWire sldrs0
-    sldrsEs <- dWireBox' ([], NoEvent) -< (startSldrs, zip (repeat others) messSldrs)
+    -- startSldrs <- now -< map soldierWire sldrs0
+    pooled <- notYet . soldierPool -< ()
+    let
+      newSolds = map (sData (head bases)) <$> pooled
+    sldrsEs <- dWireBox' ([], NoEvent) -< (newSolds, zip (repeat others) messSldrs)
     let
       (sldrsArts,outInEvts) = unzip sldrsEs
       (sldrs,arts) = unzip sldrsArts
@@ -33,6 +39,7 @@ teamWire (w,h) fl gen =
     returnA -< (Team fl sldrs arts',inEs')
   where
     -- (cswd,carc,caxe,clbw,chrs,char) = (9,5,3,3,4,2)
+    sData base cls = soldierWire $ SoldierData (basePos base) (Just fl) cls (mkStdGen 1)
     classScores = map ((1 /) . classWorth) allClasses
     classWeight = 35 / sum classScores
     cswd:carc:caxe:clbw:chrs:char:_ = map (round . (classWeight *)) classScores
@@ -49,3 +56,8 @@ teamWire (w,h) fl gen =
       x0 <- V3 <$> getRandomR (0,w) <*> getRandomR (0,h) <*> return 0
       g <- getSplit
       return $ SoldierData x0 (Just fl) (SoldierClass bod weap mnt) g
+
+soldierPool :: (Monoid e, Monad m, HasTime Double s) => Wire s e m () (Event [SoldierClass])
+soldierPool = proc _ -> zipEvents (map periodic classScores) -< map return allClasses
+  where
+    classScores = map ((2.5 *) . classWorth) allClasses

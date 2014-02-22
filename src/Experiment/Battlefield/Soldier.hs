@@ -209,13 +209,13 @@ allClasses = [ swordsmanClass, archerClass, axemanClass
 classStats :: SoldierClass -> SoldierStats
 classStats (SoldierClass bod weap mnt) = SoldierStats dps hlt dmg spd cld rng acc
   where
-    acc = fromMaybe 1 (rangedAccuracy <$ rng)
     dps = weaponDPS weap * mountDamageMod mnt / acc
     hlt = bodyHealth bod * mountHealthMod mnt
     dmg = dps * cld
     spd = mountSpeed mnt * bodySpeedMod bod
     cld = weaponCooldown weap
     rng = weaponRange weap
+    acc = fromMaybe 1 (rangedAccuracy <$ rng)
 
 classWorth :: SoldierClass -> Double
 classWorth = statsWorth . classStats
