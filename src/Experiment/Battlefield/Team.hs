@@ -15,7 +15,7 @@ import Utils.Wire.Wrapped
 type TeamWire s e m = Wire s e m (Team, [SoldierInEvents]) (Team,[SoldierInEvents])
 type TeamWire' = TeamWire (Timed Double ()) () Identity
 
-teamWire :: (MonadFix m, Monoid e, HasTime t s, Fractional t)
+teamWire :: (MonadFix m, Monoid e, HasTime Double s)
     => TeamFlag
     -> [SoldierData]
     -> TeamWire s e m
@@ -31,7 +31,7 @@ teamWire fl sldrs0 =
       inEs' = foldAcrossl (<>) mempty inEs
     returnA -< (Team fl sldrs arts',inEs')
 
-genTeam :: (Monoid e, HasTime t s, MonadFix m, Fractional t)
+genTeam :: (Monoid e, HasTime Double s, MonadFix m)
   => (Double, Double)               -- stage dimensions
   -> TeamFlag                       -- team flag
   -> (Int,Int,Int,Int,Int,Int)      -- Swordsman, Archers, Axemen, Longbowmen, Horsemen, Horse Archers

@@ -37,13 +37,15 @@ damageVariance = 1.15
 weaponRange :: Weapon -> Maybe Double
 weaponRange Sword   = Nothing
 weaponRange Axe     = Nothing
+-- weaponRange Sword   = Just 7.5
+-- weaponRange Axe     = Just 7.5
 weaponRange Bow     = Just 50
 weaponRange Longbow = Just 100
 
 weaponRanged :: Weapon -> Bool
 weaponRanged = isJust . weaponRange
 
-weaponCooldown :: Fractional a => Weapon -> a
+weaponCooldown :: Weapon -> Double
 weaponCooldown Sword   = 0.5
 weaponCooldown Axe     = 1.25
 weaponCooldown Bow     = 1
@@ -51,6 +53,18 @@ weaponCooldown Longbow = 1.5
 
 recoveryFactor :: Double
 recoveryFactor = 21
+
+adrenalineHalflife :: Double
+adrenalineHalflife = 1
+
+adrenalineDamage :: Double
+adrenalineDamage = 2            -- dmg * (adr * adrAtk + 1)
+
+adrenalineRecovery :: Double
+adrenalineRecovery = 2
+
+adrenalineSpeed :: Double
+adrenalineSpeed = 0.5
 
 unoptimalRange :: Double
 unoptimalRange = 1.5

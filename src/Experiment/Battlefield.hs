@@ -28,7 +28,8 @@ main = do
     dim = (600,400)
     fl1 = TeamFlag red
     fl2 = TeamFlag blue
-    counts = (9,5,3,3,4,2)
+    -- counts = (9,5,3,3,4,2)
+    counts = (1,0,0,0,0,0)
     genTeam' fl = genTeam dim fl counts
 
 simpleStage ::

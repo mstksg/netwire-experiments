@@ -12,16 +12,20 @@ import Prelude hiding               ((.),id)
 weaponSpeed :: Weapon -> Maybe Double
 weaponSpeed Sword   = Nothing
 weaponSpeed Axe     = Nothing
+-- weaponSpeed Sword   = Just 100
+-- weaponSpeed Axe     = Just 100
 weaponSpeed Bow     = Just 400
 weaponSpeed Longbow = Just 400
 
 weaponDuration :: Fractional a => Weapon -> Maybe a
-weaponDuration Sword    = Just 0.2
-weaponDuration Axe      = Just 0.3
+weaponDuration Sword    = Just 1
+weaponDuration Axe      = Just 1
+-- weaponDuration Sword    = Nothing
+-- weaponDuration Axe      = Nothing
 weaponDuration Bow      = Nothing
 weaponDuration Longbow  = Nothing
 
-attackWire :: (Monad m, Monoid e, HasTime t s, Fractional t)
+attackWire :: (Monad m, Monoid e, HasTime Double s)
     => AttackData
     -> Wire s e m (Event ()) Article
 attackWire (AttackData x0 vu@(V3 vx vy _) atk) =

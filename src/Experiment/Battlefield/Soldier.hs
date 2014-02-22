@@ -1,6 +1,8 @@
 module Experiment.Battlefield.Soldier (soldierWire) where
 
+-- import FRP.Netwire.Noise
 import Control.Monad
+import Debug.Trace
 import Control.Monad.Fix
 import Control.Wire                  as W
 import Control.Wire.Unsafe.Event
@@ -11,16 +13,17 @@ import Experiment.Battlefield.Attack
 import Experiment.Battlefield.Stats
 import Experiment.Battlefield.Types
 import FRP.Netwire.Move
--- import FRP.Netwire.Noise
 import Linear
 import Prelude hiding                ((.),id)
 import System.Random
 import Utils.Helpers                 (foldAcrossl)
 import Utils.Wire.Misc
+import Utils.Wire.Move
 import Utils.Wire.Noise
 import Utils.Wire.Wrapped
+import Utils.Wire.Debug
 
-soldierWire :: (MonadFix m, HasTime t s, Monoid e, Fractional t)
+soldierWire :: (MonadFix m, HasTime Double s, Monoid e)
     => SoldierData
     -> Wire s e m ([Maybe Soldier], SoldierInEvents) ((Maybe Soldier,[Article]), (SoldierOutEvents,[SoldierInEvents]))
 soldierWire (SoldierData x0 fl bod weap mnt gen) =
@@ -41,54 +44,63 @@ soldierWire (SoldierData x0 fl bod weap mnt gen) =
     damage <- hold . accumE (+) 0 <|> pure 0 -< hit
 
     rec
-      -- calculate health, plus recovery
+      -- why we are in rec
+      adrenaline <- decayH adrenalineHalflife 0 . delay NoEvent -< fromIntegral <$> killE
+
+      rec
+        -- calculate health, plus recovery
+        let
+          health = min (startingHealth + recov - damage) startingHealth
+          alive = health > 0
+        -- recov <- integral 0 . (recoveryW <|> pure 0) . delay (startingHealth, 0) -< (health, adrenaline)
+        recov <- integral 0 . (recoveryW <|> pure 0) . delay (startingHealth, 0) -< (health, 0)
+
+      -- seeking and movement
+      acc <- accuracy -< ()
+
+      rec
+        let
+          -- find the target and the direction to face
+          targetPool  | null attackers = targetsPos
+                      | otherwise      = attackers
+          target = seek targetPool pos
+          newD
+            -- | alive     = target >>= newAtk pos acc adrenaline
+            | alive     = target >>= newAtk pos acc 0
+            | otherwise = Nothing
+          dir    = snd <$> target
+
+          -- move to target?
+          vel = case target of
+            Just (tDist, tDir)
+              | tDist > range  -> tDir ^* (speed * (adrenaline * adrenalineSpeed + 1))
+              -- | tDist > range  -> tDir ^* speed
+            _                  -> 0
+
+        pos <- integral x0 -< vel
+
+      -- shoot!
+      shot  <- shoot . delay Nothing -< newD
       let
-        health = min (startingHealth + recov - damage) startingHealth
-        alive = health > 0
-      recov <- integral 0 . ((pure recovery . W.when (< startingHealth)) <|> pure 0) . delay startingHealth -< health
+        shotW = shot `traceEvent'` (map attackWire <$> shot)
 
-    -- seeking and movement
-    acc <- accuracy -< ()
-    rec
-      let
-        -- find the target and the direction to face
-        targetPool  | null attackers = targetsPos
-                    | otherwise      = attackers
-        target = seek targetPool pos
-        newD
-          | alive     = target >>= newAtk pos acc
-          | otherwise = Nothing
-        dir    = snd <$> target
+      -- manage shots
+      rec
+        atks    <- dWireBox' NoEvent -< (shotW, atkDies)
+        let
+          atkHitsKills = checkAttacks atks targets
+          (kills,atkHits) = unzip atkHitsKills
+          kills' = (length . filter id) kills
+          killE | kills' > 0 = Event kills'
+                | otherwise  = NoEvent
+          atkDies = map (mconcat . map (() <$)) atkHits
+          atkOuts = foldAcrossl (<>) mempty atkHits
 
-        -- move to target?
-        vel = case target of
-          Just (tDist, tDir)
-            | tDist > range  -> tDir ^* speed
-          _                  -> 0
-
-      pos <- integral x0 -< vel
+      killCount <- hold . accumE (+) 0 <|> 0 -< killE
 
     -- calculate last direction facing.  holdJust breaks FRP.
     (V3 vx vy _) <- holdJust zero -< dir
 
-    -- shoot!
-    shot  <- shoot -< newD
-    let
-      shotW = map attackWire <$> shot
-
-    -- manage shots
-    rec
-      atks    <- dWireBox' NoEvent -< (shotW, atkDies)
-      let
-        atkHitsKills = checkAttacks atks targets
-        (kills,atkHits) = unzip atkHitsKills
-        kills' = (length . filter id) kills
-        killE | kills' > 0 = Event kills'
-              | otherwise  = NoEvent
-        atkDies = map (mconcat . map (() <$)) atkHits
-        atkOuts = foldAcrossl (<>) mempty atkHits
-
-    killCount <- hold . accumE (+) 0 <|> 0 -< killE
 
     let
       angle = atan2 vy vx
@@ -120,16 +132,18 @@ soldierWire (SoldierData x0 fl bod weap mnt gen) =
     accuracy
       -- | isRanged  = Just <$> (hold . noiseR coolDownTime (-accLimit,accLimit) accGen <|> pure firstAcc)
       | otherwise = pure Nothing
-    newAtk :: V3 Double -> Maybe Double -> (Double, V3 Double) -> Maybe (Double -> AttackData)
-    newAtk p acc (tDist, tDir)
+    newAtk :: V3 Double -> Maybe Double -> Double -> (Double, V3 Double) -> Maybe (Double -> AttackData)
+    newAtk p acc adr (tDist, tDir)
       | tDist > range = Nothing
-      | otherwise     = Just $ AttackData aX0 tDir' . flip (Attack weap) aX0
+      | otherwise     = Just $ AttackData aX0 tDir' . flip (Attack weap) aX0 . (* multer)
           where
             tDir' =
               case acc of
                 Just a  -> (rot2 a) !* tDir
                 Nothing -> tDir
-            aX0 = p ^+^ (tDir' ^* 7.5)
+            aX0 = p ^+^ (tDir' ^* 8)
+            multer = adr * adrenalineDamage + 1
+            -- multer = 1
     rot2 ang = V3 (V3 (cos ang) (-1 * (sin ang)) 0)
                   (V3 (sin ang) (cos ang)        0)
                   (V3 0         0                1)
@@ -137,6 +151,9 @@ soldierWire (SoldierData x0 fl bod weap mnt gen) =
     startingHealth = bodyHealth bod * mountHealthMod mnt
     speed = mountSpeed mnt * bodySpeedMod bod
     recovery = startingHealth / recoveryFactor
+    recoveryW = proc (h,adr) -> do
+      W.when (< startingHealth) -< h
+      returnA -< recovery * (adr * adrenalineRecovery + 1)
     baseDamage = weaponDPS weap * (realToFrac coolDownTime) * mountDamageMod mnt
     coolDownTime = weaponCooldown weap
     findClosest :: [V3 Double] -> V3 Double -> Maybe ((Double, V3 Double),V3 Double)
