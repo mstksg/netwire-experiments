@@ -11,8 +11,10 @@ import Experiment.Battlefield.Attack
 import Experiment.Battlefield.Stats
 import Experiment.Battlefield.Types
 import FRP.Netwire.Move
+-- import FRP.Netwire.Noise
 import Linear
 import Prelude hiding                ((.),id)
+import System.Random
 import Utils.Helpers                 (foldAcrossl)
 import Utils.Wire.Misc
 import Utils.Wire.Noise
@@ -46,6 +48,7 @@ soldierWire (SoldierData x0 fl bod weap mnt gen) =
       recov <- integral 0 . ((pure recovery . W.when (< startingHealth)) <|> pure 0) . delay startingHealth -< health
 
     -- seeking and movement
+    acc <- accuracy -< ()
     rec
       let
         -- find the target and the direction to face
@@ -53,7 +56,7 @@ soldierWire (SoldierData x0 fl bod weap mnt gen) =
                     | otherwise      = attackers
         target = seek targetPool pos
         newD
-          | alive     = target >>= newAtk pos
+          | alive     = target >>= newAtk pos acc
           | otherwise = Nothing
         dir    = snd <$> target
 
@@ -110,12 +113,27 @@ soldierWire (SoldierData x0 fl bod weap mnt gen) =
     returnA -< ((soldier',atks),(outE,atkOuts))
 
   where
-    newAtk p (tDist, tDir)
+    (dmgGen,accGen') = split gen
+    (_firstAcc,_accGen) = randomR (-accLimit,accLimit) accGen'
+    accLimit = atan $ (hitRadius / rangedAccuracy / 2) / range
+    _isRanged = weaponRanged weap
+    accuracy
+      -- | isRanged  = Just <$> (hold . noiseR coolDownTime (-accLimit,accLimit) accGen <|> pure firstAcc)
+      | otherwise = pure Nothing
+    newAtk :: V3 Double -> Maybe Double -> (Double, V3 Double) -> Maybe (Double -> AttackData)
+    newAtk p acc (tDist, tDir)
       | tDist > range = Nothing
-      | otherwise     = Just $ AttackData aX0 tDir . flip (Attack weap) aX0
+      | otherwise     = Just $ AttackData aX0 tDir' . flip (Attack weap) aX0
           where
-            aX0 = p ^+^ (tDir ^* 7.5)
-    range = weaponRange weap
+            tDir' =
+              case acc of
+                Just a  -> (rot2 a) !* tDir
+                Nothing -> tDir
+            aX0 = p ^+^ (tDir' ^* 7.5)
+    rot2 ang = V3 (V3 (cos ang) (-1 * (sin ang)) 0)
+                  (V3 (sin ang) (cos ang)        0)
+                  (V3 0         0                1)
+    range = fromMaybe 7.5 $ weaponRange weap
     startingHealth = bodyHealth bod * mountHealthMod mnt
     speed = mountSpeed mnt * bodySpeedMod bod
     recovery = startingHealth / recoveryFactor
@@ -143,7 +161,7 @@ soldierWire (SoldierData x0 fl bod weap mnt gen) =
               shot <- W.for coolDownTime . now -< a
               returnA -< shot
           ) --> oneShot
-        coupleRandom = couple (noisePrimR (1/damageVariance,damageVariance) gen)
+        coupleRandom = couple (noisePrimR (1/damageVariance,damageVariance) dmgGen)
         applyRandom (atk,r) = [atk (r * baseDamage)]
     checkAttacks :: [Article] -> [Maybe Soldier] -> [(Bool,[SoldierInEvents])]
     checkAttacks atks sldrs = map makeKill atks
@@ -156,8 +174,8 @@ soldierWire (SoldierData x0 fl bod weap mnt gen) =
             f b      Nothing         = (b    , NoEvent)
             f b@(Just _)   _               = (b, NoEvent)
             f Nothing (Just sldr)
-              | norm (pa ^-^ ps) < 5 = (Just killed, Event [AttackedEvent dmg o])
-              | otherwise            = (Nothing, NoEvent )
+              | norm (pa ^-^ ps) < hitRadius = (Just killed, Event [AttackedEvent dmg o])
+              | otherwise                    = (Nothing, NoEvent )
                   where
                     ps     = soldierPos sldr
                     killed = soldierFuncsWouldKill (soldierFuncs sldr) atk

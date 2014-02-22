@@ -29,16 +29,22 @@ attackWire (AttackData x0 vu@(V3 vx vy _) atk) =
     pos      <- integral x0 -< vel
     traveled <- integral 0  -< speed
     duration                -< ()
-    W.when (< range + 1)    -< traveled
+    W.when (< unoptimal)    -< traveled
+    let
+      attack  | traveled < range' = optimalAtk
+              | otherwise         = unoptimalAtk
     W.until                 -< (Article (PosAng pos angle) attack, die)
   where
-    weap     = attackWeapon atk
-    angle    = atan2 vy vx
-    speed    = fromMaybe 0 (weaponSpeed weap)
-    range    = weaponRange weap
-    vel      = vu ^* speed
-    attack   = ArticleAttack atk
-    duration = maybe returnA W.for (weaponDuration weap)
+    weap      = attackWeapon atk
+    angle     = atan2 vy vx
+    speed     = fromMaybe 0 (weaponSpeed weap)
+    range     = fromMaybe 0 $ weaponRange weap
+    range'    = range + 2.5
+    unoptimal = range * unoptimalRange
+    vel       = vu ^* speed
+    duration  = maybe returnA W.for (weaponDuration weap)
+    optimalAtk   = ArticleAttack $ atk
+    unoptimalAtk = ArticleAttack $ atk { attackDamage = (attackDamage atk) * unoptimalDamage }
 
 maybeAttack :: SoldierOutEvent -> Maybe AttackData
 maybeAttack (AttackEvent atk) = Just atk

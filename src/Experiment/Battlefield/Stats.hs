@@ -1,6 +1,7 @@
 module Experiment.Battlefield.Stats where
 
 import Experiment.Battlefield.Types
+import Data.Maybe (isJust)
 
 bodyHealth :: SoldierBody -> Double
 bodyHealth MeleeBody  = 25
@@ -33,11 +34,14 @@ mountDamageMod Horse = 1.25
 damageVariance :: Double
 damageVariance = 1.15
 
-weaponRange :: Weapon -> Double
-weaponRange Sword   = 7.5
-weaponRange Axe     = 7.5
-weaponRange Bow     = 50
-weaponRange Longbow = 100
+weaponRange :: Weapon -> Maybe Double
+weaponRange Sword   = Nothing
+weaponRange Axe     = Nothing
+weaponRange Bow     = Just 50
+weaponRange Longbow = Just 100
+
+weaponRanged :: Weapon -> Bool
+weaponRanged = isJust . weaponRange
 
 weaponCooldown :: Fractional a => Weapon -> a
 weaponCooldown Sword   = 0.5
@@ -48,3 +52,14 @@ weaponCooldown Longbow = 1.5
 recoveryFactor :: Double
 recoveryFactor = 21
 
+unoptimalRange :: Double
+unoptimalRange = 1.5
+
+unoptimalDamage :: Double
+unoptimalDamage = 1/6
+
+rangedAccuracy :: Double
+rangedAccuracy = 0.9
+
+hitRadius :: Double
+hitRadius = 5
