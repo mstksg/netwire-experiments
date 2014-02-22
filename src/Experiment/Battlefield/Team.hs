@@ -1,18 +1,17 @@
 module Experiment.Battlefield.Team (teamWire, genTeam, TeamWire, TeamWire') where
 
+import Control.Monad
 import Control.Monad.Fix
+import Control.Monad.Random
 import Control.Wire
 import Control.Wire.Unsafe.Event
-import Control.Monad
-import Linear.V3
-import Data.Maybe (mapMaybe)
-import Experiment.Battlefield.Attack
 import Experiment.Battlefield.Soldier
 import Experiment.Battlefield.Types
+import Linear.V3
+import Utils.Helpers                  (foldAcrossl)
 import Utils.Wire.Wrapped
-import Control.Monad.Random
 
-type TeamWire s e m = Wire s e m (Team, ([SoldierInEvents],[Event ()])) Team
+type TeamWire s e m = Wire s e m (Team, [SoldierInEvents]) (Team,[SoldierInEvents])
 type TeamWire' = TeamWire (Timed Double ()) () Identity
 
 teamWire :: (MonadFix m, Monoid e, HasTime t s, Fractional t)
@@ -20,17 +19,16 @@ teamWire :: (MonadFix m, Monoid e, HasTime t s, Fractional t)
     -> [SoldierData]
     -> TeamWire s e m
 teamWire fl sldrs0 =
-  proc (Team _ others _,(messSldrs,messAtks)) -> do
+  proc (Team _ others _,messSldrs) -> do
     startSldrs <- now -< map soldierWire sldrs0
     sldrsEs <- dWireBox' ([], NoEvent) -< (startSldrs, zip (repeat others) messSldrs)
     let
-      sldrs = map fst sldrsEs
-      outEvts = mconcat (map snd sldrsEs)
-      newAtks = mapMaybe maybeAttack <$> outEvts
-      newAtkWires = map attackWire <$> newAtks
-    atks <- dWireBox' NoEvent -< (newAtkWires, messAtks)
-    returnA -< Team fl sldrs atks
-
+      (sldrsArts,outInEvts) = unzip sldrsEs
+      (sldrs,arts) = unzip sldrsArts
+      (_outEs,inEs) = unzip outInEvts
+      arts' = concat arts
+      inEs' = foldAcrossl (<>) mempty inEs
+    returnA -< (Team fl sldrs arts',inEs')
 
 genTeam :: (Monoid e, HasTime t s, MonadFix m, Fractional t)
   => (Double, Double)               -- stage dimensions
