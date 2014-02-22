@@ -43,7 +43,7 @@ weaponRange Longbow = Just 100
 weaponRanged :: Weapon -> Bool
 weaponRanged = isJust . weaponRange
 
-weaponCooldown :: Fractional a => Weapon -> a
+weaponCooldown :: Weapon -> Double
 weaponCooldown Sword   = 0.5
 weaponCooldown Axe     = 1.25
 weaponCooldown Bow     = 1

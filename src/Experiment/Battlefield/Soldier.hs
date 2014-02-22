@@ -20,7 +20,7 @@ import Utils.Wire.Misc
 import Utils.Wire.Noise
 import Utils.Wire.Wrapped
 
-soldierWire :: (MonadFix m, HasTime t s, Monoid e, Fractional t)
+soldierWire :: (MonadFix m, HasTime Double s, Monoid e)
     => SoldierData
     -> Wire s e m ([Maybe Soldier], SoldierInEvents) ((Maybe Soldier,[Article]), (SoldierOutEvents,[SoldierInEvents]))
 soldierWire (SoldierData x0 fl bod weap mnt gen) =
