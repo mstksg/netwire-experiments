@@ -6,7 +6,7 @@ import System.Random
 
 -- definitely breaks FRP.  do not use!
 --
-noisePrim :: (RandomGen g, Random b) => g -> Wire s e m () b
+noisePrim :: forall s e m g b. (RandomGen g, Random b) => g -> Wire s e m () b
 noisePrim gen = mkSFN (const res)
   where
     res = (out, noisePrim gen')
@@ -14,7 +14,7 @@ noisePrim gen = mkSFN (const res)
     
 -- definitely breaks FRP.  do not use!
 --
-noisePrimR :: (RandomGen g, Random b) => (b,b) -> g -> Wire s e m () b
+noisePrimR :: forall s e m g b. (RandomGen g, Random b) => (b,b) -> g -> Wire s e m () b
 noisePrimR range gen = mkSFN . const $ (out, noisePrimR range gen')
   where
     (out,gen') = randomR range gen

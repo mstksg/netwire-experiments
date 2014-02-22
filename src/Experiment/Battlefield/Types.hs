@@ -3,6 +3,7 @@ module Experiment.Battlefield.Types where
 import Render.Sprite
 import Control.Wire
 import Prelude hiding ((.),id)
+import Data.Default
 import Data.Colour
 import Data.Colour.Names
 import Data.Colour.SRGB
@@ -20,10 +21,20 @@ data Stage = Stage { stageDimensions :: (Double,Double)
 data Soldier = Soldier  { soldierPosAng :: PosAng
                         , soldierHealth :: Double
                         , soldierFlag   :: Maybe TeamFlag
+                        , soldierScore  :: SoldierScore
+                        , soldierFuncs  :: SoldierFuncs
                         , soldierBody   :: SoldierBody
                         , soldierWeapon :: Weapon
                         , soldierMount  :: Mount
                         } deriving Show
+
+
+data SoldierScore = SoldierScore { soldierScoreKillCount :: Int
+                                 , soldierScoreAge       :: Double
+                                 } deriving Show
+
+data SoldierFuncs = SoldierFuncs { soldierFuncsWouldKill :: Attack -> Bool
+                                 }
 
 data SoldierBody = MeleeBody | TankBody | RangedBody
                      deriving Show
@@ -35,7 +46,7 @@ data Mount = Foot | Horse
                       deriving Show
 
 data Team = Team { teamFlag     :: TeamFlag
-                 , teamSoldiers :: [Soldier]
+                 , teamSoldiers :: [Maybe Soldier]
                  , teamArticles :: [Article]
                  } deriving Show
 
@@ -72,13 +83,25 @@ data SoldierInEvent = AttackedEvent { attackedEventDamage :: Double
 
 type SoldierInEvents = Event [SoldierInEvent]
 
+data Base = Base { basePos :: V3 Double }
+
 data SoldierData = SoldierData { soldierDataX0     :: V3 Double
                                , soldierDataFlag   :: Maybe TeamFlag
-                               , soldierDataBody   :: SoldierBody
-                               , soldierDataWeapon :: Weapon
-                               , soldierDataMount  :: Mount
+                               , soldierDataClass  :: SoldierClass
                                , soldierDataGen    :: StdGen
                                } deriving Show
+
+data SoldierClass = SoldierClass { soldierClassBody   :: SoldierBody
+                                 , soldierClassWeapon :: Weapon
+                                 , soldierClassMount  :: Mount
+                                 } deriving Show
+
+data SoldierStats = SoldierStats { soldierStatsDPS      :: Double
+                                 , soldierStatsHealth   :: Double
+                                 , soldierStatsSpeed    :: Double
+                                 , soldierStatsCooldown :: Double
+                                 , soldierStatsRange    :: Maybe Double
+                                 }
 
 instance HasSurface Stage where
   toSurface (Stage (w,h) sldrs arts) = Surface zero idTrans 1 ents
@@ -89,7 +112,7 @@ instance HasSurface Stage where
       ents = EntSprite back:(sldrEnts ++ artEnts)
 
 instance HasSurface Soldier where
-  toSurface (Soldier (PosAng (V3 x y _) ang) health fl _ weap mnt) =
+  toSurface (Soldier (PosAng (V3 x y _) ang) health fl _ _ _ weap mnt) =
       Surface (V2 x y) (transRotate ang) 1 [mountEnt,bodyEnt,weaponEnt]
     where
       mountEnt  =
@@ -122,5 +145,15 @@ instance HasSurface Article where
           Bow     -> EntSprite $ Sprite zero (Line (V2 (-2) 0) (V2 2 0)) black 1
           Longbow -> EntSprite $ Sprite zero (Line (V2 (-2) 0) (V2 2 0)) black 1
 
+instance Show SoldierFuncs where
+  show _ = "Soldier Functions"
+
+instance Default SoldierScore where
+  def = SoldierScore 0 0
+
+instance Default SoldierFuncs where
+  def = SoldierFuncs (const False)
+
 soldierPos :: Soldier -> V3 Double
 soldierPos = posAngPos . soldierPosAng
+
