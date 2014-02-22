@@ -1,4 +1,12 @@
-module Experiment.Battlefield.Soldier (soldierWire) where
+module Experiment.Battlefield.Soldier
+  ( soldierWire
+  , swordsmanClass
+  , archerClass
+  , axemanClass
+  , longbowmanClass
+  , horsemanClass
+  , horsearcherClass
+  ) where
 
 import Control.Monad
 import Control.Monad.Fix
@@ -179,3 +187,17 @@ soldierWire (SoldierData x0 fl (SoldierClass bod weap mnt) gen) =
                   where
                     ps     = soldierPos sldr
                     killed = soldierFuncsWouldKill (soldierFuncs sldr) atk
+
+swordsmanClass   :: SoldierClass
+archerClass      :: SoldierClass
+axemanClass      :: SoldierClass
+longbowmanClass  :: SoldierClass
+horsemanClass    :: SoldierClass
+horsearcherClass :: SoldierClass
+
+swordsmanClass   = SoldierClass MeleeBody Sword Foot
+archerClass      = SoldierClass RangedBody Bow Foot
+axemanClass      = SoldierClass TankBody Axe Foot
+longbowmanClass  = SoldierClass RangedBody Longbow Foot
+horsemanClass    = SoldierClass MeleeBody Sword Horse
+horsearcherClass = SoldierClass RangedBody Bow Horse
