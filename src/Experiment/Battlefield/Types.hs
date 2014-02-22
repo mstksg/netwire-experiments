@@ -98,9 +98,11 @@ data SoldierClass = SoldierClass { soldierClassBody   :: SoldierBody
 
 data SoldierStats = SoldierStats { soldierStatsDPS      :: Double
                                  , soldierStatsHealth   :: Double
+                                 , soldierStatsDamage   :: Double
                                  , soldierStatsSpeed    :: Double
                                  , soldierStatsCooldown :: Double
                                  , soldierStatsRange    :: Maybe Double
+                                 , soldierStatsAccuracy :: Double
                                  }
 
 instance HasSurface Stage where
