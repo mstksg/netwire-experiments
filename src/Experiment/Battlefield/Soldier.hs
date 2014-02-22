@@ -1,8 +1,9 @@
 module Experiment.Battlefield.Soldier (soldierWire) where
 
+-- import Debug.Trace
 -- import FRP.Netwire.Noise
+-- import Utils.Wire.Debug
 import Control.Monad
-import Debug.Trace
 import Control.Monad.Fix
 import Control.Wire                  as W
 import Control.Wire.Unsafe.Event
@@ -21,7 +22,6 @@ import Utils.Wire.Misc
 import Utils.Wire.Move
 import Utils.Wire.Noise
 import Utils.Wire.Wrapped
-import Utils.Wire.Debug
 
 soldierWire :: (MonadFix m, HasTime Double s, Monoid e)
     => SoldierData
@@ -52,8 +52,8 @@ soldierWire (SoldierData x0 fl bod weap mnt gen) =
         let
           health = min (startingHealth + recov - damage) startingHealth
           alive = health > 0
-        -- recov <- integral 0 . (recoveryW <|> pure 0) . delay (startingHealth, 0) -< (health, adrenaline)
-        recov <- integral 0 . (recoveryW <|> pure 0) . delay (startingHealth, 0) -< (health, 0)
+        recov <- integral 0 . (recoveryW <|> pure 0) . delay (startingHealth, 0) -< (health, adrenaline)
+        -- recov <- integral 0 . (recoveryW <|> pure 0) . delay (startingHealth, 0) -< (health, 0)
 
       -- seeking and movement
       acc <- accuracy -< ()
@@ -65,8 +65,8 @@ soldierWire (SoldierData x0 fl bod weap mnt gen) =
                       | otherwise      = attackers
           target = seek targetPool pos
           newD
-            -- | alive     = target >>= newAtk pos acc adrenaline
-            | alive     = target >>= newAtk pos acc 0
+            | alive     = target >>= newAtk pos acc adrenaline
+            -- | alive     = target >>= newAtk pos acc 0
             | otherwise = Nothing
           dir    = snd <$> target
 
@@ -82,7 +82,7 @@ soldierWire (SoldierData x0 fl bod weap mnt gen) =
       -- shoot!
       shot  <- shoot . delay Nothing -< newD
       let
-        shotW = shot `traceEvent'` (map attackWire <$> shot)
+        shotW = map attackWire <$> shot
 
       -- manage shots
       rec

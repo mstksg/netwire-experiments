@@ -37,8 +37,6 @@ damageVariance = 1.15
 weaponRange :: Weapon -> Maybe Double
 weaponRange Sword   = Nothing
 weaponRange Axe     = Nothing
--- weaponRange Sword   = Just 7.5
--- weaponRange Axe     = Just 7.5
 weaponRange Bow     = Just 50
 weaponRange Longbow = Just 100
 
