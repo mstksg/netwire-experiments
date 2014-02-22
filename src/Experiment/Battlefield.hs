@@ -6,6 +6,7 @@ import Control.Monad.Random
 import Control.Wire
 import Data.Colour.Names
 import Experiment.Battlefield.Team
+import Data.Maybe (catMaybes)
 import Experiment.Battlefield.Types
 import Prelude hiding               ((.),id)
 import Render.Render
@@ -38,9 +39,12 @@ simpleStage ::
 simpleStage dim t1w t2w = proc _ -> do
     rec
       let
-      (team1@(Team _ t1as t1ds), t2ahits) <- t1w -< (team2, t1ahits)
-      (team2@(Team _ t2as t2ds), t1ahits) <- t2w -< (team1, t2ahits)
-    returnA -< Stage dim (t1as ++ t2as) (t1ds ++ t2ds)
+      (team1@(Team _ t1ss t1as), t2ahits) <- t1w -< (team2, t1ahits)
+      (team2@(Team _ t2ss t2as), t1ahits) <- t2w -< (team1, t2ahits)
+    let
+      sldrs = catMaybes (t1ss ++ t2ss)
+      arts  = t1as ++ t2as
+    returnA -< Stage dim sldrs arts
 
 testStage :: Wire' () Stage -> IO ()
 testStage w =

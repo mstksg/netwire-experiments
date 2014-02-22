@@ -35,7 +35,7 @@ data Mount = Foot | Horse
                       deriving Show
 
 data Team = Team { teamFlag     :: TeamFlag
-                 , teamSoldiers :: [Soldier]
+                 , teamSoldiers :: [Maybe Soldier]
                  , teamArticles :: [Article]
                  } deriving Show
 

@@ -5,7 +5,7 @@ import Control.Monad.Fix
 import Control.Wire                  as W
 import Control.Wire.Unsafe.Event
 import Data.List                     (minimumBy, mapAccumL)
-import Data.Maybe                    (mapMaybe)
+import Data.Maybe                    (mapMaybe, catMaybes)
 import Data.Ord                      (comparing)
 import Experiment.Battlefield.Attack
 import Experiment.Battlefield.Stats
@@ -20,15 +20,27 @@ import Utils.Wire.Wrapped
 
 soldierWire :: (MonadFix m, HasTime t s, Monoid e, Fractional t)
     => SoldierData
-    -> Wire s e m ([Soldier], SoldierInEvents) ((Soldier,[Article]), (SoldierOutEvents,[SoldierInEvents]))
+    -> Wire s e m ([Maybe Soldier], SoldierInEvents) ((Maybe Soldier,[Article]), (SoldierOutEvents,[SoldierInEvents]))
 soldierWire (SoldierData x0 fl bod weap mnt gen) =
   proc (targets,mess) -> do
 
     let
-      targetsPos = map soldierPos targets
+      targetsPos = map soldierPos (catMaybes targets)
       attackeds = mapMaybe maybeAttacked <$> mess
 
     attackers <- curated -< (map snd <$> attackeds, findAttacker targetsPos)
+
+    -- calculate damage from hits
+    let
+      hit = sum . map fst <$> attackeds
+    damage <- hold . accumE (+) 0 <|> pure 0 -< hit
+
+    rec
+      -- calculate health, plus recovery
+      let
+        health = min (startingHealth + recov - damage) startingHealth
+        alive = health > 0
+      recov <- integral 0 . ((pure recovery . W.when (< startingHealth)) <|> pure 0) . delay startingHealth -< health
 
     -- seeking and movement
     rec
@@ -37,7 +49,9 @@ soldierWire (SoldierData x0 fl bod weap mnt gen) =
         targetPool  | null attackers = targetsPos
                     | otherwise      = attackers
         target = seek targetPool pos
-        newD   = target >>= newAtk pos
+        newD
+          | alive     = target >>= newAtk pos
+          | otherwise = Nothing
         dir    = snd <$> target
 
         -- move to target?
@@ -48,11 +62,15 @@ soldierWire (SoldierData x0 fl bod weap mnt gen) =
 
       pos <- integral x0 -< vel
 
+    -- calculate last direction facing.  holdJust breaks FRP.
+    (V3 vx vy _) <- holdJust zero -< dir
+
     -- shoot!
     shot  <- shoot -< newD
     let
       shotW = map attackWire <$> shot
 
+    -- manage shots
     rec
       atks    <- dWireBox' NoEvent -< (shotW, atkDies)
       let
@@ -60,31 +78,23 @@ soldierWire (SoldierData x0 fl bod weap mnt gen) =
         atkDies = map (mconcat . map (() <$)) atkHits
         atkOuts = foldAcrossl (<>) mempty atkHits
 
-
-
-    -- calculate hit damage
-    let
-      hit = getSum . mconcat . map (Sum . fst) <$> attackeds
-    damage <- hold . accumE (+) 0 <|> pure 0 -< hit
-
-    rec
-      -- calculate health, plus recovery
-      let
-        health = min (startingHealth + recov - damage) startingHealth
-      recov <- integral 0 . ((pure recovery . W.when (< startingHealth)) <|> pure 0) . delay startingHealth -< health
-
-    -- calculate last direction facing.  holdJust breaks FRP.
-    (V3 vx vy _) <- holdJust zero -< dir
-
     let
       angle = atan2 vy vx
-      soldier = Soldier (PosAng pos angle) (health / startingHealth) fl bod weap mnt
+      hasAtks = not (null atks)
 
-    -- inhibit when health > 0
-    W.unless (<= 0) -< health
+      soldier       = Soldier
+                        (PosAng pos angle)
+                        (health / startingHealth)
+                        fl bod weap mnt
+      soldier'
+        | alive     = Just soldier
+        | otherwise = Nothing
+
+    -- inhibit when dead and no more attacks
+    W.when (uncurry (||)) -< (alive, hasAtks)
 
     outE <- never -< ()
-    returnA -< ((soldier,atks),(outE,atkOuts))
+    returnA -< ((soldier',atks),(outE,atkOuts))
 
   where
     newAtk p (tDist, tDir)
@@ -122,13 +132,14 @@ soldierWire (SoldierData x0 fl bod weap mnt gen) =
           ) --> oneShot
         coupleRandom = couple (noisePrimR (1/damageVariance,damageVariance) gen)
         applyRandom (atk,r) = [atk (r * baseDamage)]
-    checkAttacks :: [Article] -> [Soldier] -> [[SoldierInEvents]]
+    checkAttacks :: [Article] -> [Maybe Soldier] -> [[SoldierInEvents]]
     checkAttacks atks sldrs = map makeKill atks
       where
         makeKill :: Article -> [SoldierInEvents]
         makeKill (Article (PosAng pa _) (ArticleAttack (Attack _ dmg o))) = snd $ mapAccumL f False sldrs
           where
-            f True _                              = (True , NoEvent )
-            f False sldr
+            f b      Nothing                      = (b , NoEvent)
+            f True   _                            = (True , NoEvent )
+            f False (Just sldr)
               | norm (pa ^-^ soldierPos sldr) < 5 = (True , Event [AttackedEvent dmg o])
               | otherwise                         = (False, NoEvent )

@@ -8,6 +8,7 @@ import Control.Wire.Unsafe.Event
 import Experiment.Battlefield.Soldier
 import Experiment.Battlefield.Types
 import Linear.V3
+import Prelude hiding                 ((.),id)
 import Utils.Helpers                  (foldAcrossl)
 import Utils.Wire.Wrapped
 
