@@ -3,6 +3,7 @@ module Experiment.Battlefield.Attack (maybeAttacked, maybeAttack, attackWire) wh
 import Control.Wire                 as W
 import Data.Maybe                   (fromMaybe)
 import Experiment.Battlefield.Types
+import Experiment.Battlefield.Stats
 import FRP.Netwire.Move
 import Linear.V3
 import Linear.Vector
@@ -14,27 +15,36 @@ weaponSpeed Axe     = Nothing
 weaponSpeed Bow     = Just 400
 weaponSpeed Longbow = Just 400
 
-weaponDuration :: Fractional a => Weapon -> Maybe a
-weaponDuration Sword    = Just 0.2
-weaponDuration Axe      = Just 0.3
+weaponDuration :: Weapon -> Maybe Double
+weaponDuration Sword    = Just 0.25
+weaponDuration Axe      = Just 0.5
 weaponDuration Bow      = Nothing
 weaponDuration Longbow  = Nothing
 
-attackWire :: (Monad m, Monoid e, HasTime t s, Fractional t)
+attackWire :: (Monad m, Monoid e, HasTime Double s)
     => AttackData
     -> Wire s e m (Event ()) Article
 attackWire (AttackData x0 vu@(V3 vx vy _) atk) =
   proc die -> do
-    pos <- integral x0 -< vel
-    duration           -< ()
-    W.until            -< (Article (PosAng pos angle) attack, die)
+    pos      <- integral x0 -< vel
+    traveled <- integral 0  -< speed
+    duration                -< ()
+    W.when (< unoptimal)    -< traveled
+    let
+      attack  | traveled < range' = optimalAtk
+              | otherwise         = unoptimalAtk
+    W.until                 -< (Article (PosAng pos angle) attack, die)
   where
-    weap     = attackWeapon atk
-    angle    = atan2 vy vx
-    speed    = fromMaybe 0 (weaponSpeed weap)
-    vel      = vu ^* speed
-    attack   = ArticleAttack atk
-    duration = maybe returnA W.for (weaponDuration weap)
+    weap      = attackWeapon atk
+    angle     = atan2 vy vx
+    speed     = fromMaybe 0 (weaponSpeed weap)
+    range     = fromMaybe 1 (weaponRange weap)
+    range'    = range + hitRadius
+    unoptimal = range * unoptimalRange
+    vel       = vu ^* speed
+    duration  = maybe returnA W.for (weaponDuration weap)
+    optimalAtk   = ArticleAttack $ atk
+    unoptimalAtk = ArticleAttack $ atk { attackDamage = (attackDamage atk) * unoptimalDamage }
 
 maybeAttack :: SoldierOutEvent -> Maybe AttackData
 maybeAttack (AttackEvent atk) = Just atk

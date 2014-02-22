@@ -1,39 +1,74 @@
-module Experiment.Battlefield.Soldier (soldierWire) where
+module Experiment.Battlefield.Soldier
+  ( soldierWire
+  , swordsmanClass
+  , archerClass
+  , axemanClass
+  , longbowmanClass
+  , horsemanClass
+  , horsearcherClass
+  , allClasses
+  , classStats
+  , classWorth
+  ) where
 
 import Control.Monad
 import Control.Monad.Fix
 import Control.Wire                  as W
-import Data.List                     (minimumBy)
-import Data.Maybe                    (mapMaybe)
+import Control.Wire.Unsafe.Event
+import Data.List                     (minimumBy, mapAccumL)
+import Data.Maybe                    (mapMaybe, catMaybes, fromMaybe)
 import Data.Ord                      (comparing)
 import Experiment.Battlefield.Attack
+import Experiment.Battlefield.Stats
 import Experiment.Battlefield.Types
 import FRP.Netwire.Move
+-- import FRP.Netwire.Noise
 import Linear
 import Prelude hiding                ((.),id)
+import System.Random
+import Utils.Helpers                 (foldAcrossl)
 import Utils.Wire.Misc
 import Utils.Wire.Noise
+import Utils.Wire.Wrapped
 
-soldierWire :: (MonadFix m, HasTime t s, Monoid e, Fractional t)
+soldierWire :: (MonadFix m, HasTime Double s, Monoid e)
     => SoldierData
-    -> Wire s e m ([Soldier], SoldierInEvents) (Soldier, SoldierOutEvents)
-soldierWire (SoldierData x0 fl bod weap mnt gen) =
+    -> Wire s e m ([Maybe Soldier], SoldierInEvents) ((Maybe Soldier,[Article]), (SoldierOutEvents,[SoldierInEvents]))
+soldierWire (SoldierData x0 fl (SoldierClass bod weap mnt) gen) =
   proc (targets,mess) -> do
 
+    -- it's good to be alive!
+    age <- integral 0 -< 1
+
     let
-      targetsPos = map soldierPos targets
+      targetsPos = map soldierPos (catMaybes targets)
       attackeds = mapMaybe maybeAttacked <$> mess
 
     attackers <- curated -< (map snd <$> attackeds, findAttacker targetsPos)
 
+    -- calculate damage from hits
+    let
+      hit = sum . map fst <$> attackeds
+    damage <- hold . accumE (+) 0 <|> pure 0 -< hit
+
+    rec
+      -- calculate health, plus recovery
+      let
+        health = min (startingHealth + recov - damage) startingHealth
+        alive = health > 0
+      recov <- integral 0 . ((pure recovery . W.when (< startingHealth)) <|> pure 0) . delay startingHealth -< health
+
     -- seeking and movement
+    acc <- accuracy -< ()
     rec
       let
         -- find the target and the direction to face
-        targetPool  | null attackers = targetsPos
-                    | otherwise      = attackers
+        targetPool  | null attackers || not isRanged = targetsPos
+                    | otherwise                      = attackers
         target = seek targetPool pos
-        newD   = target >>= newAtk pos
+        newD
+          | alive     = target >>= newAtk pos acc
+          | otherwise = Nothing
         dir    = snd <$> target
 
         -- move to target?
@@ -44,42 +79,72 @@ soldierWire (SoldierData x0 fl bod weap mnt gen) =
 
       pos <- integral x0 -< vel
 
-    -- shoot!
-    shot  <- shoot -< newD
-    -- this is bad frp but :|
-    shotR <- couple (noisePrimR (1/damageVariance,damageVariance) gen) -< shot
-    let
-      shot' = (\(atk,r) -> [atk (r * baseDamage)]) <$> shotR
-
-    -- calculate hit damage
-    let
-      hit = getSum . mconcat . map (Sum . fst) <$> attackeds
-    damage <- hold . accumE (+) 0 <|> pure 0 -< hit
-
-    rec
-      -- calculate health, plus recovery
-      let
-        health = min (startingHealth + recov - damage) startingHealth
-      recov <- integral 0 . ((pure recovery . W.when (< startingHealth)) <|> pure 0) . delay startingHealth -< health
-
     -- calculate last direction facing.  holdJust breaks FRP.
     (V3 vx vy _) <- holdJust zero -< dir
 
+    -- shoot!
+    shot  <- shoot -< newD
+    let
+      shotW = map attackWire <$> shot
+
+    -- manage shots
+    rec
+      atks    <- dWireBox' NoEvent -< (shotW, atkDies)
+      let
+        atkHitsKills = checkAttacks atks targets
+        (kills,atkHits) = unzip atkHitsKills
+        kills' = (length . filter id) kills
+        killE | kills' > 0 = Event kills'
+              | otherwise  = NoEvent
+        atkDies = map (mconcat . map (() <$)) atkHits
+        atkOuts = foldAcrossl (<>) mempty atkHits
+
+    killCount <- hold . accumE (+) 0 <|> 0 -< killE
+
     let
       angle = atan2 vy vx
-      soldier = Soldier (PosAng pos angle) (health / startingHealth) fl bod weap mnt
+      hasAtks = not (null atks)
 
-    -- inhibit when health > 0
-    W.unless (<= 0) -< health
-    returnA -< (soldier,shot')
+      wouldKill = (>= health) . attackDamage
+      funcs     = SoldierFuncs wouldKill
+      score     = SoldierScore killCount age
+
+      soldier       = Soldier
+                        (PosAng pos angle)
+                        (health / startingHealth)
+                        fl score funcs bod weap mnt
+      soldier'
+        | alive     = Just soldier
+        | otherwise = Nothing
+
+    -- inhibit when dead and no more attacks
+    W.when (uncurry (||)) -< (alive, hasAtks)
+
+    outE <- never -< ()
+    returnA -< ((soldier',atks),(outE,atkOuts))
 
   where
-    newAtk p (tDist, tDir)
+    (dmgGen,accGen') = split gen
+    (_firstAcc,_accGen) = randomR (-accLimit,accLimit) accGen'
+    accLimit = atan $ (hitRadius / rangedAccuracy / 2) / range
+    isRanged = weaponRanged weap
+    accuracy
+      -- | isRanged  = Just <$> (hold . noiseR coolDownTime (-accLimit,accLimit) accGen <|> pure firstAcc)
+      | otherwise = pure Nothing
+    newAtk :: V3 Double -> Maybe Double -> (Double, V3 Double) -> Maybe (Double -> AttackData)
+    newAtk p acc (tDist, tDir)
       | tDist > range = Nothing
-      | otherwise     = Just $ AttackEvent . AttackData aX0 tDir . flip (Attack weap) aX0
+      | otherwise     = Just $ AttackData aX0 tDir' . flip (Attack weap) aX0
           where
-            aX0 = p ^+^ (tDir ^* 7.5)
-    range = weaponRange weap
+            tDir' =
+              case acc of
+                Just a  -> (rot2 a) !* tDir
+                Nothing -> tDir
+            aX0 = p ^+^ (tDir' ^* 7.5)
+    rot2 ang = V3 (V3 (cos ang) (-1 * (sin ang)) 0)
+                  (V3 (sin ang) (cos ang)        0)
+                  (V3 0         0                1)
+    range = fromMaybe 7.5 $ weaponRange weap
     startingHealth = bodyHealth bod * mountHealthMod mnt
     speed = mountSpeed mnt * bodySpeedMod bod
     recovery = startingHealth / recoveryFactor
@@ -96,63 +161,72 @@ soldierWire (SoldierData x0 fl bod weap mnt gen) =
             d  = norm dv
             u  = dv ^/ d
     findAttacker :: [V3 Double]  -> V3 Double -> Maybe (V3 Double)
-    -- findAttacker others pos = snd <$> mfilter ((< 9) . fst . fst) (findClosest others pos)
     findAttacker others pos = snd <$> mfilter ((< 9) . fst . fst) (findClosest others pos)
-    -- seekOrigin :: V3 Double -> Event [V3 Double] -> V3 Double
-    -- seekOrigin pos attackedFrom
-    --   | null <$> attackedFrom = pos
     seek others = (fst <$>) . findClosest others
-    shoot = (proc newA -> do
-      case newA of
-        Nothing -> never -< ()
-        Just a  -> do
-          shot <- W.for coolDownTime . now -< a
-          returnA -< shot
-      ) --> shoot
-    -- angle = proc (V3 vx vy _) -> do
+    shoot = fmap applyRandom <$> coupleRandom . oneShot
+      where
+        oneShot = (proc newA -> do
+          case newA of
+            Nothing -> never -< ()
+            Just a  -> do
+              shot <- W.for coolDownTime . now -< a
+              returnA -< shot
+          ) --> oneShot
+        coupleRandom = couple (noisePrimR (1/damageVariance,damageVariance) dmgGen)
+        applyRandom (atk,r) = [atk (r * baseDamage)]
+    checkAttacks :: [Article] -> [Maybe Soldier] -> [(Bool,[SoldierInEvents])]
+    checkAttacks atks sldrs = map makeKill atks
+      where
+        makeKill :: Article -> (Bool, [SoldierInEvents])
+        makeKill (Article (PosAng pa _)
+                 (ArticleAttack atk@(Attack _ dmg o)))
+                    = first (fromMaybe False) $ mapAccumL f Nothing sldrs
+          where
+            f b      Nothing         = (b    , NoEvent)
+            f b@(Just _)   _               = (b, NoEvent)
+            f Nothing (Just sldr)
+              | norm (pa ^-^ ps) < hitRadius = (Just killed, Event [AttackedEvent dmg o])
+              | otherwise                    = (Nothing, NoEvent )
+                  where
+                    ps     = soldierPos sldr
+                    killed = soldierFuncsWouldKill (soldierFuncs sldr) atk
 
-bodyHealth :: SoldierBody -> Double
-bodyHealth MeleeBody  = 25
-bodyHealth TankBody   = 55
-bodyHealth RangedBody = 12
+swordsmanClass   :: SoldierClass
+archerClass      :: SoldierClass
+axemanClass      :: SoldierClass
+longbowmanClass  :: SoldierClass
+horsemanClass    :: SoldierClass
+horsearcherClass :: SoldierClass
 
-mountHealthMod :: Mount -> Double
-mountHealthMod Foot  = 1
-mountHealthMod Horse = 1.5
+swordsmanClass   = SoldierClass MeleeBody Sword Foot
+archerClass      = SoldierClass RangedBody Bow Foot
+axemanClass      = SoldierClass TankBody Axe Foot
+longbowmanClass  = SoldierClass RangedBody Longbow Foot
+horsemanClass    = SoldierClass MeleeBody Sword Horse
+horsearcherClass = SoldierClass RangedBody Bow Horse
 
-mountSpeed :: Mount -> Double
-mountSpeed Foot   = 25
-mountSpeed Horse  = 75
+allClasses :: [SoldierClass]
+allClasses = [ swordsmanClass, archerClass, axemanClass
+             , longbowmanClass, horsemanClass, horsearcherClass]
 
-bodySpeedMod :: SoldierBody -> Double
-bodySpeedMod MeleeBody  = 1
-bodySpeedMod TankBody   = 0.5
-bodySpeedMod RangedBody = 1
+classStats :: SoldierClass -> SoldierStats
+classStats (SoldierClass bod weap mnt) = SoldierStats dps hlt spd cld rng
+  where
+    dps = weaponDPS weap
+    hlt = bodyHealth bod * mountHealthMod mnt
+    spd = mountSpeed mnt * bodySpeedMod bod
+    cld = weaponCooldown weap
+    rng = weaponRange weap
 
-weaponDPS :: Weapon -> Double
-weaponDPS Sword   = 8.0
-weaponDPS Axe     = 10.0
-weaponDPS Bow     = 2.75
-weaponDPS Longbow = 2.5
+classWorth :: SoldierClass -> Double
+classWorth = statsWorth . classStats
+  where
+    statsWorth (SoldierStats dps hlt spd cld rng) = sum statZipped - shunter
+      where
+        shunter    = 2
+        statArr    = [ dps , hlt , spd , 1/cld , fromMaybe 0   rng ]
+        statNorm   = [ 5   , 25  , 33  , 1     , 25              ]
+        statWeight = [ 1.85, 1.67, 0.75, 0.2   , 1.5              ]
+        statZipped = zipWith3 mul3 statArr statNorm statWeight
+        mul3 a n z = (a/n)*z
 
-mountDamageMod :: Mount -> Double
-mountDamageMod Foot  = 1
-mountDamageMod Horse = 1.25
-
-damageVariance :: Double
-damageVariance = 1.15
-
-weaponRange :: Weapon -> Double
-weaponRange Sword   = 7.5
-weaponRange Axe     = 7.5
-weaponRange Bow     = 50
-weaponRange Longbow = 100
-
-weaponCooldown :: Fractional a => Weapon -> a
-weaponCooldown Sword   = 0.5
-weaponCooldown Axe     = 1.25
-weaponCooldown Bow     = 1
-weaponCooldown Longbow = 1.5
-
-recoveryFactor :: Double
-recoveryFactor = 21
