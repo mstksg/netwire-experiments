@@ -24,8 +24,8 @@ bodySpeedMod RangedBody = 1.2
 weaponDPS :: Weapon -> Double
 weaponDPS Sword   = 7.5
 weaponDPS Axe     = 12.0
-weaponDPS Bow     = 3
-weaponDPS Longbow = 2.25
+weaponDPS Bow     = 2.75
+weaponDPS Longbow = 4
 
 mountDamageMod :: Mount -> Double
 mountDamageMod Foot  = 1
@@ -52,14 +52,11 @@ weaponCooldown Longbow = 1.5
 recoveryFactor :: Double
 recoveryFactor = 21
 
-unoptimalRange :: Double
-unoptimalRange = 1.5
-
-unoptimalDamage :: Double
-unoptimalDamage = 1/6
+maximumRange :: Double
+maximumRange = 2.0
 
 rangedAccuracy :: Double
-rangedAccuracy = 0.9
+rangedAccuracy = 0.85
 
 hitRadius :: Double
 hitRadius = 5

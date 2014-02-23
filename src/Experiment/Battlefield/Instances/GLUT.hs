@@ -9,10 +9,11 @@ import Render.Surface
 import Graphics.UI.GLUT
 
 instance GLUTRenderable Stage where
-  renderGLUT stg@(Stage (w,h) _ _) = do
+  renderGLUT stg = do
     Size ww wh <- get windowSize
 
     let
+      (w, h)     = stageDimensions stg
       (ww', wh') = (fromIntegral ww, fromIntegral wh)
       ratio = ww' / wh'
       ratio' = w / h

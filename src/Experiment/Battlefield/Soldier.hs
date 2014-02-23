@@ -22,7 +22,7 @@ import Experiment.Battlefield.Attack
 import Experiment.Battlefield.Stats
 import Experiment.Battlefield.Types
 import FRP.Netwire.Move
--- import FRP.Netwire.Noise
+import FRP.Netwire.Noise
 import Linear
 import Prelude hiding                ((.),id)
 import System.Random
@@ -34,7 +34,7 @@ import Utils.Wire.Wrapped
 soldierWire :: (MonadFix m, HasTime Double s, Monoid e)
     => SoldierData
     -> Wire s e m ([Maybe Soldier], SoldierInEvents) ((Maybe Soldier,[Article]), (SoldierOutEvents,[SoldierInEvents]))
-soldierWire (SoldierData x0 fl (SoldierClass bod weap mnt) gen) =
+soldierWire (SoldierData x0 fl cls@(SoldierClass bod weap mnt) gen) =
   proc (targets,mess) -> do
 
     -- it's good to be alive!
@@ -51,12 +51,11 @@ soldierWire (SoldierData x0 fl (SoldierClass bod weap mnt) gen) =
       hit = sum . map fst <$> attackeds
     damage <- hold . accumE (+) 0 <|> pure 0 -< hit
 
-    rec
-      -- calculate health, plus recovery
-      let
-        health = min (startingHealth + recov - damage) startingHealth
-        alive = health > 0
-      recov <- integral 0 . ((pure recovery . W.when (< startingHealth)) <|> pure 0) . delay startingHealth -< health
+    -- calculate health, plus recovery
+    recov <- integralWith (\d a -> min d a) 0 -< (recovery, damage)
+    let
+      health = maxHealth + recov - damage
+      alive = health > 0
 
     -- seeking and movement
     acc <- accuracy -< ()
@@ -111,7 +110,7 @@ soldierWire (SoldierData x0 fl (SoldierClass bod weap mnt) gen) =
 
       soldier       = Soldier
                         (PosAng pos angle)
-                        (health / startingHealth)
+                        (health / maxHealth)
                         fl score funcs bod weap mnt
       soldier'
         | alive     = Just soldier
@@ -124,12 +123,14 @@ soldierWire (SoldierData x0 fl (SoldierClass bod weap mnt) gen) =
     returnA -< ((soldier',atks),(outE,atkOuts))
 
   where
+    SoldierStats _ maxHealth baseDamage speed coolDown range' classAcc = classStats cls
     (dmgGen,accGen') = split gen
-    (_firstAcc,_accGen) = randomR (-accLimit,accLimit) accGen'
-    accLimit = atan $ (hitRadius / rangedAccuracy / 2) / range
+    (firstAcc,accGen) = randomR (-accLimit,accLimit) accGen'
+    accLimit = atan $ (hitRadius * 1.1 / classAcc / 2) / range
+    range = fromMaybe 7.5 range'
     isRanged = weaponRanged weap
     accuracy
-      -- | isRanged  = Just <$> (hold . noiseR coolDownTime (-accLimit,accLimit) accGen <|> pure firstAcc)
+      | isRanged  = Just <$> (hold . noiseR coolDown (-accLimit,accLimit) accGen <|> pure firstAcc)
       | otherwise = pure Nothing
     newAtk :: V3 Double -> Maybe Double -> (Double, V3 Double) -> Maybe (Double -> AttackData)
     newAtk p acc (tDist, tDir)
@@ -144,12 +145,7 @@ soldierWire (SoldierData x0 fl (SoldierClass bod weap mnt) gen) =
     rot2 ang = V3 (V3 (cos ang) (-1 * (sin ang)) 0)
                   (V3 (sin ang) (cos ang)        0)
                   (V3 0         0                1)
-    range = fromMaybe 7.5 $ weaponRange weap
-    startingHealth = bodyHealth bod * mountHealthMod mnt
-    speed = mountSpeed mnt * bodySpeedMod bod
-    recovery = startingHealth / recoveryFactor
-    baseDamage = weaponDPS weap * (realToFrac coolDownTime) * mountDamageMod mnt
-    coolDownTime = weaponCooldown weap
+    recovery = maxHealth / recoveryFactor
     findClosest :: [V3 Double] -> V3 Double -> Maybe ((Double, V3 Double),V3 Double)
     findClosest [] _       = Nothing
     findClosest others pos = Just $ minimumBy (comparing fst) otherPs
@@ -169,7 +165,7 @@ soldierWire (SoldierData x0 fl (SoldierClass bod weap mnt) gen) =
           case newA of
             Nothing -> never -< ()
             Just a  -> do
-              shot <- W.for coolDownTime . now -< a
+              shot <- W.for coolDown . now -< a
               returnA -< shot
           ) --> oneShot
         coupleRandom = couple (noisePrimR (1/damageVariance,damageVariance) dmgGen)
@@ -210,23 +206,25 @@ allClasses = [ swordsmanClass, archerClass, axemanClass
              , longbowmanClass, horsemanClass, horsearcherClass]
 
 classStats :: SoldierClass -> SoldierStats
-classStats (SoldierClass bod weap mnt) = SoldierStats dps hlt spd cld rng
+classStats (SoldierClass bod weap mnt) = SoldierStats dps hlt dmg spd cld rng acc
   where
-    dps = weaponDPS weap
+    dps = weaponDPS weap * mountDamageMod mnt / acc
     hlt = bodyHealth bod * mountHealthMod mnt
+    dmg = dps * cld
     spd = mountSpeed mnt * bodySpeedMod bod
     cld = weaponCooldown weap
     rng = weaponRange weap
+    acc = fromMaybe 1 (rangedAccuracy <$ rng)
 
 classWorth :: SoldierClass -> Double
 classWorth = statsWorth . classStats
   where
-    statsWorth (SoldierStats dps hlt spd cld rng) = sum statZipped - shunter
+    statsWorth (SoldierStats dps hlt dmg spd _ rng _) = sum statZipped - shunter
       where
-        shunter    = 2
-        statArr    = [ dps , hlt , spd , 1/cld , fromMaybe 0   rng ]
-        statNorm   = [ 5   , 25  , 33  , 1     , 25              ]
-        statWeight = [ 1.85, 1.67, 0.75, 0.2   , 1.5              ]
+        shunter    = 2.5
+        statArr    = [ dps , hlt , spd , dmg , fromMaybe 0   rng ]
+        statNorm   = [ 5   , 25  , 33  , 5   , 25              ]
+        statWeight = [ 1.85, 1.67, 0.75, 0.5 , 1.5              ]
         statZipped = zipWith3 mul3 statArr statNorm statWeight
         mul3 a n z = (a/n)*z
 

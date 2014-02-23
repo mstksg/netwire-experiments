@@ -4,3 +4,7 @@
 [Sun Feb  2 03:04:30 PST 2014]	okay so mostly works now..except...sometimes the arrows dont die when hit
 [Wed Feb 19 13:12:17 PST 2014]	outstanding problems. every attack is splash. cannot attack real attacker
 [Wed Feb 19 13:12:22 PST 2014]	kill count
+[Sat Feb 22 15:00:36 PST 2014]	should not bother with Article creation and stuff for melee
+[Sun Feb 23 13:38:19 PST 2014]	there is definitely some wire box mixing up going on because of people randomly finding the wrong targets or something. should nail that somehow. it is mostly from them thinking that the wrong people targeted them.
+[Sun Feb 23 14:08:49 PST 2014]	probably a case of the arrow hitting the wrong target
+[Sun Feb 23 14:08:59 PST 2014]	how to debug? perhaps print location of last hit ove rhead?
