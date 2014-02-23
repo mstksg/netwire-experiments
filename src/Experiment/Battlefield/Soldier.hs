@@ -51,12 +51,11 @@ soldierWire (SoldierData x0 fl cls@(SoldierClass bod weap mnt) gen) =
       hit = sum . map fst <$> attackeds
     damage <- hold . accumE (+) 0 <|> pure 0 -< hit
 
-    rec
-      -- calculate health, plus recovery
-      let
-        health = min (maxHealth + recov - damage) maxHealth
-        alive = health > 0
-      recov <- integral 0 . ((pure recovery . W.when (< maxHealth)) <|> pure 0) . delay maxHealth -< health
+    -- calculate health, plus recovery
+    recov <- integralWith (\d a -> min d a) 0 -< (recovery, damage)
+    let
+      health = maxHealth + recov - damage
+      alive = health > 0
 
     -- seeking and movement
     acc <- accuracy -< ()

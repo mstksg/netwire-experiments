@@ -21,12 +21,12 @@ stageWire :: (MonadFix m, Monoid e, HasTime Double s)
   -> TeamData
   -> Wire s e m () Stage
 stageWire dim@(w,h) t1d t2d = proc _ -> do
-    let t1bes' = repeat NoEvent
-        t2bes' = repeat NoEvent
+    -- let t1bes' = repeat NoEvent
+    --     t2bes' = repeat NoEvent
 
     rec
-      (team1@(Team _ t1ss t1as _t1bs), t2ahits) <- t1w . delay teamWireDelayer -< (team2, (t1bes', t1ahits))
-      (team2@(Team _ t2ss t2as _t2bs), t1ahits) <- t2w . delay teamWireDelayer -< (team1, (t2bes', t2ahits))
+      (team1@(Team _ t1ss t1as _t1bs), t2ahits) <- t1w . delay teamWireDelayer -< (team2, (t1bes, t1ahits))
+      (team2@(Team _ t2ss t2as _t2bs), t1ahits) <- t2w . delay teamWireDelayer -< (team1, (t2bes, t2ahits))
 
       let t1ss' = catMaybes t1ss
           t2ss' = catMaybes t2ss
@@ -34,7 +34,7 @@ stageWire dim@(w,h) t1d t2d = proc _ -> do
       (bases,(t1bes,t2bes)) <- basesWire (t1fl,t2fl) b0s . delay ([],[]) -< (t1ss',t2ss')
 
     let sldrs = t1ss' ++ t2ss'
-        arts  = t1as ++ t2as
+        arts  = t1as  ++ t2as
 
     returnA -< Stage dim sldrs arts bases
 
@@ -44,8 +44,10 @@ stageWire dim@(w,h) t1d t2d = proc _ -> do
 
     t1w = teamWire b0s t1d
     t2w = teamWire b0s t2d
-    b1s = makeBase t1fl <$> [V3 (w/6) (h/6) 0, V3 (w/6) (5*h/6) 0]
-    b2s = makeBase t2fl <$> [V3 (5*w/6) (h/6) 0, V3 (5*w/6) (5*h/6) 0]
+    -- b1s = makeBase t1fl <$> [V3 (w/6) (h/6) 0, V3 (w/6) (5*h/6) 0]
+    -- b2s = makeBase t2fl <$> [V3 (5*w/6) (h/6) 0, V3 (5*w/6) (5*h/6) 0]
+    b1s = makeBase t1fl <$> [V3 (w/6) (h/6) 0, V3 (5*w/6) (5*h/6) 0]
+    b2s = makeBase t2fl <$> [V3 (5*w/6) (h/6) 0, V3 (w/6) (5*h/6) 0]
     b0s = b1s ++ b2s
     makeBase fl pb = Base pb (Just fl) 1 Nothing
 
@@ -65,11 +67,12 @@ basesWire fls@(t1fl,_t2fl) b0s = proc inp -> do
   where
     sortEvts (t1bes,t2bes) swaps =
         case swaps of
-          Event (Just fl,_) | fl == t1fl -> (Event [GetBase]:t1bes,NoEvent:t2bes)
-                            | otherwise  -> (NoEvent:t1bes,Event [GetBase]:t2bes)
-          Event (_,Just fl) | fl == t1fl -> (Event [LoseBase]:t1bes,NoEvent:t2bes)
-                            | otherwise  -> (NoEvent:t1bes,Event [LoseBase]:t2bes)
-          NoEvent                        -> (NoEvent:t1bes,NoEvent:t2bes)
+          Event (Just fl,_) | fl == t1fl -> ( Event [GetBase]  : t1bes, NoEvent          : t2bes )
+                            | otherwise  -> ( NoEvent          : t1bes, Event [GetBase]  : t2bes )
+          Event (_,_)                    -> ( Event [LoseBase] : t1bes, Event [LoseBase] : t2bes )
+          -- Event (_,Just fl) | fl == t1fl -> ( Event [LoseBase] : t1bes, NoEvent          : t2bes )
+          --                   | otherwise  -> ( NoEvent          : t1bes, Event [LoseBase] : t2bes )
+          NoEvent                        -> ( NoEvent          : t1bes, NoEvent          : t2bes )
 
 baseWire :: forall m e s. (MonadFix m, Monoid e, HasTime Double s)
   => (TeamFlag, TeamFlag)

@@ -54,7 +54,8 @@ teamWire b0s (TeamData fl gen) =
 
       let (basesGens,newSolds) = unzip basesNewSolds
           bases                = map fst basesGens
-          maxSoldiers          = length bases * baseSupply
+          ownedBases           = filter ((== Just fl) . baseTeamFlag) bases
+          maxSoldiers          = length ownedBases * baseSupply
           newSolds'            = map soldierWire <$> mconcat newSolds
 
       sldrsEs <- dWireBox' ([], NoEvent) -< (newSolds', zip (repeat others) messSldrs)
@@ -75,11 +76,14 @@ teamWire b0s (TeamData fl gen) =
     (bgen,_g') = split gen
     bgens = map mkStdGen (randoms bgen)
     juiceStream = (pure 300 . W.for 1) --> pure 15
+
     baseSwapper' :: (Base,StdGen) -> BaseEvents -> Event (Wire s e m  (Double, BaseEvents) ((Base,StdGen), Event [SoldierData]))
     baseSwapper' bg (Event xs@(_:_)) = Event $ baseSwapper bg (last xs)
     baseSwapper' bg (Event []) = Event $ baseSwapper bg LoseBase
     baseSwapper' _ NoEvent = NoEvent
+
     baseDelay = ((0,NoEvent),NoEvent)
+
     baseSwapper (base,g) GetBase = baseWire fl g base
     baseSwapper (base,g) LoseBase = pure ((base, g), NoEvent)
 
