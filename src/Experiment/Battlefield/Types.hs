@@ -92,11 +92,9 @@ data SoldierInEvent = AttackedEvent { attackedEventDamage :: Double
 
 type SoldierInEvents = Event [SoldierInEvent]
 
-data TeamInEvent = GotBase Base
+data TeamInEvent
 
-type TeamInEvents = Event [TeamInEvent]
-
-data BaseEvent = LoseBase
+data BaseEvent = GetBase | LoseBase
 
 type BaseEvents = Event [BaseEvent]
 
@@ -155,7 +153,7 @@ instance HasSurface Base where
       -- influence = case fl of
       --               Just
       -- col'      = sec `darken` blend (1/3) backgroundColor col
-      col = 
+      col =
         case (fl,lean) of
           (Just c,_)  ->
             sec `darken` blend (1/3) backgroundColor (teamFlagColor c)

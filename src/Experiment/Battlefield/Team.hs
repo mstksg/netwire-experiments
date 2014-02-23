@@ -1,6 +1,7 @@
 module Experiment.Battlefield.Team (teamWire, teamWireDelayer, TeamWire, TeamWire') where
 
 -- import Control.Monad
+-- import Data.Maybe                  (mapMaybe)
 -- import Data.Traversable
 -- import Debug.Trace
 -- import Utils.Wire.Debug
@@ -9,7 +10,6 @@ import Control.Monad.Random
 import Control.Wire                   as W
 import Control.Wire.Unsafe.Event
 import Data.Default
-import Data.Maybe                     (mapMaybe)
 import Experiment.Battlefield.Soldier
 import Experiment.Battlefield.Types
 import FRP.Netwire.Move
@@ -22,31 +22,40 @@ import Utils.Wire.Misc
 import Utils.Wire.Noise
 import Utils.Wire.Wrapped
 
-type TeamWireIn = (Team, ((TeamInEvents,[BaseEvents]),[SoldierInEvents]))
+type TeamWireIn = (Team, ([BaseEvents],[SoldierInEvents]))
 type TeamWire s e m = Wire s e m TeamWireIn (Team,[SoldierInEvents])
 type TeamWire' = TeamWire (Timed Double ()) () Identity
 
 teamWireDelayer :: TeamWireIn
-teamWireDelayer = (def,((NoEvent,repeat NoEvent),repeat NoEvent))
+teamWireDelayer = (def,(repeat NoEvent,repeat NoEvent))
 
-teamWire :: (MonadFix m, Monoid e, HasTime Double s)
-    => TeamData
+teamWire :: forall s e m. (MonadFix m, Monoid e, HasTime Double s)
+    => [Base]
+    -> TeamData
     -> TeamWire s e m
-teamWire (TeamData fl gen) =
-  proc (Team _ others _ _, ((teamEvts,baseEvts),messSldrs)) -> do
+teamWire b0s (TeamData fl gen) =
+  proc (Team _ others _ _, (baseEvts,messSldrs)) -> do
 
-    teamEvtsRand <- couple (noisePrim gen) -< teamEvts
+    -- teamEvtsRand <- couple (noisePrim gen) -< teamEvts
 
-    let newBases = newBaseEs <$> teamEvtsRand
+    -- let newBases = newBaseEs <$> teamEvtsRand
+
 
     rec
       juice <- (juiceStream . W.when not <|> pure 0) . delay False -< maxedSoldiers
+      -- juice <- (juiceStream . W.when not <|> pure 0) . delay False -< False
 
-      basesNewSolds <- dWireBox' (0,NoEvent) -< (newBases, zip (repeat juice) baseEvts)
+      let baseSwappers = zipWith baseSwapper' basesGens baseEvts
+      -- let baseSwappers = repeat NoEvent
 
-      let (bases,newSolds) = unzip basesNewSolds
-          maxSoldiers      = length bases * baseSupply
-          newSolds'        = map soldierWire <$> mconcat newSolds
+      -- basesNewSolds <- dWireBox' (0,NoEvent) -< (newBases, zip (repeat juice) baseEvts)
+
+      basesNewSolds <- zipWires (zipWith baseSwitcher b0s bgens) . delay (repeat baseDelay) -< zip (zip (repeat juice) baseEvts) baseSwappers
+
+      let (basesGens,newSolds) = unzip basesNewSolds
+          bases                = map fst basesGens
+          maxSoldiers          = length bases * baseSupply
+          newSolds'            = map soldierWire <$> mconcat newSolds
 
       sldrsEs <- dWireBox' ([], NoEvent) -< (newSolds', zip (repeat others) messSldrs)
 
@@ -63,12 +72,29 @@ teamWire (TeamData fl gen) =
     returnA -< ((Team fl sldrs arts' bases),inEs')
 
   where
+    (bgen,_g') = split gen
+    bgens = map mkStdGen (randoms bgen)
     juiceStream = (pure 300 . W.for 1) --> pure 15
-    newBaseEs (evts,g) = zipWith (baseWire fl) gens (mapMaybe getBase evts)
+    baseSwapper' :: (Base,StdGen) -> BaseEvents -> Event (Wire s e m  (Double, BaseEvents) ((Base,StdGen), Event [SoldierData]))
+    baseSwapper' bg (Event xs@(_:_)) = Event $ baseSwapper bg (last xs)
+    baseSwapper' bg (Event []) = Event $ baseSwapper bg LoseBase
+    baseSwapper' _ NoEvent = NoEvent
+    baseDelay = ((0,NoEvent),NoEvent)
+    baseSwapper (base,g) GetBase = baseWire fl g base
+    baseSwapper (base,g) LoseBase = pure ((base, g), NoEvent)
+
+    baseSwitcher base g = drSwitch w0
       where
-        gens :: [StdGen]
-        gens = map mkStdGen $ randoms (mkStdGen g)
-        getBase (GotBase b) = Just b
+        w0 =
+          case baseTeamFlag base of
+            Just bfl | bfl == fl -> baseSwapper (base,g) GetBase
+            _                    -> baseSwapper (base,g) LoseBase
+    -- newBaseEs (evts,g) = zipWith (baseWire fl) gens (mapMaybe getBase evts)
+    --   where
+    --     gens :: [StdGen]
+    --     gens = map mkStdGen $ randoms (mkStdGen g)
+    --     -- getBase (GotBase b) = Just b
+    --     getBase _ = Nothing
 
     -- (cswd,carc,caxe,clbw,chrs,char) = (9,5,3,3,4,2)
     -- classScores = map ((1 /) . classWorth) allClasses
@@ -91,16 +117,17 @@ teamWire (TeamData fl gen) =
 baseSupply :: Int
 baseSupply = 8
 
-baseWire :: (MonadFix m, Monoid e, HasTime Double s) => TeamFlag -> StdGen -> Base -> Wire s e m (Double, BaseEvents) (Base, Event [SoldierData])
+baseWire :: (MonadFix m, Monoid e, HasTime Double s) => TeamFlag -> StdGen -> Base -> Wire s e m (Double, BaseEvents) ((Base,StdGen), Event [SoldierData])
 baseWire fl gen b = proc (juice,es) -> do
     die <- filterE (not . null) -< filter isLoseBase <$> es
     pooled <- couple (noisePrim genSldr) . soldierPool genPool -< juice
     let
       newSolds = processPool <$> pooled
-    W.until -< ((b',newSolds),die)
+    W.until -< (((b',g11),newSolds),die)
   where
     b' = b { baseTeamFlag = Just fl }
-    (genSldr,genPool) = split gen
+    (g00,genSldr) = split gen
+    (genPool,g11) = split g00
     isLoseBase LoseBase = True
     processPool (sldrs,g) = zipWith posser sldrs posses
       where
