@@ -21,17 +21,18 @@ stageWire :: (MonadFix m, Monoid e, HasTime Double s)
   -> TeamData
   -> Wire s e m () Stage
 stageWire dim@(w,h) t1d t2d = proc _ -> do
-    let
-      b1es = repeat NoEvent
-      b2es = repeat NoEvent
-
     rec
-      (team1@(Team _ t1ss t1as t1bs), t2ahits) <- t1w . delay teamWireDelayer -< (team2, (b1es, t1ahits))
-      (team2@(Team _ t2ss t2as t2bs), t1ahits) <- t2w . delay teamWireDelayer -< (team1, (b2es, t2ahits))
+      (team1@(Team _ t1ss t1as _t1bs), t2ahits) <- t1w . delay teamWireDelayer -< (team2, (t1bes, t1ahits))
+      -- (team2@(Team _ t2ss t2as _t2bs), t1ahits) <- t2w . delay teamWireDelayer -< (team1, (t2bes, t2ahits))
+      (team2@(Team _ t2ss t2as _t2bs), t1ahits) <- t2w -< (team1, (t2bes, t2ahits))
 
-    let sldrs = catMaybes (t1ss ++ t2ss)
+      let t1ss' = catMaybes t1ss
+          t2ss' = catMaybes t2ss
+
+      (bases,(t1bes,t2bes)) <- basesWire (t1fl,t2fl) b0s . delay ([],[]) -< (t1ss',t2ss')
+
+    let sldrs = t1ss' ++ t2ss'
         arts  = t1as ++ t2as
-        bases = t1bs ++ t2bs
 
     returnA -< Stage dim sldrs arts bases
 
@@ -46,112 +47,117 @@ stageWire dim@(w,h) t1d t2d = proc _ -> do
     b0s = b1s ++ b2s
     makeBase fl pb = Base pb (Just fl) 1 Nothing
 
--- basesWire :: (MonadFix m, Monoid e, HasTime Double s)
---   => (TeamFlag, TeamFlag)
---   -> [Base]
---   -> Wire s e m ([Soldier],[Soldier]) ([Base],((TeamInEvents,[BaseEvents]),(TeamInEvents,[BaseEvents])))
--- basesWire fls@(t1fl,t2fl) b0s = proc inp -> do
+basesWire :: (MonadFix m, Monoid e, HasTime Double s)
+  => (TeamFlag, TeamFlag)
+  -> [Base]
+  -> Wire s e m ([Soldier],[Soldier]) ([Base],([BaseEvents],[BaseEvents]))
+basesWire fls@(t1fl,_t2fl) b0s = proc inp -> do
 
---   bEvts <- sequenceA (map (baseWire fls) b0s) -< inp
+  bEvts <- sequenceA (map (baseWire fls) b0s) -< inp
 
---   let
---     bases = map fst bEvts
---     evts = foldl sortEvts ((NoEvent,[]),(NoEvent,[])) (reverse bEvts)
+  let
+    (bases,swaps) = unzip bEvts
+    evts = foldl sortEvts ([],[]) (reverse swaps)
 
---   returnA -< (bases,evts)
---   where
---     sortEvts ((t1es,t1bes),(t2es,t2bes)) (base,swaps) =
---       -- ((t1es',t1bes'),(t2es',t2bes'))
---         case swaps of
---           Event (Just fl,_) | fl == t1fl -> ((t1es <> ([GotBase base] <$ swaps),NoEvent:t1bes),(t2es,NoEvent:t2bes))
---                             | otherwise  -> ((t1es,NoEvent:t1bes),(t2es <> ([GotBase base] <$ swaps),NoEvent:t2bes))
---           Event (_,Just fl) | fl == t1fl -> ((t1es,Event [LoseBase]:t1bes),(t2es,NoEvent:t2bes))
---                             | otherwise  -> ((t1es,NoEvent:t1bes),(t2es,Event [LoseBase]:t2bes))
---           NoEvent ->    ((t1es,NoEvent:t1bes),(t2es,NoEvent:t2bes))
+  returnA -< (bases,evts)
+  where
+    sortEvts (t1bes,t2bes) swaps =
+      -- ((t1es',t1bes'),(t2es',t2bes'))
+        case swaps of
+          Event (Just fl,_) | fl == t1fl -> (Event [GetBase]:t1bes,NoEvent:t2bes)
+                            | otherwise  -> (NoEvent:t1bes,Event [GetBase]:t2bes)
+          Event (_,Just fl) | fl == t1fl -> (Event [LoseBase]:t1bes,NoEvent:t2bes)
+                            | otherwise  -> (NoEvent:t1bes,Event [LoseBase]:t2bes)
+          NoEvent                        -> (NoEvent:t1bes,NoEvent:t2bes)
+
+          -- ((t1es <> ([GotBase base] <$ swaps),NoEvent:t1bes),(t2es,NoEvent:t2bes))
+          --                   | otherwise  -> ((t1es,NoEvent:t1bes),(t2es <> ([GotBase base] <$ swaps),NoEvent:t2bes))
+          -- Event (_,Just fl) | fl == t1fl -> ((t1es,Event [LoseBase]:t1bes),(t2es,NoEvent:t2bes))
+          --                   | otherwise  -> ((t1es,NoEvent:t1bes),(t2es,Event [LoseBase]:t2bes))
+          -- NoEvent ->    ((t1es,NoEvent:t1bes),(t2es,NoEvent:t2bes))
 
 
 
---       where
---         bfl = baseTeamFlag base
+      --   (t1bes',) =
+      --   t1es' = t1es
+      --   t1bes' =
+      --     case swaps of
+      --       NoEvent -> NoEvent:t1bes
+      --       Event (Just fl) | fl ==
+      --   t2es' = t2es
+      --   t2bes' = t2bes
 
---       --   (t1bes',) =
---       --   t1es' = t1es
---       --   t1bes' =
---       --     case swaps of
---       --       NoEvent -> NoEvent:t1bes
---       --       Event (Just fl) | fl ==
---       --   t2es' = t2es
---       --   t2bes' = t2bes
+baseWire :: forall m e s. (MonadFix m, Monoid e, HasTime Double s)
+  => (TeamFlag, TeamFlag)
+  -> Base
+  -> Wire s e m ([Soldier],[Soldier]) (Base,Event (Maybe TeamFlag, Maybe TeamFlag))
+baseWire (t1fl,t2fl) b0@(Base pb fl0 _ _) = proc (t1s,t2s) -> do
+  let
+    t1b = length $ filter inBase t1s
+    t2b = length $ filter inBase t2s
+    influence | t1b > t2b = Just t1fl
+              | t1b < t2b = Just t2fl
+              | otherwise = Nothing
 
--- baseWire :: forall m e s. (MonadFix m, Monoid e, HasTime Double s)
---   => (TeamFlag, TeamFlag)
---   -> Base
---   -> Wire s e m ([Soldier],[Soldier]) (Base,Event (Maybe TeamFlag, Maybe TeamFlag))
--- baseWire (t1fl,t2fl) b0@(Base pb fl0 _ _) = proc (t1s,t2s) -> do
---   let
---     t1b = length $ filter inBase t1s
---     t2b = length $ filter inBase t2s
---     influence | t1b > t2b = Just t1fl
---               | t1b < t2b = Just t2fl
---               | otherwise = Nothing
+  rec
+    let newWire = ntBase <$> teamChange
+    ((security, leaning), teamChange) <- drSwitch (ntBase fl0) -< (influence, newWire)
 
---   rec
---     let newWire = ntBase <$> teamChange
---     ((security, leaning), teamChange) <- rSwitch (ntBase fl0) -< (influence, newWire)
+  owner <- hold <|> pure fl0 -< teamChange
+  oldOwner <- delay fl0 -< owner
 
---   owner <- hold <|> pure fl0 -< teamChange
---   oldOwner <- delay fl0 -< owner
+  let newBase = b0 { baseTeamFlag = owner
+                   , baseSecurity = security
+                   , baseLeaning  = leaning
+                   }
 
---   let newBase = b0 { baseTeamFlag = owner
---                    , baseSecurity = security
---                    , baseLeaning  = leaning
---                    }
+      changeEvent = (,oldOwner) <$> teamChange
 
---       changeEvent = (,oldOwner) <$> teamChange
+  -- let mode =
 
---   -- let mode =
+  --       case owner of
+  --         Nothing              -> undefined
+  --         Just fl | fl == t1fl -> undefined
+  --                 | otherwise  -> undefined
 
---   --       case owner of
---   --         Nothing              -> undefined
---   --         Just fl | fl == t1fl -> undefined
---   --                 | otherwise  -> undefined
+  -- mode -< influence
 
---   -- mode -< influence
+  returnA -< (newBase, changeEvent)
 
---   returnA -< (newBase, changeEvent)
+  where
+    thresh = 5
+    inBase = (< baseRadius) . norm . (^-^ pb) . soldierPos
+    ntBase :: Maybe TeamFlag -> Wire s e m (Maybe TeamFlag) ((Double, Maybe TeamFlag), Event (Maybe TeamFlag))
+    ntBase = maybe neutralBase teamBase
+    neutralBase :: Wire s e m (Maybe TeamFlag) ((Double, Maybe TeamFlag), Event (Maybe TeamFlag))
+    neutralBase = proc infl -> do
+      rec
+        let push =
+              case infl of
+                Just fl | fl == t1fl -> 1
+                        | otherwise  -> -1
+                Nothing -> -1 * sec / abs sec
+        sec <- integral 0 -< push
 
---   where
---     inBase = (< baseRadius) . norm . (^-^ pb) . soldierPos
---     ntBase :: Maybe TeamFlag -> Wire s e m (Maybe TeamFlag) ((Double, Maybe TeamFlag), Event (Maybe TeamFlag))
---     ntBase = maybe neutralBase teamBase
---     neutralBase :: Wire s e m (Maybe TeamFlag) ((Double, Maybe TeamFlag), Event (Maybe TeamFlag))
---     neutralBase = proc infl -> do
---       rec
---         let push =
---               case infl of
---                 Just fl | fl == t1fl -> 1
---                         | otherwise  -> -1
---                 Nothing -> -1 * sec / abs sec
---         sec <- integral 0 -< push
+      let leaning | sec > 0   = Just t1fl
+                  | sec < 0   = Just t2fl
+                  | otherwise = Nothing
 
---       let leaning | sec > 0   = Just t1fl
---                   | sec < 0   = Just t2fl
---                   | otherwise = Nothing
+      swap <- never . W.when ((< 10) . abs) --> now -< sec
+      returnA -< ((abs sec / thresh,leaning),infl <$ swap)
+    teamBase :: TeamFlag -> Wire s e m (Maybe TeamFlag) ((Double, Maybe TeamFlag), Event (Maybe TeamFlag))
+    teamBase fl = proc infl -> do
+      rec
+        let push =
+              case infl of
+                Just fl' | fl' == fl -> 1
+                         | otherwise -> -1
+                Nothing              -> 0.5
+        sec <- integralWith (\_ s' -> (min s' thresh)) thresh -< (push,())
 
---       swap <- never . W.when ((< 1) . abs) --> now -< sec
---       returnA -< ((sec,leaning),infl <$ swap)
---     teamBase :: TeamFlag -> Wire s e m (Maybe TeamFlag) ((Double, Maybe TeamFlag), Event (Maybe TeamFlag))
---     teamBase fl = proc infl -> do
---       rec
---         let push =
---               case infl of
---                 Just fl' | fl' == fl -> 1
---                          | otherwise -> -1 * sec
---         sec <- integral 0 -< push
+      swap <- never . W.when (> 0) --> now -< sec
 
---       swap <- never . W.when (< 1) --> now -< sec
+      returnA -< ((sec / thresh,Nothing),Nothing <$ swap)
 
---       returnA -< ((sec,Nothing),Nothing <$ swap)
-
---     -- mode = modes (Just fl0)
+    -- mode = modes (Just fl0)
 

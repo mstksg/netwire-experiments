@@ -115,7 +115,7 @@ teamWire b0s (TeamData fl gen) =
     --   return $ SoldierData x0 (Just fl) (SoldierClass bod weap mnt) g
 
 baseSupply :: Int
-baseSupply = 8
+baseSupply = 16
 
 baseWire :: (MonadFix m, Monoid e, HasTime Double s) => TeamFlag -> StdGen -> Base -> Wire s e m (Double, BaseEvents) ((Base,StdGen), Event [SoldierData])
 baseWire fl gen b = proc (juice,es) -> do

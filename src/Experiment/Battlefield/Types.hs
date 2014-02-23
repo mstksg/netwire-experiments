@@ -149,18 +149,14 @@ instance HasSurface Base where
   toSurface (Base (V3 x y _) fl sec lean) = Surface (V2 x y) idTrans 1 [baseCirc]
     where
       baseCirc = EntSprite $ Sprite zero (Circle baseRadius Filled) col 1
-      -- col       = maybe white teamFlagColor fl
-      -- influence = case fl of
-      --               Just
-      -- col'      = sec `darken` blend (1/3) backgroundColor col
       col =
         case (fl,lean) of
           (Just c,_)  ->
-            sec `darken` blend (1/3) backgroundColor (teamFlagColor c)
+            sec `darken` blend (1/4) (teamFlagColor c) backgroundColor
           (_,Nothing) ->
-            white
+            green
           (_,Just c)  ->
-            blend sec white (blend (1/3) backgroundColor (teamFlagColor c))
+            blend sec yellow (blend (1/3) backgroundColor (teamFlagColor c))
 
 instance HasSurface Soldier where
   toSurface (Soldier (PosAng (V3 x y _) ang) health fl _ _ _ weap mnt) =
