@@ -75,7 +75,7 @@ teamWire b0s (TeamData fl gen) =
   where
     (bgen,_g') = split gen
     bgens = map mkStdGen (randoms bgen)
-    juiceStream = (pure 300 . W.for 1) --> pure 15
+    juiceStream = (pure 300 . W.for 1) --> pure 2.5
 
     baseSwapper' :: (Base,StdGen) -> BaseEvents -> Event (Wire s e m  (Double, BaseEvents) ((Base,StdGen), Event [SoldierData]))
     baseSwapper' bg (Event xs@(_:_)) = Event $ baseSwapper bg (last xs)
@@ -156,12 +156,13 @@ soldierPool gen = proc juice -> do
         summed = sum unNormed
     poolWires = map classPool allClasses
     classPool cls = proc juice -> do
-      poolTot <- integral 0 -< juice / 6
+
+      juiced <- integral 0 -< juice
+
       rec
         depletion <- (hold . accumE (+) 0 <|> pure 0) . delay NoEvent -< deplete
-        deplete   <- watchDeplete score . delay 0 -< pool
-        let
-          pool = poolTot - depletion
+        deplete   <- watchDeplete score . delay 0 -< juiced - depletion
+
       let
         popped = [cls] <$ deplete
       returnA -< popped
