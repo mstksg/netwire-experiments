@@ -30,10 +30,9 @@ teamWireDelayer :: TeamWireIn
 teamWireDelayer = (def,((NoEvent,repeat NoEvent),repeat NoEvent))
 
 teamWire :: (MonadFix m, Monoid e, HasTime Double s)
-    => TeamFlag
-    -> StdGen
+    => TeamData
     -> TeamWire s e m
-teamWire fl gen =
+teamWire (TeamData fl gen) =
   proc (Team _ others _ _, ((teamEvts,baseEvts),messSldrs)) -> do
 
     teamEvtsRand <- couple (noisePrim gen) -< teamEvts
@@ -70,6 +69,7 @@ teamWire fl gen =
         gens :: [StdGen]
         gens = map mkStdGen $ randoms (mkStdGen g)
         getBase (GotBase b) = Just b
+
     -- (cswd,carc,caxe,clbw,chrs,char) = (9,5,3,3,4,2)
     -- classScores = map ((1 /) . classWorth) allClasses
     -- classWeight = 10 / sum classScores

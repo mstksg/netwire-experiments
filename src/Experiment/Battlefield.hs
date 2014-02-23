@@ -7,7 +7,6 @@ import Control.Wire
 import Data.Colour.Names
 import Experiment.Battlefield.Soldier
 import Experiment.Battlefield.Stage
-import Experiment.Battlefield.Team
 import Experiment.Battlefield.Types
 import Prelude hiding                 ((.),id)
 import Render.Render
@@ -24,8 +23,8 @@ main :: IO ()
 main = do
   reportClasses
   (t1,t2) <- evalRandIO $ (,)
-      <$> (teamWire fl1 <$> getSplit)
-      <*> (teamWire fl2 <$> getSplit)
+      <$> (TeamData fl1 <$> getSplit)
+      <*> (TeamData fl2 <$> getSplit)
   testStage $ stageWire dim t1 t2
   where
     dim = (600,400)

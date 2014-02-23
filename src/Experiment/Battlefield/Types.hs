@@ -1,7 +1,10 @@
+{-# OPTIONS -fno-warn-orphans #-}
+
 module Experiment.Battlefield.Types where
 
 import Render.Sprite
 import Control.Wire
+import Data.Ord
 import Prelude hiding ((.),id)
 import Data.Default
 import Data.Colour
@@ -53,7 +56,11 @@ data Team = Team { teamFlag     :: TeamFlag
                  } deriving Show
 
 data TeamFlag = TeamFlag  { teamFlagColor :: Color
-                          } deriving Show
+                          } deriving (Show, Eq, Ord)
+
+data TeamData = TeamData { teamDataFlag :: TeamFlag
+                         , teamDataGen  :: StdGen
+                         } deriving Show
 
 data Article = Article { articlePosAng :: PosAng
                        , articleType   :: ArticleType
@@ -96,6 +103,7 @@ type BaseEvents = Event [BaseEvent]
 data Base = Base { basePos      :: V3 Double
                  , baseTeamFlag :: Maybe TeamFlag
                  , baseSecurity :: Double
+                 , baseLeaning  :: Maybe TeamFlag
                  } deriving Show
 
 baseRadius :: Double
@@ -124,6 +132,12 @@ data SoldierStats = SoldierStats { soldierStatsDPS      :: Double
 backgroundColor :: Color
 backgroundColor = sRGB24 126 126 126
 
+instance (Ord a, Floating a) => Ord (Colour a) where
+  compare = comparing toSRGB
+
+instance Ord a => Ord (RGB a) where
+  compare (RGB r1 g1 b1) (RGB r2 g2 b2) = compare (r1,g1,b1) (r2,g2,b2)
+
 instance HasSurface Stage where
   toSurface (Stage (w,h) sldrs arts bases) = Surface zero idTrans 1 ents
     where
@@ -133,14 +147,22 @@ instance HasSurface Stage where
       artEnts = map (EntSurface . toSurface) arts
       ents = EntSprite back:(baseEnts ++ sldrEnts ++ artEnts)
 
-
 instance HasSurface Base where
-  toSurface (Base (V3 x y _) fl sec) = Surface (V2 x y) idTrans 1 [baseCirc]
+  toSurface (Base (V3 x y _) fl sec lean) = Surface (V2 x y) idTrans 1 [baseCirc]
     where
-      baseCirc = EntSprite $ Sprite zero (Circle baseRadius Filled) col' 1
-      col   = maybe white teamFlagColor fl
-      col'  = sec `darken` blend (1/3) backgroundColor col
-
+      baseCirc = EntSprite $ Sprite zero (Circle baseRadius Filled) col 1
+      -- col       = maybe white teamFlagColor fl
+      -- influence = case fl of
+      --               Just
+      -- col'      = sec `darken` blend (1/3) backgroundColor col
+      col = 
+        case (fl,lean) of
+          (Just c,_)  ->
+            sec `darken` blend (1/3) backgroundColor (teamFlagColor c)
+          (_,Nothing) ->
+            white
+          (_,Just c)  ->
+            blend sec white (blend (1/3) backgroundColor (teamFlagColor c))
 
 instance HasSurface Soldier where
   toSurface (Soldier (PosAng (V3 x y _) ang) health fl _ _ _ weap mnt) =
