@@ -3,6 +3,7 @@
 module Main where
 
 import Control.Monad.Random
+import Control.Wire.Unsafe.Event
 import Control.Wire
 import Linear.V3
 import Data.Colour.Names
@@ -50,16 +51,21 @@ simpleStage ::
   -> Wire' () Stage
 simpleStage dim@(w,h) t1w t2w = proc _ -> do
     rec
+      b10 <- now -< b1s
+      b20 <- now -< b2s
       let
-      (team1@(Team _ t1ss t1as), t2ahits) <- t1w -< (team2, b1s, t1ahits)
-      (team2@(Team _ t2ss t2as), t1ahits) <- t2w -< (team1, b2s, t2ahits)
+        b1es = repeat NoEvent
+        b2es = repeat NoEvent
+      (team1@(Team _ t1ss t1as), t2ahits) <- t1w -< (team2, ((b10,b1es), t1ahits))
+      (team2@(Team _ t2ss t2as), t1ahits) <- t2w -< (team1, ((b20,b2es), t2ahits))
     let
       sldrs = catMaybes (t1ss ++ t2ss)
       arts  = t1as ++ t2as
     returnA -< Stage dim sldrs arts
   where
-    b1s = [Base (V3 (w/5) (h/5) 0), Base (V3 (w/5) (4*h/5) 0)]
-    b2s = [Base (V3 (4*w/5) (h/5) 0), Base (V3 (4*w/5) (4*h/5) 0)]
+    b1s = GotBase <$> [Base (V3 (w/5) (h/5) 0), Base (V3 (w/5) (4*h/5) 0)]
+    b2s = GotBase <$> [Base (V3 (4*w/5) (h/5) 0), Base (V3 (4*w/5) (4*h/5) 0)]
+
 
 testStage :: Wire' () Stage -> IO ()
 testStage w =

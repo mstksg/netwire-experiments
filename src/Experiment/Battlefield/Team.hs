@@ -19,7 +19,7 @@ import Utils.Wire.Misc
 import Utils.Wire.Noise
 import Utils.Wire.Wrapped
 
-type TeamWire s e m = Wire s e m (Team, [Base], [SoldierInEvents]) (Team,[SoldierInEvents])
+type TeamWire s e m = Wire s e m (Team, ((TeamInEvents,[Event BaseEvent]),[SoldierInEvents])) ((Team, [Base]),[SoldierInEvents])
 type TeamWire' = TeamWire (Timed Double ()) () Identity
 
 teamWire :: (MonadFix m, Monoid e, HasTime Double s)
@@ -28,11 +28,11 @@ teamWire :: (MonadFix m, Monoid e, HasTime Double s)
     -> StdGen
     -> TeamWire s e m
 teamWire (w,h) fl gen =
-  proc (Team _ others _, bases, messSldrs) -> do
+  proc (Team _ others _, ((teamEvts,baseEvts),messSldrs)) -> do
     startSldrs <- now -< map soldierWire sldrs0
     pooled <- couple (noisePrim gen) . soldierPool -< 15
     let
-      newSolds = processPool (head bases) <$> pooled
+      newSolds = processPool undefined <$> pooled
     sldrsEs <- dWireBox' ([], NoEvent) -< (newSolds <> startSldrs, zip (repeat others) messSldrs)
     let
       (sldrsArts,outInEvts) = unzip sldrsEs
@@ -40,7 +40,7 @@ teamWire (w,h) fl gen =
       (_outEs,inEs) = unzip outInEvts
       arts' = concat arts
       inEs' = foldAcrossl (<>) mempty inEs
-    returnA -< (Team fl sldrs arts',inEs')
+    returnA -< ((Team fl sldrs arts',[]),inEs')
   where
     -- (cswd,carc,caxe,clbw,chrs,char) = (9,5,3,3,4,2)
     processPool (Base pb) (sldrs,g) = zipWith posser sldrs posses

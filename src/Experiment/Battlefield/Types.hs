@@ -83,6 +83,12 @@ data SoldierInEvent = AttackedEvent { attackedEventDamage :: Double
 
 type SoldierInEvents = Event [SoldierInEvent]
 
+data TeamInEvent = GotBase Base
+
+type TeamInEvents = Event [TeamInEvent]
+
+data BaseEvent = LoseBase
+
 data Base = Base { basePos :: V3 Double }
 
 data SoldierData = SoldierData { soldierDataX0     :: V3 Double
