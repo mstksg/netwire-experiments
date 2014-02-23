@@ -10,6 +10,7 @@ import Data.Traversable
 import Experiment.Battlefield.Team
 import Experiment.Battlefield.Types
 import FRP.Netwire.Move
+import Data.String
 import Linear.Metric
 import Linear.V3
 import Linear.Vector
@@ -25,8 +26,8 @@ stageWire dim@(w,h) t1d t2d = proc _ -> do
     --     t2bes' = repeat NoEvent
 
     rec
-      (team1@(Team _ t1ss t1as _t1bs), t2ahits) <- t1w . delay teamWireDelayer -< (team2, (t1bes, t1ahits))
-      (team2@(Team _ t2ss t2as _t2bs), t1ahits) <- t2w . delay teamWireDelayer -< (team1, (t2bes, t2ahits))
+      (team1@(Team _ t1ss t1as _), t2ahits) <- t1w . delay teamWireDelayer --> error "team 1 inhibits" -< (team2, (t1bes, t1ahits))
+      (team2@(Team _ t2ss t2as _), t1ahits) <- t2w . delay teamWireDelayer --> error "team 2 inhibits" -< (team1, (t2bes, t2ahits))
 
       let t1ss' = catMaybes t1ss
           t2ss' = catMaybes t2ss
@@ -46,10 +47,10 @@ stageWire dim@(w,h) t1d t2d = proc _ -> do
     t2w = teamWire b0s t2d
     -- b1s = makeBase t1fl <$> [V3 (w/6) (h/6) 0, V3 (w/6) (5*h/6) 0]
     -- b2s = makeBase t2fl <$> [V3 (5*w/6) (h/6) 0, V3 (5*w/6) (5*h/6) 0]
-    b1s = makeBase t1fl <$> [V3 (w/6) (h/6) 0, V3 (5*w/6) (5*h/6) 0]
-    b2s = makeBase t2fl <$> [V3 (5*w/6) (h/6) 0, V3 (w/6) (5*h/6) 0]
-    b0s = b1s ++ b2s
-    makeBase fl pb = Base pb (Just fl) 1 Nothing
+    b1s = makeBase (Just t1fl) <$> [V3 (w/6) (h/6) 0, V3 (5*w/6) (5*h/6) 0]
+    b2s = makeBase (Just t2fl) <$> [V3 (5*w/6) (h/6) 0, V3 (w/6) (5*h/6) 0]
+    b0s = b1s ++ b2s ++ [makeBase Nothing (V3 (w/2) (h/2) 0)]
+    makeBase fl pb = Base pb fl 1 Nothing
 
 basesWire :: (MonadFix m, Monoid e, HasTime Double s)
   => (TeamFlag, TeamFlag)

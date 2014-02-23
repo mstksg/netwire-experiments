@@ -14,7 +14,7 @@ import Render.Surface
 import Linear
 import System.Random
 
-type Wire' = Wire (Timed Double ()) () Identity
+type Wire' = Wire (Timed Double ()) String Identity
 
 data Stage = Stage { stageDimensions :: (Double,Double)
                    , stageSoldiers   :: [Soldier]
@@ -149,14 +149,14 @@ instance HasSurface Base where
   toSurface (Base (V3 x y _) fl sec lean) = Surface (V2 x y) idTrans 1 [baseCirc]
     where
       baseCirc = EntSprite $ Sprite zero (Circle baseRadius Filled) col 1
-      col =
+      col = blend (3/4) backgroundColor $
         case (fl,lean) of
           (Just c,_)  ->
-            sec `darken` blend (1/4) (teamFlagColor c) backgroundColor
+            sec `darken` teamFlagColor c
           (_,Nothing) ->
             white
           (_,Just c)  ->
-            blend sec white (blend (1/4) (teamFlagColor c) backgroundColor)
+            blend sec white (teamFlagColor c)
 
 instance HasSurface Soldier where
   toSurface (Soldier (PosAng (V3 x y _) ang) health fl _ _ _ weap mnt) =

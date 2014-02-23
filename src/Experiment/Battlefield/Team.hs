@@ -29,7 +29,7 @@ type TeamWire' = TeamWire (Timed Double ()) () Identity
 teamWireDelayer :: TeamWireIn
 teamWireDelayer = (def,(repeat NoEvent,repeat NoEvent))
 
-teamWire :: forall s e m. (MonadFix m, Monoid e, HasTime Double s)
+teamWire :: forall s e m. (MonadFix m, HasTime Double s, Monoid e)
     => [Base]
     -> TeamData
     -> TeamWire s e m
@@ -50,7 +50,7 @@ teamWire b0s (TeamData fl gen) =
 
       -- basesNewSolds <- dWireBox' (0,NoEvent) -< (newBases, zip (repeat juice) baseEvts)
 
-      basesNewSolds <- zipWires (zipWith baseSwitcher b0s bgens) . delay (repeat baseDelay) -< zip (zip (repeat juice) baseEvts) baseSwappers
+      basesNewSolds <- zipWires (zipWith baseSwitcher b0s bgens) . delay (repeat baseDelay) --> error "base wires inhibit" -< zip (repeat juice) baseSwappers
 
       let (basesGens,newSolds) = unzip basesNewSolds
           bases                = map fst basesGens
@@ -58,7 +58,7 @@ teamWire b0s (TeamData fl gen) =
           maxSoldiers          = length ownedBases * baseSupply
           newSolds'            = map soldierWire <$> mconcat newSolds
 
-      sldrsEs <- dWireBox' ([], NoEvent) -< (newSolds', zip (repeat others) messSldrs)
+      sldrsEs <- dWireBox' ([], NoEvent) --> error "soldier box inhibits" -< (newSolds', zip (repeat others) messSldrs)
 
       let sldrCount     = length sldrsEs
           maxedSoldiers = sldrCount >= maxSoldiers
@@ -77,15 +77,15 @@ teamWire b0s (TeamData fl gen) =
     bgens = map mkStdGen (randoms bgen)
     juiceStream = (pure 300 . W.for 1) --> pure 2.5
 
-    baseSwapper' :: (Base,StdGen) -> BaseEvents -> Event (Wire s e m  (Double, BaseEvents) ((Base,StdGen), Event [SoldierData]))
+    baseSwapper' :: (Base,StdGen) -> BaseEvents -> Event (Wire s e m  Double ((Base,StdGen), Event [SoldierData]))
     baseSwapper' bg (Event xs@(_:_)) = Event $ baseSwapper bg (last xs)
     baseSwapper' bg (Event []) = Event $ baseSwapper bg LoseBase
     baseSwapper' _ NoEvent = NoEvent
 
-    baseDelay = ((0,NoEvent),NoEvent)
+    baseDelay = (0,NoEvent)
 
-    baseSwapper (base,g) GetBase = baseWire fl g base
-    baseSwapper (base,g) LoseBase = pure ((base, g), NoEvent)
+    baseSwapper (base,g) GetBase = baseWire fl g base --> error "base wire inhibits"
+    baseSwapper (base,g) LoseBase = pure ((base, g), NoEvent) --> error "no base wire inhibits"
 
     baseSwitcher base g = drSwitch w0
       where
@@ -121,18 +121,16 @@ teamWire b0s (TeamData fl gen) =
 baseSupply :: Int
 baseSupply = 8
 
-baseWire :: (MonadFix m, Monoid e, HasTime Double s) => TeamFlag -> StdGen -> Base -> Wire s e m (Double, BaseEvents) ((Base,StdGen), Event [SoldierData])
-baseWire fl gen b = proc (juice,es) -> do
-    die <- filterE (not . null) -< filter isLoseBase <$> es
+baseWire :: (MonadFix m, Monoid e, HasTime Double s) => TeamFlag -> StdGen -> Base -> Wire s e m Double ((Base,StdGen), Event [SoldierData])
+baseWire fl gen b = proc juice -> do
     pooled <- couple (noisePrim genSldr) . soldierPool genPool -< juice
     let
       newSolds = processPool <$> pooled
-    W.until -< (((b',g11),newSolds),die)
+    returnA -< ((b',g11),newSolds)
   where
     b' = b { baseTeamFlag = Just fl }
     (g00,genSldr) = split gen
     (genPool,g11) = split g00
-    isLoseBase LoseBase = True
     processPool (sldrs,g) = zipWith posser sldrs posses
       where
         (g0,g') = split (mkStdGen g)
