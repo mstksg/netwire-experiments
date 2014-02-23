@@ -16,7 +16,7 @@ import qualified Graphics.UI.SDL            as SDL
 import qualified Graphics.UI.SDL.Framerate  as Framerate
 import qualified Graphics.UI.SDL.Primitives as SDL
 
-sdlBackend :: SDLRenderable a
+sdlBackend :: (SDLRenderable a, Show e)
     => Double
     -> Int
     -> (Int,Int)
@@ -65,7 +65,7 @@ sdlBackend simDt fr (ht,wd) (cr,cg,cb) = Backend runSdl
 
               go screen s w frameRate
 
-            Left _ -> return ()
+            Left e -> error (show e)
 
 class SDLRenderable a where
   renderSDL ::
