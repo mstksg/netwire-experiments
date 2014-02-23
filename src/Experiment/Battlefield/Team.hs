@@ -3,13 +3,14 @@ module Experiment.Battlefield.Team (teamWire, TeamWire, TeamWire') where
 import Control.Monad
 import Control.Monad.Fix
 import Control.Monad.Random
-import Debug.Trace
-import Control.Wire as W
+import Control.Wire                   as W
 import Control.Wire.Unsafe.Event
+import Data.Maybe                     (mapMaybe)
 import Data.Traversable
-import FRP.Netwire.Move
+import Debug.Trace
 import Experiment.Battlefield.Soldier
 import Experiment.Battlefield.Types
+import FRP.Netwire.Move
 import Linear.V3
 import Linear.Vector
 import Prelude hiding                 ((.),id)
@@ -19,7 +20,7 @@ import Utils.Wire.Misc
 import Utils.Wire.Noise
 import Utils.Wire.Wrapped
 
-type TeamWire s e m = Wire s e m (Team, ((TeamInEvents,[Event BaseEvent]),[SoldierInEvents])) ((Team, [Base]),[SoldierInEvents])
+type TeamWire s e m = Wire s e m (Team, ((TeamInEvents,[BaseEvents]),[SoldierInEvents])) ((Team, [Base]),[SoldierInEvents])
 type TeamWire' = TeamWire (Timed Double ()) () Identity
 
 teamWire :: (MonadFix m, Monoid e, HasTime Double s)
@@ -29,29 +30,29 @@ teamWire :: (MonadFix m, Monoid e, HasTime Double s)
     -> TeamWire s e m
 teamWire (w,h) fl gen =
   proc (Team _ others _, ((teamEvts,baseEvts),messSldrs)) -> do
-    startSldrs <- now -< map soldierWire sldrs0
-    pooled <- couple (noisePrim gen) . soldierPool -< 15
+    -- startSldrs <- now -< map soldierWire sldrs0
+    startSldrs <- never -< ()
+    juice <- pure 300 . W.for 1 --> pure 15 -< ()
     let
-      newSolds = processPool undefined <$> pooled
-    sldrsEs <- dWireBox' ([], NoEvent) -< (newSolds <> startSldrs, zip (repeat others) messSldrs)
+      newBases = newBaseEs <$> teamEvts
+    basesNewSolds <- dWireBox' (0,NoEvent) -< (map (baseWire fl gen) <$> newBases, zip (repeat juice) baseEvts)
+    -- pooled <- couple (noisePrim gen) . soldierPool -< 15
+    let
+      (bases,newSolds) = unzip basesNewSolds
+      newSolds' = map soldierWire <$> mconcat newSolds
+    sldrsEs <- dWireBox' ([], NoEvent) -< (newSolds' <> startSldrs, zip (repeat others) messSldrs)
     let
       (sldrsArts,outInEvts) = unzip sldrsEs
       (sldrs,arts) = unzip sldrsArts
       (_outEs,inEs) = unzip outInEvts
       arts' = concat arts
       inEs' = foldAcrossl (<>) mempty inEs
-    returnA -< ((Team fl sldrs arts',[]),inEs')
+    returnA -< ((Team fl sldrs arts',bases),inEs')
   where
     -- (cswd,carc,caxe,clbw,chrs,char) = (9,5,3,3,4,2)
-    processPool (Base pb) (sldrs,g) = zipWith posser sldrs posses
+    newBaseEs = mapMaybe getBase
       where
-        maxbdist = 25
-        (g0,g') = split (mkStdGen g)
-        (g1,g2) = split g'
-        posses = zipWith pickDisk (randomRs (0,1) g1) (randomRs (0,2*pi) g2)
-        pickDisk r th = pb ^+^ maxbdist *^ V3 (sqrt r * cos th) (sqrt r * sin th) 0
-        posser sldr pos = soldierWire $ SoldierData pos (Just fl) sldr g0
-
+        getBase (GotBase b) = Just b
     classScores = map ((1 /) . classWorth) allClasses
     classWeight = 10 / sum classScores
     cswd:carc:caxe:clbw:chrs:char:_ = map (round . (classWeight *)) classScores
@@ -68,6 +69,27 @@ teamWire (w,h) fl gen =
       x0 <- V3 <$> getRandomR (0,w) <*> getRandomR (0,h) <*> return 0
       g <- getSplit
       return $ SoldierData x0 (Just fl) (SoldierClass bod weap mnt) g
+
+
+baseWire :: (MonadFix m, Monoid e, HasTime Double s) => TeamFlag -> StdGen -> Base -> Wire s e m (Double, BaseEvents) (Base, Event [SoldierData])
+baseWire fl gen b = proc (juice,es) -> do
+    die <- filterE (not . null) -< filter isLoseBase <$> es
+    pooled <- couple (noisePrim gen) . soldierPool -< juice
+    let
+      newSolds = processPool <$> pooled
+    W.until -< ((b,newSolds),die)
+  where
+    isLoseBase LoseBase = True
+    processPool (sldrs,g) = zipWith posser sldrs posses
+      where
+        maxbdist = 25
+        (g0,g') = split (mkStdGen g)
+        (g1,g2) = split g'
+        posses = zipWith pickDisk (randomRs (0,1) g1) (randomRs (0,2*pi) g2)
+        pickDisk r th = (basePos b) ^+^ maxbdist *^ V3 (sqrt r * cos th) (sqrt r * sin th) 0
+        posser sldr pos = SoldierData pos (Just fl) sldr g0
+
+
 
 soldierPool :: (Monoid e, MonadFix m, HasTime Double s) => Wire s e m Double (Event [SoldierClass])
 soldierPool = proc juice -> do

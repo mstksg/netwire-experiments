@@ -89,6 +89,8 @@ type TeamInEvents = Event [TeamInEvent]
 
 data BaseEvent = LoseBase
 
+type BaseEvents = Event [BaseEvent]
+
 data Base = Base { basePos :: V3 Double }
 
 data SoldierData = SoldierData { soldierDataX0     :: V3 Double
@@ -164,4 +166,3 @@ instance Default SoldierFuncs where
 
 soldierPos :: Soldier -> V3 Double
 soldierPos = posAngPos . soldierPosAng
-
