@@ -154,9 +154,9 @@ instance HasSurface Base where
           (Just c,_)  ->
             sec `darken` blend (1/4) (teamFlagColor c) backgroundColor
           (_,Nothing) ->
-            green
+            white
           (_,Just c)  ->
-            blend sec yellow (blend (1/3) backgroundColor (teamFlagColor c))
+            blend sec white (blend (1/4) (teamFlagColor c) backgroundColor)
 
 instance HasSurface Soldier where
   toSurface (Soldier (PosAng (V3 x y _) ang) health fl _ _ _ weap mnt) =
