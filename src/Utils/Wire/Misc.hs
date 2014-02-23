@@ -72,3 +72,6 @@ zipEvents :: (Monad m, Monoid e, Semigroup b)
     => [Wire s e m a (Event b)]
     -> Wire s e m [a] (Event b)
 zipEvents ws = mconcat <$> zipWires ws
+
+delayM :: Monoid a => Wire s e m a a
+delayM = delay mempty

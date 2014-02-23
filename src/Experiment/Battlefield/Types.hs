@@ -16,6 +16,7 @@ type Wire' = Wire (Timed Double ()) () Identity
 data Stage = Stage { stageDimensions :: (Double,Double)
                    , stageSoldiers   :: [Soldier]
                    , stageArticles   :: [Article]
+                   , stageBases      :: [Base]
                    } deriving Show
 
 data Soldier = Soldier  { soldierPosAng :: PosAng
@@ -48,6 +49,7 @@ data Mount = Foot | Horse
 data Team = Team { teamFlag     :: TeamFlag
                  , teamSoldiers :: [Maybe Soldier]
                  , teamArticles :: [Article]
+                 , teamBases    :: [Base]
                  } deriving Show
 
 data TeamFlag = TeamFlag  { teamFlagColor :: Color
@@ -91,7 +93,13 @@ data BaseEvent = LoseBase
 
 type BaseEvents = Event [BaseEvent]
 
-data Base = Base { basePos :: V3 Double }
+data Base = Base { basePos      :: V3 Double
+                 , baseTeamFlag :: Maybe TeamFlag
+                 , baseSecurity :: Double
+                 } deriving Show
+
+baseRadius :: Double
+baseRadius = 40
 
 data SoldierData = SoldierData { soldierDataX0     :: V3 Double
                                , soldierDataFlag   :: Maybe TeamFlag
@@ -113,13 +121,26 @@ data SoldierStats = SoldierStats { soldierStatsDPS      :: Double
                                  , soldierStatsAccuracy :: Double
                                  }
 
+backgroundColor :: Color
+backgroundColor = sRGB24 126 126 126
+
 instance HasSurface Stage where
-  toSurface (Stage (w,h) sldrs arts) = Surface zero idTrans 1 ents
+  toSurface (Stage (w,h) sldrs arts bases) = Surface zero idTrans 1 ents
     where
-      back  = Sprite (V2 (w/2) (h/2)) (Rectangle (V2 w h) Filled) (sRGB24 126 126 126) 1
+      back  = Sprite (V2 (w/2) (h/2)) (Rectangle (V2 w h) Filled) backgroundColor 1
+      baseEnts = map (EntSurface . toSurface) bases
       sldrEnts = map (EntSurface . toSurface) sldrs
       artEnts = map (EntSurface . toSurface) arts
-      ents = EntSprite back:(sldrEnts ++ artEnts)
+      ents = EntSprite back:(baseEnts ++ sldrEnts ++ artEnts)
+
+
+instance HasSurface Base where
+  toSurface (Base (V3 x y _) fl sec) = Surface (V2 x y) idTrans 1 [baseCirc]
+    where
+      baseCirc = EntSprite $ Sprite zero (Circle baseRadius Filled) col' 1
+      col   = maybe white teamFlagColor fl
+      col'  = sec `darken` blend (1/3) backgroundColor col
+
 
 instance HasSurface Soldier where
   toSurface (Soldier (PosAng (V3 x y _) ang) health fl _ _ _ weap mnt) =
@@ -157,6 +178,12 @@ instance HasSurface Article where
 
 instance Show SoldierFuncs where
   show _ = "Soldier Functions"
+
+instance Default Team where
+  def = Team def [] [] []
+
+instance Default TeamFlag where
+  def = TeamFlag white
 
 instance Default SoldierScore where
   def = SoldierScore 0 0
