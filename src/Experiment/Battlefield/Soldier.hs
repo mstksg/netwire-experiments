@@ -161,7 +161,7 @@ soldierWire (SoldierData x0 fl cls@(SoldierClass bod weap mnt) gen) =
                     killed = soldierFuncsWouldKill (soldierFuncs sldr) atk
 
     moveAndAttack g = proc (targets,targetBases,attackeds,alive) -> do
-      favoriteSpot <- arr (^* (baseRadius * 0.5)) . noiseDisc 1.5 0 g -< ()
+      favoriteSpot <- arr (^* (baseRadius * 0.5)) . noiseDisc 1 0 g -< ()
 
       let
         targetsPos = map soldierPos (catMaybes targets)
