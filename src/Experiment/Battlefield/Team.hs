@@ -74,7 +74,7 @@ teamWire b0s (TeamData fl gen) =
     -- selectBases = fmap (== fl) . baseTeamFlag
     selectBases (Base _ Nothing _ _) = Nothing
     selectBases (Base _ (Just bfl) sec _) | bfl /= fl = Just False
-                                          | sec < 0.8 = Just False
+                                          | sec < 0.8 = Nothing
                                           | otherwise = Just True
     baseSwapper' :: (Base,StdGen) -> BaseEvents -> Event (Wire s e m  Double (StdGen, Event [SoldierData]))
     baseSwapper' bg (Event xs@(_:_)) = Event $ baseSwapper bg (last xs)
