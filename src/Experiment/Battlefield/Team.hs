@@ -51,7 +51,7 @@ teamWire b0s (TeamData fl gen) =
           -- targetBases | null neutB = enemyB
           --             | otherwise  = neutB
           targetBases | attackPhase = neutB ++ enemyB
-                      | otherwise   = ownedB
+                      | otherwise   = neutB ++ enemyB ++ ownedB
           -- maxSoldiers          = round (fromIntegral (length ownedB) * baseSupply')
           maxSoldiers          = totalSupply
           newSolds'            = map soldierWire <$> mconcat newSolds
@@ -108,9 +108,10 @@ teamWire b0s (TeamData fl gen) =
       where
         phaseLoop = buildPhase --> attackPhase --> phaseLoop
         initialPhase = pure True . W.for 30
-        buildPhase  = pure False . W.when (< 0.8)
-        -- attackPhase = pure True . W.when (> 0.5)
-        attackPhase = pure True . W.for 30
+        buildPhase  = pure False . W.when (< 0.95)
+        attackPhase = pure True . W.when (> 0.85)
+        -- attackPhase = pure True . W.for 15
+        -- attackPhase = pure True . (W.for 15 <|> W.when (> 0.85))
 
     -- newBaseEs (evts,g) = zipWith (baseWire fl) gens (mapMaybe getBase evts)
     --   where
