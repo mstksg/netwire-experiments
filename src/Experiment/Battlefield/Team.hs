@@ -70,7 +70,7 @@ teamWire b0s (TeamData fl gen) =
 
   where
     totalSupply = 20
-    juiceConst = 4
+    juiceConst = 3
     (bgen,_g') = split gen
     bgens = map mkStdGen (randoms bgen)
     juiceStream = (pure 50 . W.for 1) --> pure juiceConst
