@@ -22,8 +22,6 @@ stageWire :: (MonadFix m, Monoid e, HasTime Double s)
   -> TeamData
   -> Wire s e m () Stage
 stageWire dim@(w,h) t1d t2d = proc _ -> do
-    -- let t1bes' = repeat NoEvent
-    --     t2bes' = repeat NoEvent
 
     rec
       (team1@(Team _ t1ss t1as _), t2ahits) <- t1w . delay (teamWireDelayer b0s) --> error "team 1 inhibits" -< ((team2,bases), (t1bes, t1ahits))
@@ -47,9 +45,18 @@ stageWire dim@(w,h) t1d t2d = proc _ -> do
     t2w = teamWire b0s t2d
     -- b1s = makeBase t1fl <$> [V3 (w/6) (h/6) 0, V3 (w/6) (5*h/6) 0]
     -- b2s = makeBase t2fl <$> [V3 (5*w/6) (h/6) 0, V3 (5*w/6) (5*h/6) 0]
-    b1s = makeBase (Just t1fl) <$> [V3 (w/6) (h/6) 0, V3 (5*w/6) (5*h/6) 0]
-    b2s = makeBase (Just t2fl) <$> [V3 (5*w/6) (h/6) 0, V3 (w/6) (5*h/6) 0]
-    b0s = b1s ++ b2s ++ [makeBase Nothing (V3 (w/2) (h/2) 0)]
+    -- b1s = makeBase (Just t1fl) <$> [V3 (w/6) (h/6) 0, V3 (5*w/6) (5*h/6) 0]
+    -- b2s = makeBase (Just t2fl) <$> [V3 (5*w/6) (h/6) 0, V3 (w/6) (5*h/6) 0]
+    -- b1s = makeBase (Just t1fl) <$> [V3 (w/6) (h/6) 0, V3 (5*w/6) (h/6) 0]
+    -- b2s = makeBase (Just t2fl) <$> [V3 (w/6) (5*h/6) 0, V3 (5*w/6) (5*h/6) 0]
+    -- bns = makeBase Nothing <$> [V3 (w/2) (h/4) 0, V3 (w/2) (3*h/4) 0, V3 (w/4) (h/2) 0, V3 (3*w/4) (h/2) 0]
+    -- bns = makeBase Nothing <$> [V3 (5*w/6) (h/6) 0, V3 (w/2) (h/2) 0, V3 (w/6) (5*h/6) 0]
+    -- bns = makeBase Nothing <$> [V3 (w/3) (h/2) 0, V3 (2*w/3) (h/2) 0]
+    -- bns = makeBase Nothing <$> [V3 (w/2) (h/2) 0]
+    b1s = makeBase (Just t1fl) <$> [V3 (w/6) (h/6) 0]
+    b2s = makeBase (Just t2fl) <$> [V3 (5*w/6) (5*h/6) 0]
+    bns = makeBase Nothing <$> [V3 (w/2) (h/4) 0, V3 (w/2) (3*h/4) 0, V3 (w/4) (h/2) 0, V3 (3*w/4) (h/2) 0, V3 (5*w/6) (h/6) 0, V3 (w/2) (h/2) 0, V3 (w/6) (5*h/6) 0]
+    b0s = b1s ++ bns ++ b2s
     makeBase fl pb = Base pb fl 1 Nothing
 
 basesWire :: (MonadFix m, Monoid e, HasTime Double s)

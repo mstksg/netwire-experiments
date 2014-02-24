@@ -146,10 +146,10 @@ instance HasSurface Stage where
       ents = EntSprite back:(baseEnts ++ sldrEnts ++ artEnts)
 
 instance HasSurface Base where
-  toSurface (Base (V3 x y _) fl sec lean) = Surface (V2 x y) idTrans 1 [baseCirc,baseOutline]
+  toSurface (Base (V3 x y _) fl sec lean) = Surface (V2 x y) idTrans 1 [baseOutline,baseCirc]
     where
-      baseOutline = EntSprite $ Sprite zero (Circle baseRadius Unfilled) (maybe white teamFlagColor fl) 1
-      baseCirc = EntSprite $ Sprite zero (Circle baseRadius Filled) col 1
+      baseOutline = EntSprite $ Sprite zero (Circle baseRadius Filled) (blend (2/3) backgroundColor $ maybe white teamFlagColor fl) 1
+      baseCirc = EntSprite $ Sprite zero (Circle (baseRadius * 15/16) Filled) col 1
       col = blend (3/4) backgroundColor $
         case (fl,lean) of
           (Just c,_)  ->
