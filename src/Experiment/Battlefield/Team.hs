@@ -1,55 +1,166 @@
-module Experiment.Battlefield.Team (teamWire, genTeam, TeamWire, TeamWire') where
+module Experiment.Battlefield.Team (teamWire, teamWireDelayer, TeamWire, TeamWire') where
 
+-- import Control.Monad
+-- import Data.Maybe                  (mapMaybe)
+-- import Data.Traversable
+-- import Debug.Trace
+-- import Utils.Wire.Debug
 import Control.Monad.Fix
-import Control.Wire
-import Control.Wire.Unsafe.Event
-import Control.Monad
-import Linear.V3
-import Data.Maybe (mapMaybe)
-import Experiment.Battlefield.Attack
-import Experiment.Battlefield.Soldier
-import Experiment.Battlefield.Types
-import Utils.Wire.Wrapped
 import Control.Monad.Random
+import Control.Wire                   as W
+import Control.Wire.Unsafe.Event
+import Data.Default
+import Experiment.Battlefield.Soldier
+import Experiment.Battlefield.Stats
+import Experiment.Battlefield.Types
+import FRP.Netwire.Move
+import FRP.Netwire.Noise
+import Linear.V3
+import Linear.Vector
+import Prelude hiding                 ((.),id)
+import Utils.Helpers                  (foldAcrossl,partition3)
+import Utils.Wire.Misc
+import Utils.Wire.Noise
+import Utils.Wire.Wrapped
 
-type TeamWire s e m = Wire s e m (Team, ([SoldierInEvents],[Event ()])) Team
+type TeamWireIn = ((Team,[Base]), ([BaseEvents],[SoldierInEvents]))
+type TeamWire s e m = Wire s e m TeamWireIn (Team,[SoldierInEvents])
 type TeamWire' = TeamWire (Timed Double ()) () Identity
 
-teamWire :: (MonadFix m, Monoid e, HasTime t s, Fractional t)
-    => TeamFlag
-    -> [SoldierData]
+teamWireDelayer :: [Base] -> TeamWireIn
+teamWireDelayer b0s = ((def,b0s),(repeat NoEvent,repeat NoEvent))
+
+teamWire :: forall s e m. (MonadFix m, HasTime Double s, Monoid e)
+    => [Base]
+    -> TeamData
     -> TeamWire s e m
-teamWire fl sldrs0 =
-  proc (Team _ others _,(messSldrs,messAtks)) -> do
-    startSldrs <- now -< map soldierWire sldrs0
-    sldrsEs <- dWireBox' ([], NoEvent) -< (startSldrs, zip (repeat others) messSldrs)
-    let
-      sldrs = map fst sldrsEs
-      outEvts = mconcat (map snd sldrsEs)
-      newAtks = mapMaybe maybeAttack <$> outEvts
-      newAtkWires = map attackWire <$> newAtks
-    atks <- dWireBox' NoEvent -< (newAtkWires, messAtks)
-    returnA -< Team fl sldrs atks
+teamWire b0s (TeamData fl gen) =
+  proc ((Team _ others _ _,bases), (baseEvts,messSldrs)) -> do
+
+    rec
+      juice <- (juiceStream . W.when not <|> pure 0) . delay False -< maxedSoldiers
+
+      let baseSwappers = zipWith baseSwapper' (zip bases gens) baseEvts
+
+      basesNewSolds <- zipWires (zipWith baseSwitcher b0s bgens) . delay (repeat baseDelay) --> error "base wires inhibit" -< zip (repeat juice) baseSwappers
+
+      let (gens,newSolds) = unzip basesNewSolds
+          -- bases                = map fst basesGens
+          ((ownedB,enemyB),neutB) = partition3 selectBases bases
+          -- targetBases | null neutB = enemyB
+          --             | otherwise  = neutB
+          targetBases = neutB ++ enemyB
+          maxSoldiers          = length ownedB * baseSupply
+          newSolds'            = map soldierWire <$> mconcat newSolds
+
+      sldrsEs <- dWireBox' (([],[]), NoEvent) -< (newSolds', zip (repeat (others, targetBases)) messSldrs)
+
+      let sldrCount     = length sldrsEs
+          maxedSoldiers = sldrCount >= maxSoldiers
 
 
-genTeam :: (Monoid e, HasTime t s, MonadFix m, Fractional t)
-  => (Double, Double)               -- stage dimensions
-  -> TeamFlag                       -- team flag
-  -> (Int,Int,Int,Int,Int,Int)      -- Swordsman, Archers, Axemen, Longbowmen, Horsemen, Horse Archers
-  -> Rand StdGen (TeamWire s e m)
-genTeam (w,h) fl (cswd,carc,caxe,clbw,chrs,char) = do
-  swds <- replicateM cswd (genSoldier MeleeBody Sword Foot)
-  arcs <- replicateM carc (genSoldier RangedBody Bow Foot)
-  axes <- replicateM caxe (genSoldier TankBody Axe Foot)
-  lbws <- replicateM clbw (genSoldier MeleeBody Longbow Foot)
-  hrss <- replicateM chrs (genSoldier MeleeBody Sword Horse)
-  hars <- replicateM char (genSoldier MeleeBody Bow Horse)
-  let
-    datas = concat [swds,arcs,axes,lbws,hrss,hars]
-  return $ teamWire fl datas
+    let (sldrsArts,outInEvts) = unzip sldrsEs
+        (sldrs,arts)          = unzip sldrsArts
+        (_outEs,inEs)         = unzip outInEvts
+        arts'                 = concat arts
+        inEs'                 = foldAcrossl (<>) mempty inEs
+
+    returnA -< ((Team fl sldrs arts' bases),inEs')
+
   where
-    genSoldier :: SoldierBody -> Weapon -> Mount -> Rand StdGen SoldierData
-    genSoldier bod weap mnt = do
-      x0 <- V3 <$> getRandomR (0,w) <*> getRandomR (0,h) <*> return 0
-      gen <- getSplit
-      return $ SoldierData x0 (Just fl) bod weap mnt gen
+    (bgen,_g') = split gen
+    bgens = map mkStdGen (randoms bgen)
+    juiceStream = (pure 50 . W.for 1) --> pure 2.5
+    -- selectBases = fmap (== fl) . baseTeamFlag
+    selectBases (Base _ Nothing _ _) = Nothing
+    selectBases (Base _ (Just bfl) sec _) | bfl /= fl = Just False
+                                          | sec < 0.8 = Just False
+                                          | otherwise = Just True
+    baseSwapper' :: (Base,StdGen) -> BaseEvents -> Event (Wire s e m  Double (StdGen, Event [SoldierData]))
+    baseSwapper' bg (Event xs@(_:_)) = Event $ baseSwapper bg (last xs)
+    baseSwapper' bg (Event []) = Event $ baseSwapper bg (LoseBase Nothing)
+    baseSwapper' _ NoEvent = NoEvent
+
+    baseDelay = (0,NoEvent)
+
+    baseSwapper (base,g) GetBase = baseWire fl g base
+    baseSwapper (_,g) (LoseBase _) = pure (g, NoEvent)
+
+    baseSwitcher base g = drSwitch w0
+      where
+        bfl = baseTeamFlag base
+        w0 =
+          case bfl of
+            Just bfl' | bfl' == fl -> baseSwapper (base,g) GetBase
+            _                      -> baseSwapper (base,g) (LoseBase bfl)
+    -- newBaseEs (evts,g) = zipWith (baseWire fl) gens (mapMaybe getBase evts)
+    --   where
+    --     gens :: [StdGen]
+    --     gens = map mkStdGen $ randoms (mkStdGen g)
+    --     -- getBase (GotBase b) = Just b
+    --     getBase _ = Nothing
+
+    -- (cswd,carc,caxe,clbw,chrs,char) = (9,5,3,3,4,2)
+    -- classScores = map ((1 /) . classWorth) allClasses
+    -- classWeight = 10 / sum classScores
+    -- cswd:carc:caxe:clbw:chrs:char:_ = map (round . (classWeight *)) classScores
+    -- (sldrs0,_gen') = flip runRand gen $ do
+    --   swds <- replicateM cswd (genSoldier swordsmanClass)
+    --   arcs <- replicateM carc (genSoldier archerClass)
+    --   axes <- replicateM caxe (genSoldier axemanClass)
+    --   lbws <- replicateM clbw (genSoldier longbowmanClass)
+    --   hrss <- replicateM chrs (genSoldier horsemanClass)
+    --   hars <- replicateM char (genSoldier horsearcherClass)
+    --   return $ concat [swds,arcs,axes,lbws,hrss,hars]
+    -- genSoldier :: SoldierClass -> Rand StdGen SoldierData
+    -- genSoldier (SoldierClass bod weap mnt) = do
+    --   x0 <- V3 <$> getRandomR (0,w) <*> getRandomR (0,h) <*> return 0
+    --   g <- getSplit
+    --   return $ SoldierData x0 (Just fl) (SoldierClass bod weap mnt) g
+
+baseWire :: (MonadFix m, Monoid e, HasTime Double s) => TeamFlag -> StdGen -> Base -> Wire s e m Double (StdGen, Event [SoldierData])
+baseWire fl gen b = proc juice -> do
+    pooled <- couple (noisePrim genSldr) . soldierPool genPool -< juice
+    let
+      newSolds = processPool <$> pooled
+    returnA -< (g11,newSolds)
+  where
+    (g00,genSldr) = split gen
+    (genPool,g11) = split g00
+    processPool (sldrs,g) = zipWith posser sldrs posses
+      where
+        (g0,g') = split (mkStdGen g)
+        (g1,g2) = split g'
+        posses = zipWith pickDisk (randomRs (0,1) g1) (randomRs (0,2*pi) g2)
+        pickDisk r th = (basePos b) ^+^ (baseRadius *^ V3 (sqrt r * cos th) (sqrt r * sin th) 0)
+        posser sldr pos = SoldierData pos (Just fl) sldr g0
+
+
+soldierPool :: (Monoid e, MonadFix m, HasTime Double s) => StdGen -> Wire s e m Double (Event [SoldierClass])
+soldierPool gen = proc juice -> do
+    juiceDist <- (normDist . mkStdGen <$> hold . noise 1 genDist) <|> pure initDist -< ()
+    mconcat <$> zipWires poolWires -< liftA2 (*) juiceDist (pure juice)
+  where
+    (genInit,genDist) = split gen
+    -- defDist = [1/6,1/6,1/6,1/6,1/6,1/6]
+    initDist = normDist genInit
+    normDist g = map (/ summed) unNormed
+      where
+        unNormed = take 6 . map (+ 3) $ randomRs (0,1) g
+        summed = sum unNormed
+    poolWires = map classPool allClasses
+    classPool cls = proc juice -> do
+
+      juiced <- integral 0 -< juice
+
+      rec
+        depletion <- (hold . accumE (+) 0 <|> pure 0) . delay NoEvent -< deplete
+        deplete   <- watchDeplete score . delay 0 -< juiced - depletion
+
+      let
+        popped = [cls] <$ deplete
+      returnA -< popped
+      where
+        watchDeplete lim = (never . W.when (< lim) --> now . W.for 0.1) --> watchDeplete lim
+        score = classWorth cls
+

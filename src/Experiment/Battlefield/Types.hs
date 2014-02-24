@@ -1,8 +1,12 @@
+{-# OPTIONS -fno-warn-orphans #-}
+
 module Experiment.Battlefield.Types where
 
 import Render.Sprite
 import Control.Wire
+import Data.Ord
 import Prelude hiding ((.),id)
+import Data.Default
 import Data.Colour
 import Data.Colour.Names
 import Data.Colour.SRGB
@@ -10,20 +14,31 @@ import Render.Surface
 import Linear
 import System.Random
 
-type Wire' = Wire (Timed Double ()) () Identity
+type Wire' = Wire (Timed Double ()) String Identity
 
 data Stage = Stage { stageDimensions :: (Double,Double)
                    , stageSoldiers   :: [Soldier]
                    , stageArticles   :: [Article]
+                   , stageBases      :: [Base]
                    } deriving Show
 
 data Soldier = Soldier  { soldierPosAng :: PosAng
                         , soldierHealth :: Double
                         , soldierFlag   :: Maybe TeamFlag
+                        , soldierScore  :: SoldierScore
+                        , soldierFuncs  :: SoldierFuncs
                         , soldierBody   :: SoldierBody
                         , soldierWeapon :: Weapon
                         , soldierMount  :: Mount
                         } deriving Show
+
+
+data SoldierScore = SoldierScore { soldierScoreKillCount :: Int
+                                 , soldierScoreAge       :: Double
+                                 } deriving Show
+
+data SoldierFuncs = SoldierFuncs { soldierFuncsWouldKill :: Attack -> Bool
+                                 }
 
 data SoldierBody = MeleeBody | TankBody | RangedBody
                      deriving Show
@@ -35,12 +50,17 @@ data Mount = Foot | Horse
                       deriving Show
 
 data Team = Team { teamFlag     :: TeamFlag
-                 , teamSoldiers :: [Soldier]
+                 , teamSoldiers :: [Maybe Soldier]
                  , teamArticles :: [Article]
+                 , teamBases    :: [Base]
                  } deriving Show
 
 data TeamFlag = TeamFlag  { teamFlagColor :: Color
-                          } deriving Show
+                          } deriving (Show, Eq, Ord)
+
+data TeamData = TeamData { teamDataFlag :: TeamFlag
+                         , teamDataGen  :: StdGen
+                         } deriving Show
 
 data Article = Article { articlePosAng :: PosAng
                        , articleType   :: ArticleType
@@ -72,24 +92,75 @@ data SoldierInEvent = AttackedEvent { attackedEventDamage :: Double
 
 type SoldierInEvents = Event [SoldierInEvent]
 
+data TeamInEvent
+
+data BaseEvent = GetBase | LoseBase (Maybe TeamFlag)
+
+type BaseEvents = Event [BaseEvent]
+
+data Base = Base { basePos      :: V3 Double
+                 , baseTeamFlag :: Maybe TeamFlag
+                 , baseSecurity :: Double
+                 , baseLeaning  :: Maybe TeamFlag
+                 } deriving Show
+
+baseRadius :: Double
+baseRadius = 40
+
 data SoldierData = SoldierData { soldierDataX0     :: V3 Double
                                , soldierDataFlag   :: Maybe TeamFlag
-                               , soldierDataBody   :: SoldierBody
-                               , soldierDataWeapon :: Weapon
-                               , soldierDataMount  :: Mount
+                               , soldierDataClass  :: SoldierClass
                                , soldierDataGen    :: StdGen
                                } deriving Show
 
+data SoldierClass = SoldierClass { soldierClassBody   :: SoldierBody
+                                 , soldierClassWeapon :: Weapon
+                                 , soldierClassMount  :: Mount
+                                 } deriving Show
+
+data SoldierStats = SoldierStats { soldierStatsDPS      :: Double
+                                 , soldierStatsHealth   :: Double
+                                 , soldierStatsDamage   :: Double
+                                 , soldierStatsSpeed    :: Double
+                                 , soldierStatsCooldown :: Double
+                                 , soldierStatsRange    :: Maybe Double
+                                 , soldierStatsAccuracy :: Double
+                                 }
+
+backgroundColor :: Color
+backgroundColor = sRGB24 126 126 126
+
+instance (Ord a, Floating a) => Ord (Colour a) where
+  compare = comparing toSRGB
+
+instance Ord a => Ord (RGB a) where
+  compare (RGB r1 g1 b1) (RGB r2 g2 b2) = compare (r1,g1,b1) (r2,g2,b2)
+
 instance HasSurface Stage where
-  toSurface (Stage (w,h) sldrs arts) = Surface zero idTrans 1 ents
+  toSurface (Stage (w,h) sldrs arts bases) = Surface zero idTrans 1 ents
     where
-      back  = Sprite (V2 (w/2) (h/2)) (Rectangle (V2 w h) Filled) (sRGB24 126 126 126) 1
+      back  = Sprite (V2 (w/2) (h/2)) (Rectangle (V2 w h) Filled) backgroundColor 1
+      baseEnts = map (EntSurface . toSurface) bases
       sldrEnts = map (EntSurface . toSurface) sldrs
       artEnts = map (EntSurface . toSurface) arts
-      ents = EntSprite back:(sldrEnts ++ artEnts)
+      ents = EntSprite back:(baseEnts ++ sldrEnts ++ artEnts)
+
+instance HasSurface Base where
+  toSurface (Base (V3 x y _) fl sec lean) = Surface (V2 x y) idTrans 1 [baseCirc,baseOutline]
+    where
+      baseOutline = EntSprite $ Sprite zero (Circle baseRadius Unfilled) (maybe white teamFlagColor fl) 1
+      baseCirc = EntSprite $ Sprite zero (Circle baseRadius Filled) col 1
+      col = blend (3/4) backgroundColor $
+        case (fl,lean) of
+          (Just c,_)  ->
+            sec `darken` teamFlagColor c
+          (_,Nothing) ->
+            white
+          (_,Just c)  ->
+            blend sec white (teamFlagColor c)
 
 instance HasSurface Soldier where
-  toSurface (Soldier (PosAng (V3 x y _) ang) health fl _ weap mnt) =
+  toSurface (Soldier (PosAng (V3 x y _) ang) health fl _ _ _ weap mnt) =
       Surface (V2 x y) (transRotate ang) 1 [mountEnt,bodyEnt,weaponEnt]
     where
       mountEnt  =
@@ -121,6 +192,21 @@ instance HasSurface Article where
           Axe     -> EntSprite $ Sprite zero (Circle 2 Filled) yellow 2
           Bow     -> EntSprite $ Sprite zero (Line (V2 (-2) 0) (V2 2 0)) black 1
           Longbow -> EntSprite $ Sprite zero (Line (V2 (-2) 0) (V2 2 0)) black 1
+
+instance Show SoldierFuncs where
+  show _ = "Soldier Functions"
+
+instance Default Team where
+  def = Team def [] [] []
+
+instance Default TeamFlag where
+  def = TeamFlag white
+
+instance Default SoldierScore where
+  def = SoldierScore 0 0
+
+instance Default SoldierFuncs where
+  def = SoldierFuncs (const False)
 
 soldierPos :: Soldier -> V3 Double
 soldierPos = posAngPos . soldierPosAng

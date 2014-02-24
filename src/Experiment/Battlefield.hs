@@ -4,13 +4,11 @@ module Main where
 
 import Control.Monad.Random
 import Control.Wire
-import Control.Wire.Unsafe.Event
 import Data.Colour.Names
-import Data.List                    (transpose)
-import Experiment.Battlefield.Team
+import Experiment.Battlefield.Soldier
+import Experiment.Battlefield.Stage
 import Experiment.Battlefield.Types
-import Linear
-import Prelude hiding               ((.),id)
+import Prelude hiding                 ((.),id)
 import Render.Render
 
 #ifdef WINDOWS
@@ -23,51 +21,24 @@ import Experiment.Battlefield.Instances.SDL ()
 
 main :: IO ()
 main = do
-  stage <- evalRandIO $
-    simpleStage dim <$> genTeam' fl1 <*> genTeam' fl2
-  testStage stage
+  reportClasses
+  (t1,t2) <- evalRandIO $ (,)
+      <$> (TeamData fl1 <$> getSplit)
+      <*> (TeamData fl2 <$> getSplit)
+  testStage $ stageWire dim t1 t2
   where
     dim = (600,400)
     fl1 = TeamFlag red
     fl2 = TeamFlag blue
-    counts = (9,5,3,3,4,2)
-    genTeam' fl = genTeam dim fl counts
+    -- counts = (9,5,3,3,4,2)
 
-simpleStage ::
-     (Double, Double)
-  -> TeamWire'
-  -> TeamWire'
-  -> Wire' () Stage
-simpleStage dim@(w,h) t1w t2w = proc _ -> do
-    rec
-      let
-        (t1ahits,t2dhits) = hitWatcher t1as t2ds
-        (t2ahits,t1dhits) = hitWatcher t2as t1ds
-        t1douts           = borderWatcher t1ds
-        t2douts           = borderWatcher t2ds
-        t1devts           = zipWith (<>) t1douts t1dhits
-        t2devts           = zipWith (<>) t2douts t2dhits
-      team1@(Team _ t1as t1ds) <- t1w -< (team2, (t1ahits,t1devts))
-      team2@(Team _ t2as t2ds) <- t2w -< (team1, (t2ahits,t2devts))
-    returnA -< Stage dim (t1as ++ t2as) (t1ds ++ t2ds)
+reportClasses :: IO ()
+reportClasses = mapM_ (print . report) classScores
   where
-    hitWatcher :: [Soldier] -> [Article] -> ([SoldierInEvents],[Event ()])
-    hitWatcher as ds = (hitas, hitds)
-      where
-        hitMatrix = map hitad as
-        hitad a   = map (collision a) ds
-        collision (Soldier (PosAng ps _) _ _ _ _ _)
-                  (Article (PosAng pa _) (ArticleAttack (Attack _ dmg o)))
-                  | norm (ps ^-^ pa) < 5  = Event [AttackedEvent dmg o]
-        collision _ _ = NoEvent
-        hitas     = map mconcat hitMatrix
-        hitds     = map ((() <$) . mconcat) (transpose hitMatrix)
-    borderWatcher :: [Article] -> [Event ()]
-    borderWatcher = map outOfBounds
-      where
-        outOfBounds (Article (PosAng (V3 x y _) _) (ArticleAttack _))
-          | or [x < 0, y < 0, x > w, y > h] = Event ()
-        outOfBounds _                       = NoEvent
+    report :: Double -> (Double,Double,Int)
+    report score = (1 / score, score, round (classWeight * score))
+    classScores = map ((1 /) . classWorth) allClasses
+    classWeight = 30 / sum classScores
 
 testStage :: Wire' () Stage -> IO ()
 testStage w =
