@@ -17,10 +17,16 @@ import System.Random
 type Wire' = Wire (Timed Double ()) String Identity
 
 data Stage = Stage { stageDimensions :: (Double,Double)
+                   , stageData       :: StageData
                    , stageSoldiers   :: [Soldier]
                    , stageArticles   :: [Article]
                    , stageBases      :: [Base]
                    } deriving Show
+
+data StageData = StageData { stageDataScore :: (Double,Double)
+                           , stageDataGames :: Integer
+                           , stageDataDuration :: Double
+                           } deriving Show
 
 data Soldier = Soldier  { soldierPosAng :: PosAng
                         , soldierHealth :: Double
@@ -105,7 +111,7 @@ data Base = Base { basePos      :: V3 Double
                  } deriving Show
 
 baseRadius :: Double
-baseRadius = 40
+baseRadius = 30
 
 data SoldierData = SoldierData { soldierDataX0     :: V3 Double
                                , soldierDataFlag   :: Maybe TeamFlag
@@ -137,7 +143,7 @@ instance Ord a => Ord (RGB a) where
   compare (RGB r1 g1 b1) (RGB r2 g2 b2) = compare (r1,g1,b1) (r2,g2,b2)
 
 instance HasSurface Stage where
-  toSurface (Stage (w,h) sldrs arts bases) = Surface zero idTrans 1 ents
+  toSurface (Stage (w,h) _ sldrs arts bases) = Surface zero idTrans 1 ents
     where
       back  = Sprite (V2 (w/2) (h/2)) (Rectangle (V2 w h) Filled) backgroundColor 1
       baseEnts = map (EntSurface . toSurface) bases
@@ -195,6 +201,9 @@ instance HasSurface Article where
 
 instance Show SoldierFuncs where
   show _ = "Soldier Functions"
+
+instance Default StageData where
+  def = StageData (0,0) 0 0
 
 instance Default Team where
   def = Team def [] [] []

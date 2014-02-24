@@ -44,19 +44,24 @@ teamWire b0s (TeamData fl gen) =
 
       basesNewSolds <- zipWires (zipWith baseSwitcher b0s bgens) . delay (repeat baseDelay) --> error "base wires inhibit" -< zip (repeat juice) baseSwappers
 
+
       let (gens,newSolds) = unzip basesNewSolds
           -- bases                = map fst basesGens
           ((ownedB,enemyB),neutB) = partition3 selectBases bases
           -- targetBases | null neutB = enemyB
           --             | otherwise  = neutB
-          targetBases = neutB ++ enemyB
+          targetBases | attackPhase = neutB ++ enemyB
+                      | otherwise   = neutB ++ enemyB ++ ownedB
           -- maxSoldiers          = round (fromIntegral (length ownedB) * baseSupply')
           maxSoldiers          = totalSupply
           newSolds'            = map soldierWire <$> mconcat newSolds
 
+      attackPhase <- phaseWire . delay 0.5 -< soldierCapacity
+
       sldrsEs <- dWireBox' (([],[]), NoEvent) -< (newSolds', zip (repeat (others, targetBases)) messSldrs)
 
       let sldrCount     = length sldrsEs
+          soldierCapacity = fromIntegral sldrCount / fromIntegral maxSoldiers
           maxedSoldiers = sldrCount >= maxSoldiers
 
 
@@ -70,7 +75,7 @@ teamWire b0s (TeamData fl gen) =
 
   where
     totalSupply = 20
-    juiceConst = 4
+    juiceConst = 3
     (bgen,_g') = split gen
     bgens = map mkStdGen (randoms bgen)
     juiceStream = (pure 50 . W.for 1) --> pure juiceConst
@@ -97,6 +102,17 @@ teamWire b0s (TeamData fl gen) =
           case bfl of
             Just bfl' | bfl' == fl -> baseSwapper (base,g) GetBase
             _                      -> baseSwapper (base,g) (LoseBase bfl)
+
+    phaseWire :: Wire s e m Double Bool
+    phaseWire = initialPhase --> phaseLoop
+      where
+        phaseLoop = buildPhase --> attackPhase --> phaseLoop
+        initialPhase = pure True . W.for 30
+        buildPhase  = pure False . W.when (< 0.95)
+        attackPhase = pure True . W.when (> 0.85)
+        -- attackPhase = pure True . W.for 15
+        -- attackPhase = pure True . (W.for 15 <|> W.when (> 0.85))
+
     -- newBaseEs (evts,g) = zipWith (baseWire fl) gens (mapMaybe getBase evts)
     --   where
     --     gens :: [StdGen]
@@ -136,7 +152,7 @@ baseWire fl gen b = proc juice -> do
         (g0,g') = split (mkStdGen g)
         (g1,g2) = split g'
         posses = zipWith pickDisk (randomRs (0,1) g1) (randomRs (0,2*pi) g2)
-        pickDisk r th = (basePos b) ^+^ (baseRadius *^ V3 (sqrt r * cos th) (sqrt r * sin th) 0)
+        pickDisk r th = (basePos b) ^+^ ((baseRadius * 1.25) *^ V3 (sqrt r * cos th) (sqrt r * sin th) 0)
         posser sldr pos = SoldierData pos (Just fl) sldr g0
 
 
