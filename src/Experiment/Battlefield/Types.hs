@@ -105,7 +105,7 @@ data Base = Base { basePos      :: V3 Double
                  } deriving Show
 
 baseRadius :: Double
-baseRadius = 40
+baseRadius = 30
 
 data SoldierData = SoldierData { soldierDataX0     :: V3 Double
                                , soldierDataFlag   :: Maybe TeamFlag

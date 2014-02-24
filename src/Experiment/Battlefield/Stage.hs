@@ -24,8 +24,8 @@ stageWire :: (MonadFix m, Monoid e, HasTime Double s)
 stageWire dim@(w,h) t1d t2d = proc _ -> do
 
     rec
-      (team1@(Team _ t1ss t1as _), t2ahits) <- t1w . delay (teamWireDelayer b0s) --> error "team 1 inhibits" -< ((team2,bases), (t1bes, t1ahits))
-      (team2@(Team _ t2ss t2as _), t1ahits) <- t2w . delay (teamWireDelayer b0s) --> error "team 2 inhibits" -< ((team1,bases), (t2bes, t2ahits))
+      (team1@(Team _ t1ss t1as _), t2ahits) <- t1w . delay (teamWireDelayer b0s) -< ((team2,bases), (t1bes, t1ahits))
+      (team2@(Team _ t2ss t2as _), t1ahits) <- t2w -< ((team1,bases), (t2bes, t2ahits))
 
       let t1ss' = catMaybes t1ss
           t2ss' = catMaybes t2ss
