@@ -7,7 +7,6 @@ import Control.Wire
 import Data.Colour.Names
 import Experiment.Battlefield.Soldier
 import Experiment.Battlefield.Stage
-import Data.Default
 import Experiment.Battlefield.Types
 import Prelude hiding                 ((.),id)
 import Render.Render
@@ -26,7 +25,7 @@ main = do
   (t1,t2) <- evalRandIO $ (,)
       <$> (TeamData fl1 <$> getSplit)
       <*> (TeamData fl2 <$> getSplit)
-  testStage $ stageWire def dim t1 t2
+  testStage $ stageWireLoop dim t1 t2
   where
     dim = (600,400)
     fl1 = TeamFlag red
@@ -50,7 +49,7 @@ testStage w =
     (w . pure ())
 #else
   runBackend
-    (sdlBackend (1/45) 30 (600,600) (50,50,50))
-    (const . return . return $ ())
+    (sdlBackend (1/45) 23 (600,600) (50,50,50))
+    (const . const . return . return $ ())
     (w . pure ())
 #endif

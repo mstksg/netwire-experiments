@@ -296,6 +296,6 @@ testStage w =
 #else
   runBackend
     (sdlBackend (1/30) 30 (600,600) (50,50,50))
-    (const . return . return $ ())
+    (const . const . return . return $ ())
     (w . pure ())
 #endif

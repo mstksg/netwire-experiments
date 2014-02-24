@@ -141,7 +141,7 @@ runTest _ w =
 #ifdef WINDOWS
   runBackend (glutBackend (1/30) 2.5 (600,600) (31,31,31)) (const . return $ ()) (uncurry PlanetList <$> w)
 #else
-  runBackend (sdlBackend (1/30) 30 (600,600) (31,31,31)) (const . return . return $ ()) (uncurry PlanetList <$> w)
+  runBackend (sdlBackend (1/30) 30 (600,600) (31,31,31)) (const . const . return . return $ ()) (uncurry PlanetList <$> w)
 #endif
 
 runTestGNUPlot :: Int -> Wire (Timed Double ()) () IO (Event RenderEvent) [Planet] -> IO ()
