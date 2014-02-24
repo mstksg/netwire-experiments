@@ -33,15 +33,16 @@ import Utils.Wire.Wrapped
 
 soldierWire :: (MonadFix m, HasTime Double s, Monoid e)
     => SoldierData
-    -> Wire s e m ([Maybe Soldier], SoldierInEvents) ((Maybe Soldier,[Article]), (SoldierOutEvents,[SoldierInEvents]))
+    -> Wire s e m (([Maybe Soldier],[Base]), SoldierInEvents) ((Maybe Soldier,[Article]), (SoldierOutEvents,[SoldierInEvents]))
 soldierWire (SoldierData x0 fl cls@(SoldierClass bod weap mnt) gen) =
-  proc (targets,mess) -> do
+  proc ((targets,targetBases),mess) -> do
 
     -- it's good to be alive!
     age <- integral 0 -< 1
 
     let
       targetsPos = map soldierPos (catMaybes targets)
+      basesPos = map basePos targetBases
       attackeds = mapMaybe maybeAttacked <$> mess
 
     attackers <- curated -< (map snd <$> attackeds, findAttacker targetsPos)
@@ -62,8 +63,18 @@ soldierWire (SoldierData x0 fl cls@(SoldierClass bod weap mnt) gen) =
     rec
       let
         -- find the target and the direction to face
-        targetPool  | null attackers || not isRanged = targetsPos
-                    | otherwise                      = attackers
+        targetPool =
+          case (attackers,targetBases,isRanged) of
+            ([],[],False) -> targetsPos
+            ([],[],True) -> targetsPos
+            (_,[],False) -> targetsPos
+            (_,[],True) -> attackers
+            ([],_,False) -> basesPos
+            ([],_,True) -> basesPos
+            (_,_,False) -> attackers ++ basesPos
+            (_,_,True) -> attackers
+        -- targetPool  | null attackers || not isRanged = targetsPos
+        --             | otherwise                      = attackers
         target = seek targetPool pos
         newD
           | alive     = target >>= newAtk pos acc

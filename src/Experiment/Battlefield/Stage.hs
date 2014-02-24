@@ -2,6 +2,7 @@
 
 module Experiment.Battlefield.Stage (stageWire) where
 
+-- import Data.String
 import Control.Monad.Fix
 import Control.Wire                 as W
 import Control.Wire.Unsafe.Event
@@ -10,7 +11,6 @@ import Data.Traversable
 import Experiment.Battlefield.Team
 import Experiment.Battlefield.Types
 import FRP.Netwire.Move
-import Data.String
 import Linear.Metric
 import Linear.V3
 import Linear.Vector
@@ -62,23 +62,21 @@ basesWire fls@(t1fl,_t2fl) b0s = proc inp -> do
 
   let
     (bases,swaps) = unzip bEvts
-    evts = foldl sortEvts ([],[]) (reverse swaps)
+    evts = foldr sortEvts ([],[]) swaps
 
   returnA -< (bases,evts)
   where
-    sortEvts (t1bes,t2bes) swaps =
+    sortEvts swaps (t1bes,t2bes) =
         case swaps of
-          Event (Just fl,_) | fl == t1fl -> ( Event [GetBase]  : t1bes, NoEvent          : t2bes )
-                            | otherwise  -> ( NoEvent          : t1bes, Event [GetBase]  : t2bes )
-          Event (_,_)                    -> ( Event [LoseBase] : t1bes, Event [LoseBase] : t2bes )
-          -- Event (_,Just fl) | fl == t1fl -> ( Event [LoseBase] : t1bes, NoEvent          : t2bes )
-          --                   | otherwise  -> ( NoEvent          : t1bes, Event [LoseBase] : t2bes )
-          NoEvent                        -> ( NoEvent          : t1bes, NoEvent          : t2bes )
+          Event (Just fl) | fl == t1fl -> ( Event [GetBase]  : t1bes, NoEvent          : t2bes )
+                          | otherwise  -> ( NoEvent          : t1bes, Event [GetBase]  : t2bes )
+          Event _                      -> ( Event [LoseBase] : t1bes, Event [LoseBase] : t2bes )
+          NoEvent                      -> ( NoEvent          : t1bes, NoEvent          : t2bes )
 
 baseWire :: forall m e s. (MonadFix m, Monoid e, HasTime Double s)
   => (TeamFlag, TeamFlag)
   -> Base
-  -> Wire s e m ([Soldier],[Soldier]) (Base,Event (Maybe TeamFlag, Maybe TeamFlag))
+  -> Wire s e m ([Soldier],[Soldier]) (Base,Event (Maybe TeamFlag))
 baseWire (t1fl,t2fl) b0@(Base pb fl0 _ _) = proc (t1s,t2s) -> do
   let
     t1b = length $ filter inBase t1s
@@ -92,19 +90,16 @@ baseWire (t1fl,t2fl) b0@(Base pb fl0 _ _) = proc (t1s,t2s) -> do
     ((security, leaning), teamChange) <- drSwitch (ntBase fl0) -< (influence, newWire)
 
   owner <- hold <|> pure fl0 -< teamChange
-  oldOwner <- delay fl0 -< owner
 
   let newBase = b0 { baseTeamFlag = owner
                    , baseSecurity = security
                    , baseLeaning  = leaning
                    }
 
-      changeEvent = (,oldOwner) <$> teamChange
-
-  returnA -< (newBase, changeEvent)
+  returnA -< (newBase, teamChange)
 
   where
-    thresh = 5
+    thresh = 7.5
     inBase = (< baseRadius) . norm . (^-^ pb) . soldierPos
     ntBase :: Maybe TeamFlag -> Wire s e m (Maybe TeamFlag) ((Double, Maybe TeamFlag), Event (Maybe TeamFlag))
     ntBase = maybe neutralBase teamBase
@@ -115,7 +110,7 @@ baseWire (t1fl,t2fl) b0@(Base pb fl0 _ _) = proc (t1s,t2s) -> do
               case infl of
                 Just fl | fl == t1fl -> 1
                         | otherwise  -> -1
-                Nothing -> -0.25 * sec / abs sec
+                Nothing -> -0.25 * signum sec
         sec <- integral 0 -< push
 
       let leaning | sec > 0   = Just t1fl
@@ -124,7 +119,7 @@ baseWire (t1fl,t2fl) b0@(Base pb fl0 _ _) = proc (t1s,t2s) -> do
 
       swap <- never . W.when ((< thresh) . abs) --> now -< sec
 
-      returnA -< ((1 - (abs sec / thresh),leaning),infl <$ swap)
+      returnA -< ((1 - (abs sec / thresh),leaning),leaning <$ swap)
     teamBase :: TeamFlag -> Wire s e m (Maybe TeamFlag) ((Double, Maybe TeamFlag), Event (Maybe TeamFlag))
     teamBase fl = proc infl -> do
       rec

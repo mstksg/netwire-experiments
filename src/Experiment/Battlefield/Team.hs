@@ -17,7 +17,7 @@ import FRP.Netwire.Noise
 import Linear.V3
 import Linear.Vector
 import Prelude hiding                 ((.),id)
-import Utils.Helpers                  (foldAcrossl)
+import Utils.Helpers                  (foldAcrossl,partition3)
 import Utils.Wire.Misc
 import Utils.Wire.Noise
 import Utils.Wire.Wrapped
@@ -36,29 +36,22 @@ teamWire :: forall s e m. (MonadFix m, HasTime Double s, Monoid e)
 teamWire b0s (TeamData fl gen) =
   proc (Team _ others _ _, (baseEvts,messSldrs)) -> do
 
-    -- teamEvtsRand <- couple (noisePrim gen) -< teamEvts
-
-    -- let newBases = newBaseEs <$> teamEvtsRand
-
-
     rec
       juice <- (juiceStream . W.when not <|> pure 0) . delay False -< maxedSoldiers
-      -- juice <- (juiceStream . W.when not <|> pure 0) . delay False -< False
 
       let baseSwappers = zipWith baseSwapper' basesGens baseEvts
-      -- let baseSwappers = repeat NoEvent
-
-      -- basesNewSolds <- dWireBox' (0,NoEvent) -< (newBases, zip (repeat juice) baseEvts)
 
       basesNewSolds <- zipWires (zipWith baseSwitcher b0s bgens) . delay (repeat baseDelay) --> error "base wires inhibit" -< zip (repeat juice) baseSwappers
 
       let (basesGens,newSolds) = unzip basesNewSolds
           bases                = map fst basesGens
-          ownedBases           = filter ((== Just fl) . baseTeamFlag) bases
-          maxSoldiers          = length ownedBases * baseSupply
+          ((ownedB,enemyB),neutB) = partition3 (fmap (== fl) . baseTeamFlag) bases
+          targetBases | null neutB = enemyB
+                      | otherwise  = neutB
+          maxSoldiers          = length ownedB * baseSupply
           newSolds'            = map soldierWire <$> mconcat newSolds
 
-      sldrsEs <- dWireBox' ([], NoEvent) --> error "soldier box inhibits" -< (newSolds', zip (repeat others) messSldrs)
+      sldrsEs <- dWireBox' (([],[]), NoEvent) -< (newSolds', zip (repeat (others, targetBases)) messSldrs)
 
       let sldrCount     = length sldrsEs
           maxedSoldiers = sldrCount >= maxSoldiers
