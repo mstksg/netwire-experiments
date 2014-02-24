@@ -50,7 +50,8 @@ teamWire b0s (TeamData fl gen) =
           -- targetBases | null neutB = enemyB
           --             | otherwise  = neutB
           targetBases = neutB ++ enemyB
-          maxSoldiers          = length ownedB * baseSupply
+          -- maxSoldiers          = round (fromIntegral (length ownedB) * baseSupply')
+          maxSoldiers          = totalSupply
           newSolds'            = map soldierWire <$> mconcat newSolds
 
       sldrsEs <- dWireBox' (([],[]), NoEvent) -< (newSolds', zip (repeat (others, targetBases)) messSldrs)
@@ -68,9 +69,12 @@ teamWire b0s (TeamData fl gen) =
     returnA -< ((Team fl sldrs arts' bases),inEs')
 
   where
+    totalSupply = 20
+    juiceConst = 4
     (bgen,_g') = split gen
     bgens = map mkStdGen (randoms bgen)
-    juiceStream = (pure 50 . W.for 1) --> pure 2.5
+    juiceStream = (pure 50 . W.for 1) --> pure juiceConst
+    baseSupply' = fromIntegral totalSupply / fromIntegral (length b0s)
     -- selectBases = fmap (== fl) . baseTeamFlag
     selectBases (Base _ Nothing _ _) = Nothing
     selectBases (Base _ (Just bfl) sec _) | bfl /= fl = Just False
