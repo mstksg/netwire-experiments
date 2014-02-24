@@ -11,7 +11,7 @@ import Control.Wire                   as W
 import Control.Wire.Unsafe.Event
 import Data.Default
 import Experiment.Battlefield.Soldier
-import Experiment.Battlefield.Stats
+-- import Experiment.Battlefield.Stats
 import Experiment.Battlefield.Types
 import FRP.Netwire.Move
 import FRP.Netwire.Noise
@@ -46,7 +46,6 @@ teamWire b0s (TeamData fl gen) =
 
 
       let (gens,newSolds) = unzip basesNewSolds
-          -- bases                = map fst basesGens
           ((ownedB,enemyB),neutB) = partition3 selectBases bases
           -- targetBases | null neutB = enemyB
           --             | otherwise  = neutB
@@ -75,11 +74,13 @@ teamWire b0s (TeamData fl gen) =
 
   where
     totalSupply = 20
-    juiceConst = 3
+    juiceLimit = 20
+    numBases = length b0s
+    juiceAmount = juiceLimit / fromIntegral numBases
     (bgen,_g') = split gen
     bgens = map mkStdGen (randoms bgen)
-    juiceStream = (pure 50 . W.for 1) --> pure juiceConst
-    baseSupply' = fromIntegral totalSupply / fromIntegral (length b0s)
+    juiceStream = (pure 50 . W.for 1) --> pure juiceAmount
+    -- baseSupply' = fromIntegral totalSupply / fromIntegral (length b0s)
     -- selectBases = fmap (== fl) . baseTeamFlag
     selectBases (Base _ Nothing _ _) = Nothing
     selectBases (Base _ (Just bfl) sec _) | bfl /= fl = Just False

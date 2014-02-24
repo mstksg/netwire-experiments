@@ -23,9 +23,9 @@ data Stage = Stage { stageDimensions :: (Double,Double)
                    , stageBases      :: [Base]
                    } deriving Show
 
-data StageData = StageData { stageDataScore :: (Double,Double)
-                           , stageDataGames :: Integer
-                           , stageDataDuration :: Double
+data StageData = StageData { stageDataScores    :: (Int,Int)
+                           , stageDataGameCount :: Int
+                           , stageDataDuration  :: Double
                            } deriving Show
 
 data Soldier = Soldier  { soldierPosAng :: PosAng
@@ -111,7 +111,7 @@ data Base = Base { basePos      :: V3 Double
                  } deriving Show
 
 baseRadius :: Double
-baseRadius = 30
+baseRadius = 25
 
 data SoldierData = SoldierData { soldierDataX0     :: V3 Double
                                , soldierDataFlag   :: Maybe TeamFlag
@@ -173,8 +173,8 @@ instance HasSurface Soldier where
         case mnt of
           Foot  -> EntSurface $ Surface zero idTrans 1 $ map foot [-1.5,1.5]
             where
-              foot y' = EntSprite $ Sprite (V2 1 y') (Circle 0.5 Filled) brown 1
-          Horse -> EntSprite $ Sprite zero (Ellipse (V2 5 2) Filled) brown 1
+              foot y' = EntSprite $ Sprite (V2 1 y') (Circle 0.5 Filled) (sRGB24 52 52 52) 1
+          Horse -> EntSprite $ Sprite zero (Ellipse (V2 5 2) Filled) (sRGB24 52 52 52) 1
       weaponEnt =
         case weap of
           Sword   -> EntSprite $ Sprite zero (Line (V2 0 1) (V2 4 1)) black 1

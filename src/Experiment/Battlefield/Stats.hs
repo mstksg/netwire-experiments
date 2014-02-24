@@ -61,8 +61,8 @@ rangedAccuracy = 0.85
 hitRadius :: Double
 hitRadius = 5
 
-baseSupply :: Int
-baseSupply = 5
+-- baseSupply :: Int
+-- baseSupply = 5
 
 baseThreshold :: Double
 baseThreshold = 7.5

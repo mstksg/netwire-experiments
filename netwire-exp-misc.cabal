@@ -41,6 +41,7 @@ executable planets
                        , linear ==1.0.1
                        , mtl ==2.1.2
                        , MonadRandom ==0.1.12
+                       , SDL-ttf ==0.6.2
                        , netwire ==5.0.0
                        , time ==1.4.0.1
                        , colour ==2.3.3
@@ -73,6 +74,7 @@ executable room
                        , gnuplot ==0.5.1
                        , linear ==1.0.1
                        , MonadRandom ==0.1.12
+                       , SDL-ttf ==0.6.2
                        , mtl ==2.1.2
                        , netwire ==5.0.0
   hs-source-dirs:      src
@@ -108,6 +110,7 @@ executable archers
                        , MonadRandom ==0.1.12
                        , SDL-gfx ==0.6.0
                        , containers >= 0.5.0.0
+                       , SDL-ttf ==0.6.2
                        , linear ==1.0.1
                        , mtl ==2.1.2
                        , netwire ==5.0.0
@@ -147,14 +150,15 @@ executable battlefield
                        , MonadRandom ==0.1.12
                        , SDL ==0.6.5
                        , SDL-gfx ==0.6.0
+                       , SDL-ttf ==0.6.2
                        , colour ==2.3.3
+                       , containers >= 0.5.0.0
                        , data-default ==0.5.3
                        , linear ==1.0.1
                        , netwire ==5.0.0
                        , random ==1.0.1.1
                        , transformers >= 0.3.0.0
                        -- , GLUT ==2.5.0.2
-                       -- , containers >= 0.5.0.0
                        -- , mtl ==2.1.2
                        -- , time ==1.4.0.1
   hs-source-dirs:      src

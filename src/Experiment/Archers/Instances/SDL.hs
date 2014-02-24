@@ -9,7 +9,7 @@ import Render.Surface
 import qualified Graphics.UI.SDL as SDL
 
 instance SDLRenderable Stage where
-  renderSDL scr stg@(Stage w h _ _) = mapM_ (renderSDL scr) sList
+  renderSDL scr fm stg@(Stage w h _ _) = mapM_ (renderSDL scr fm) sList
     where
       sList = toSpriteList zero (transScale scale) 1 (toSurface stg)
       ht    = fromIntegral $ SDL.surfaceGetHeight scr
