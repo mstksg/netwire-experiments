@@ -40,16 +40,10 @@ soldierWire (SoldierData x0 fl cls@(SoldierClass bod weap mnt) gen) =
     -- it's good to be alive!
     age <- integral 0 -< 1
 
-    let
-      targetsPos = map soldierPos (catMaybes targets)
-      basesPos = map basePos targetBases
-      attackeds = mapMaybe maybeAttacked <$> mess
-
-    attackers <- curated -< (map snd <$> attackeds, findAttacker targetsPos)
-
     -- calculate damage from hits
     let
       hit = sum . map fst <$> attackeds
+      attackeds = mapMaybe maybeAttacked <$> mess
     damage <- hold . accumE (+) 0 <|> pure 0 -< hit
 
     -- calculate health, plus recovery
@@ -58,39 +52,7 @@ soldierWire (SoldierData x0 fl cls@(SoldierClass bod weap mnt) gen) =
       health = maxHealth + recov - damage
       alive = health > 0
 
-    -- seeking and movement
-    acc <- accuracy -< ()
-    rec
-      let
-        -- find the target and the direction to face
-        targetPool =
-          case (attackers,targetBases,isRanged) of
-            ([],[],False) -> targetsPos
-            ([],[],True) -> targetsPos
-            (_,[],False) -> targetsPos
-            (_,[],True) -> attackers
-            ([],_,False) -> basesPos
-            ([],_,True) -> basesPos
-            (_,_,False) -> attackers ++ basesPos
-            (_,_,True) -> attackers
-        -- targetPool  | null attackers || not isRanged = targetsPos
-        --             | otherwise                      = attackers
-        target = seek targetPool pos
-        newD
-          | alive     = target >>= newAtk pos acc
-          | otherwise = Nothing
-        dir    = snd <$> target
-
-        -- move to target?
-        vel = case target of
-          Just (tDist, tDir)
-            | tDist > range  -> tDir ^* speed
-          _                  -> 0
-
-      pos <- integral x0 -< vel
-
-    -- calculate last direction facing.  holdJust breaks FRP.
-    (V3 vx vy _) <- holdJust zero -< dir
+    (posAng,newD) <- moveAndAttack maaGen -< (targets,targetBases,attackeds,alive)
 
     -- shoot!
     shot  <- shoot -< newD
@@ -112,7 +74,6 @@ soldierWire (SoldierData x0 fl cls@(SoldierClass bod weap mnt) gen) =
     killCount <- hold . accumE (+) 0 <|> 0 -< killE
 
     let
-      angle = atan2 vy vx
       hasAtks = not (null atks)
 
       wouldKill = (>= health) . attackDamage
@@ -120,7 +81,7 @@ soldierWire (SoldierData x0 fl cls@(SoldierClass bod weap mnt) gen) =
       score     = SoldierScore killCount age
 
       soldier       = Soldier
-                        (PosAng pos angle)
+                        posAng
                         (health / maxHealth)
                         fl score funcs bod weap mnt
       soldier'
@@ -135,7 +96,8 @@ soldierWire (SoldierData x0 fl cls@(SoldierClass bod weap mnt) gen) =
 
   where
     SoldierStats _ maxHealth baseDamage speed coolDown range' classAcc = classStats cls
-    (dmgGen,accGen') = split gen
+    (gen',accGen') = split gen
+    (dmgGen,maaGen) = split gen'
     (firstAcc,accGen) = randomR (-accLimit,accLimit) accGen'
     accLimit = atan $ (hitRadius * 1.1 / classAcc / 2) / range
     range = fromMaybe 7.5 range'
@@ -197,6 +159,69 @@ soldierWire (SoldierData x0 fl cls@(SoldierClass bod weap mnt) gen) =
                   where
                     ps     = soldierPos sldr
                     killed = soldierFuncsWouldKill (soldierFuncs sldr) atk
+
+    moveAndAttack g = proc (targets,targetBases,attackeds,alive) -> do
+      favoriteSpot <- arr (^* (baseRadius * 0.5)) . noiseDisc 2.5 0 g -< ()
+
+      let
+        targetsPos = map soldierPos (catMaybes targets)
+        basesPos = map ((^+^ favoriteSpot) . basePos) targetBases
+
+      attackers <- curated -< (map snd <$> attackeds, findAttacker targetsPos)
+
+
+      -- seeking and movement
+      acc <- accuracy -< ()
+      rec
+        let
+          zone | null basesPos = Nothing
+               | otherwise     = fst <$> findClosest basesPos pos
+
+          zone' = (first ((if noAttackers then id else const True) . (< (range + baseRadius * 0.8)))) <$> zone
+
+          noAttackers = null attackers
+
+          inZone = fromMaybe True $ fst <$> zone'
+
+          -- inZone =
+          --   case zone of
+          --     Just ((zDist,_),_)
+          --       | zDist < baseRadius * 0.85 -> True
+          --       | otherwise -> False
+          --     Nothing -> False
+
+          -- find the target and the direction to face
+          -- targetPool =
+            -- case (attackers,targetBases,isRanged) of
+            --   ([],[],False) -> targetsPos
+            --   ([],[],True) -> targetsPos
+            --   (_,[],False) -> targetsPos
+            --   (_,[],True) -> attackers
+            --   ([],_,False) -> basesPos
+            --   ([],_,True) -> basesPos
+            --   (_,_,False) -> attackers ++ basesPos
+            --   (_,_,True) -> attackers
+          targetPool  | noAttackers || not isRanged = targetsPos
+                      | otherwise                   = attackers
+          target = guard inZone >> seek targetPool pos
+          target' = (first (> range)) <$> target
+          newD
+            | alive     = target >>= newAtk pos acc
+            | otherwise = Nothing
+
+          -- move to target?
+          (dir,vel) =
+            case (target',zone') of
+              (Just (True, tDir),_) -> (Just tDir, tDir ^* speed)
+              (_,Just (False, bDir)) -> (Just bDir, bDir ^* speed)
+              _                  -> (Nothing, zero)
+
+        pos <- integral x0 -< vel
+
+      -- calculate last direction facing.  holdJust breaks FRP.
+      (V3 vx vy _) <- holdJust zero -< dir
+
+      returnA -< (PosAng pos (atan2 vy vx),newD)
 
 swordsmanClass   :: SoldierClass
 archerClass      :: SoldierClass

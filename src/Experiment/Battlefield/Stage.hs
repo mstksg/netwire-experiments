@@ -2,12 +2,12 @@
 
 module Experiment.Battlefield.Stage (stageWire) where
 
--- import Data.String
 import Control.Monad.Fix
 import Control.Wire                 as W
 import Control.Wire.Unsafe.Event
 import Data.Maybe                   (catMaybes)
 import Data.Traversable
+import Experiment.Battlefield.Stats
 import Experiment.Battlefield.Team
 import Experiment.Battlefield.Types
 import FRP.Netwire.Move
@@ -26,8 +26,8 @@ stageWire dim@(w,h) t1d t2d = proc _ -> do
     --     t2bes' = repeat NoEvent
 
     rec
-      (team1@(Team _ t1ss t1as _), t2ahits) <- t1w . delay teamWireDelayer --> error "team 1 inhibits" -< (team2, (t1bes, t1ahits))
-      (team2@(Team _ t2ss t2as _), t1ahits) <- t2w . delay teamWireDelayer --> error "team 2 inhibits" -< (team1, (t2bes, t2ahits))
+      (team1@(Team _ t1ss t1as _), t2ahits) <- t1w . delay (teamWireDelayer b0s) --> error "team 1 inhibits" -< ((team2,bases), (t1bes, t1ahits))
+      (team2@(Team _ t2ss t2as _), t1ahits) <- t2w . delay (teamWireDelayer b0s) --> error "team 2 inhibits" -< ((team1,bases), (t2bes, t2ahits))
 
       let t1ss' = catMaybes t1ss
           t2ss' = catMaybes t2ss
@@ -68,9 +68,9 @@ basesWire fls@(t1fl,_t2fl) b0s = proc inp -> do
   where
     sortEvts swaps (t1bes,t2bes) =
         case swaps of
-          Event (Just fl) | fl == t1fl -> ( Event [GetBase]  : t1bes, NoEvent          : t2bes )
-                          | otherwise  -> ( NoEvent          : t1bes, Event [GetBase]  : t2bes )
-          Event _                      -> ( Event [LoseBase] : t1bes, Event [LoseBase] : t2bes )
+          Event j@(Just fl) | fl == t1fl -> ( Event [GetBase]  : t1bes, Event [LoseBase j]          : t2bes )
+                          | otherwise  -> ( Event [LoseBase j]          : t1bes, Event [GetBase]  : t2bes )
+          Event _                      -> ( Event [LoseBase Nothing] : t1bes, Event [LoseBase Nothing] : t2bes )
           NoEvent                      -> ( NoEvent          : t1bes, NoEvent          : t2bes )
 
 baseWire :: forall m e s. (MonadFix m, Monoid e, HasTime Double s)
@@ -99,7 +99,6 @@ baseWire (t1fl,t2fl) b0@(Base pb fl0 _ _) = proc (t1s,t2s) -> do
   returnA -< (newBase, teamChange)
 
   where
-    thresh = 7.5
     inBase = (< baseRadius) . norm . (^-^ pb) . soldierPos
     ntBase :: Maybe TeamFlag -> Wire s e m (Maybe TeamFlag) ((Double, Maybe TeamFlag), Event (Maybe TeamFlag))
     ntBase = maybe neutralBase teamBase
@@ -117,9 +116,9 @@ baseWire (t1fl,t2fl) b0@(Base pb fl0 _ _) = proc (t1s,t2s) -> do
                   | sec < 0   = Just t2fl
                   | otherwise = Nothing
 
-      swap <- never . W.when ((< thresh) . abs) --> now -< sec
+      swap <- never . W.when ((< baseThreshold) . abs) --> now -< sec
 
-      returnA -< ((1 - (abs sec / thresh),leaning),leaning <$ swap)
+      returnA -< ((1 - (abs sec / baseThreshold),leaning),leaning <$ swap)
     teamBase :: TeamFlag -> Wire s e m (Maybe TeamFlag) ((Double, Maybe TeamFlag), Event (Maybe TeamFlag))
     teamBase fl = proc infl -> do
       rec
@@ -128,9 +127,9 @@ baseWire (t1fl,t2fl) b0@(Base pb fl0 _ _) = proc (t1s,t2s) -> do
                 Just fl' | fl' == fl -> 1
                          | otherwise -> -1
                 Nothing              -> 0.1
-        sec <- integralWith (\_ s' -> (min s' thresh)) thresh -< (push,())
+        sec <- integralWith (\_ s' -> (min s' baseThreshold)) baseThreshold -< (push,())
 
       swap <- never . W.when (> 0) --> now -< sec
 
-      returnA -< ((sec / thresh,Nothing),Nothing <$ swap)
+      returnA -< ((sec / baseThreshold,Nothing),Nothing <$ swap)
 
