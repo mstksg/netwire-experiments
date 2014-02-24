@@ -94,7 +94,7 @@ type SoldierInEvents = Event [SoldierInEvent]
 
 data TeamInEvent
 
-data BaseEvent = GetBase | LoseBase
+data BaseEvent = GetBase | LoseBase (Maybe TeamFlag)
 
 type BaseEvents = Event [BaseEvent]
 
@@ -146,8 +146,9 @@ instance HasSurface Stage where
       ents = EntSprite back:(baseEnts ++ sldrEnts ++ artEnts)
 
 instance HasSurface Base where
-  toSurface (Base (V3 x y _) fl sec lean) = Surface (V2 x y) idTrans 1 [baseCirc]
+  toSurface (Base (V3 x y _) fl sec lean) = Surface (V2 x y) idTrans 1 [baseCirc,baseOutline]
     where
+      baseOutline = EntSprite $ Sprite zero (Circle baseRadius Unfilled) (maybe white teamFlagColor fl) 1
       baseCirc = EntSprite $ Sprite zero (Circle baseRadius Filled) col 1
       col = blend (3/4) backgroundColor $
         case (fl,lean) of
