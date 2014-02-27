@@ -17,6 +17,7 @@ import Experiment.Battlefield.Stats
 import Experiment.Battlefield.Team
 import Experiment.Battlefield.Types
 import FRP.Netwire.Move
+import System.Random
 import Utils.Helpers
 import Linear.Metric
 import Linear.V3
@@ -26,38 +27,43 @@ import Prelude hiding               ((.),id)
 
 stageWireOnce :: (MonadFix m, Monoid e, HasTime Double s)
   => (Double,Double)
-  -> TeamData
-  -> TeamData
+  -> TeamFlag
+  -> TeamFlag
+  -> StdGen
   -> Wire s e m () Stage
-stageWireOnce dim t1d t2d = arr fst . stageWireOnce' def dim t1d t2d
+stageWireOnce dim t1fl t2fl gen = arr fst . stageWireOnce' def dim t1fl t2fl gen
 
 stageWireLoop :: (MonadFix m, Monoid e, HasTime Double s)
   => (Double,Double)
-  -> TeamData
-  -> TeamData
+  -> TeamFlag
+  -> TeamFlag
+  -> StdGen
   -> Wire s e m () Stage
 stageWireLoop = stageWireLoop' def
 
 stageWireLoop' :: (MonadFix m, Monoid e, HasTime Double s)
-  => StageData
+  => StageScore
   -> (Double,Double)
-  -> TeamData
-  -> TeamData
+  -> TeamFlag
+  -> TeamFlag
+  -> StdGen
   -> Wire s e m () Stage
-stageWireLoop' stgD dim t1d t2d = switch stgW
+stageWireLoop' stgC dim t1fl t2fl gen = switch stgW
   where
-    stgW = second (fmap makeStageWire) <$> stageWireOnce' stgD dim t1d t2d
-    makeStageWire stgD' = stageWireLoop' stgD' dim t1d t2d
+    stgW = second (fmap makeStageWire) <$> stageWireOnce' stgC dim t1fl t2fl g1
+    makeStageWire stgC' = stageWireLoop' stgC' dim t1fl t2fl g2
+    (g1,g2) = split gen
 
 stageWireOnce' :: (MonadFix m, Monoid e, HasTime Double s)
-  => StageData
+  => StageScore
   -> (Double, Double)
-  -> TeamData
-  -> TeamData
-  -> Wire s e m () (Stage, Event StageData)
-stageWireOnce' stgD dim@(w,h) t1d t2d = proc _ -> do
+  -> TeamFlag
+  -> TeamFlag
+  -> StdGen
+  -> Wire s e m () (Stage, Event StageScore)
+stageWireOnce' stgC dim@(w,h) t1fl t2fl gen = proc _ -> do
 
-    duration <- integral (stageDataDuration stgD) -< 1
+    duration <- integral (stageScoreDuration stgC) -< 1
 
     rec
       (team1@(Team _ t1ss t1as _), t2ahits) <- t1w . delay (teamWireDelayer b0s) -< ((team2,bases), (t1bes, t1ahits))
@@ -75,14 +81,15 @@ stageWireOnce' stgD dim@(w,h) t1d t2d = proc _ -> do
 
     let newData = processVictory duration <$> victory
 
-    returnA -< (Stage dim (stgD { stageDataDuration = duration }) sldrs arts bases, newData)
+    returnA -< (Stage dim (stgC { stageScoreDuration = duration }) sldrs arts bases, newData)
 
   where
-    t1fl = teamDataFlag t1d
-    t2fl = teamDataFlag t2d
+    -- t1fl = teamDataFlag t1fl
+    -- t2fl = teamDataFlag t2fl
+    (t1gen,t2gen) = split gen
 
-    t1w = teamWire b0s t1d
-    t2w = teamWire b0s t2d
+    t1w = teamWire b0s $ TeamData t1fl t1gen
+    t2w = teamWire b0s $ TeamData t2fl t2gen
     -- b1s = makeBase t1fl <$> [V3 (w/6) (h/6) 0, V3 (w/6) (5*h/6) 0]
     -- b2s = makeBase t2fl <$> [V3 (5*w/6) (h/6) 0, V3 (5*w/6) (5*h/6) 0]
     -- b1s = makeBase (Just t1fl) <$> [V3 (w/6) (h/6) 0, V3 (5*w/6) (5*h/6) 0]
@@ -111,16 +118,16 @@ stageWireOnce' stgD dim@(w,h) t1d t2d = proc _ -> do
                                , V3 (w/6) (5*h/6) 0
                                ]
     b0s = b1s ++ bns ++ b2s
-    makeBase fl pb = Base pb fl 1 Nothing
-    numBases = length b0s
-    winner bases | length t1bs == numBases = Just t1fl
-                 | length t2bs == numBases = Just t2fl
-                 | otherwise               = Nothing
+    makeBase fl pb = Base pb fl 1 Nothing Nothing
+    -- numBases = length b0s
+    winner bases | null t1bs = Just t2fl
+                 | null t2bs = Just t1fl
+                 | otherwise = Nothing
       where
         (t1bs,t2bs) = fst $ partition3 (fmap (== t1fl) . baseTeamFlag) bases
-    processVictory dur wnr = stgD { stageDataScores    = newScore
-                                  , stageDataGameCount = gameCount + 1
-                                  , stageDataDuration  = dur
+    processVictory dur wnr = stgC { stageScoreScores    = newScore
+                                  , stageScoreGameCount = gameCount + 1
+                                  , stageScoreDuration  = dur
                                   }
       where
         newScore = case wnr of
@@ -128,8 +135,8 @@ stageWireOnce' stgD dim@(w,h) t1d t2d = proc _ -> do
                              | fl == t2fl -> (second (+1)) scores
                      _                    -> scores
 
-        (StageData scores gameCount _) = stgD
-    
+        (StageScore scores gameCount _) = stgC
+
 
 basesWire :: (MonadFix m, Monoid e, HasTime Double s)
   => (TeamFlag, TeamFlag)
@@ -156,7 +163,7 @@ baseWire :: forall m e s. (MonadFix m, Monoid e, HasTime Double s)
   => (TeamFlag, TeamFlag)
   -> Base
   -> Wire s e m ([Soldier],[Soldier]) (Base,Event (Maybe TeamFlag))
-baseWire (t1fl,t2fl) b0@(Base pb fl0 _ _) = proc (t1s,t2s) -> do
+baseWire (t1fl,t2fl) b0@(Base pb fl0 _ _ _) = proc (t1s,t2s) -> do
   let
     t1b = length $ filter inBase t1s
     t2b = length $ filter inBase t2s
@@ -178,7 +185,7 @@ baseWire (t1fl,t2fl) b0@(Base pb fl0 _ _) = proc (t1s,t2s) -> do
   returnA -< (newBase, teamChange)
 
   where
-    inBase = (< baseRadius) . norm . (^-^ pb) . soldierPos
+    inBase = (< baseRadius) . norm . (^-^ pb) . getPos
     ntBase :: Maybe TeamFlag -> Wire s e m (Maybe TeamFlag) ((Double, Maybe TeamFlag), Event (Maybe TeamFlag))
     ntBase = maybe neutralBase teamBase
     neutralBase :: Wire s e m (Maybe TeamFlag) ((Double, Maybe TeamFlag), Event (Maybe TeamFlag))

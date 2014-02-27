@@ -7,6 +7,7 @@ import Control.Wire
 import Data.Colour.Names
 import Experiment.Battlefield.Soldier
 import Experiment.Battlefield.Stage
+import Data.Map.Strict ((!))
 import Experiment.Battlefield.Types
 import Prelude hiding                 ((.),id)
 import Render.Render
@@ -22,14 +23,12 @@ import Experiment.Battlefield.Instances.SDL ()
 main :: IO ()
 main = do
   reportClasses
-  (t1,t2) <- evalRandIO $ (,)
-      <$> (TeamData fl1 <$> getSplit)
-      <*> (TeamData fl2 <$> getSplit)
-  testStage $ stageWireLoop dim t1 t2
+  g <- getStdGen
+  testStage $ stageWireLoop dim t1fl t2fl g
   where
     dim = (600,400)
-    fl1 = TeamFlag red
-    fl2 = TeamFlag blue
+    t1fl = TeamFlag red
+    t2fl = TeamFlag blue
     -- counts = (9,5,3,3,4,2)
 
 reportClasses :: IO ()
@@ -37,8 +36,8 @@ reportClasses = mapM_ (print . report) classScores
   where
     report :: Double -> (Double,Double,Int)
     report score = (1 / score, score, round (classWeight * score))
-    classScores = map ((1 /) . classWorth) allClasses
-    classWeight = 30 / sum classScores
+    classScores = map ((1 /) . (normedClassWorths !)) allClasses
+    classWeight = 100 / sum classScores
 
 testStage :: Wire' () Stage -> IO ()
 testStage w =
@@ -49,7 +48,7 @@ testStage w =
     (w . pure ())
 #else
   runBackend
-    (sdlBackend (1/45) 23 (600,600) (50,50,50))
+    (sdlBackend (1/45) 30 (600,600) (50,50,50))
     (const . const . return . return $ ())
     (w . pure ())
 #endif

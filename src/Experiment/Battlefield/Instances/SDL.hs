@@ -28,10 +28,10 @@ instance SDLRenderable Stage where
       wd    = fromIntegral $ SDL.surfaceGetWidth scr
       scale = min (ht / h) (wd / w)
       (w,h) = stageDimensions stg
-      stgD  = stageData stg
-      (t1sc,t2sc) = stageDataScores stgD
+      stgC  = stageScore stg
+      (t1sc,t2sc) = stageScoreScores stgC
       ka1 = fm ! FontKA1
       textString = unwords [ "Red" , show t1sc
                            , "Blue", show t2sc
-                           , "Time", (show . round) (stageDataDuration stgD)
+                           , "Time", (show . round) (stageScoreDuration stgC)
                            ]

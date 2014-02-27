@@ -4,6 +4,7 @@ module Utils.Helpers
   , wee
   , foldAcrossl
   , partition3
+  , rotationDir
   ) where
 
 import Data.List (foldl')
@@ -27,3 +28,11 @@ partition3 p = foldr select3 (([],[]),[])
                              Just True  -> ((x:t,b),n)
                              Just False -> ((t,x:b),n)
                              _          -> ((t,b),x:n)
+
+rotationDir :: Double -> Double -> Bool
+rotationDir a1 a2 = dp < dn
+  where
+    (dp,dn) | a1 > a2   = (a2 + 2*pi - a1,a1 - a2)
+            | otherwise = (a2 - a1,a1 + 2*pi - a2)
+
+

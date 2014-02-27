@@ -1,4 +1,5 @@
 {-# OPTIONS -fno-warn-orphans #-}
+{-# LANGUAGE OverlappingInstances #-}
 
 module Experiment.Battlefield.Types where
 
@@ -8,6 +9,7 @@ import Data.Ord
 import Prelude hiding ((.),id)
 import Data.Default
 import Data.Colour
+import Data.Maybe (fromMaybe)
 import Data.Colour.Names
 import Data.Colour.SRGB
 import Render.Surface
@@ -17,16 +19,19 @@ import System.Random
 type Wire' = Wire (Timed Double ()) String Identity
 
 data Stage = Stage { stageDimensions :: (Double,Double)
-                   , stageData       :: StageData
+                   , stageScore      :: StageScore
                    , stageSoldiers   :: [Soldier]
                    , stageArticles   :: [Article]
                    , stageBases      :: [Base]
                    } deriving Show
 
-data StageData = StageData { stageDataScores    :: (Int,Int)
-                           , stageDataGameCount :: Int
-                           , stageDataDuration  :: Double
-                           } deriving Show
+data StageScore = StageScore { stageScoreScores    :: (Int,Int)
+                             , stageScoreGameCount :: Int
+                             , stageScoreDuration  :: Double
+                             } deriving Show
+
+data Hittable = HittableSoldier Soldier
+              | HittableBase Base
 
 data Soldier = Soldier  { soldierPosAng :: PosAng
                         , soldierHealth :: Double
@@ -47,13 +52,13 @@ data SoldierFuncs = SoldierFuncs { soldierFuncsWouldKill :: Attack -> Bool
                                  }
 
 data SoldierBody = MeleeBody | TankBody | RangedBody
-                     deriving Show
+                     deriving (Show, Ord, Eq)
 
 data Weapon = Sword | Axe | Bow | Longbow
-                       deriving Show
+                       deriving (Show, Ord, Eq)
 
 data Mount = Foot | Horse
-                      deriving Show
+                      deriving (Show, Ord, Eq)
 
 data Team = Team { teamFlag     :: TeamFlag
                  , teamSoldiers :: [Maybe Soldier]
@@ -108,6 +113,7 @@ data Base = Base { basePos      :: V3 Double
                  , baseTeamFlag :: Maybe TeamFlag
                  , baseSecurity :: Double
                  , baseLeaning  :: Maybe TeamFlag
+                 , baseWall     :: Maybe Double
                  } deriving Show
 
 baseRadius :: Double
@@ -122,7 +128,7 @@ data SoldierData = SoldierData { soldierDataX0     :: V3 Double
 data SoldierClass = SoldierClass { soldierClassBody   :: SoldierBody
                                  , soldierClassWeapon :: Weapon
                                  , soldierClassMount  :: Mount
-                                 } deriving Show
+                                 } deriving (Show, Ord, Eq)
 
 data SoldierStats = SoldierStats { soldierStatsDPS      :: Double
                                  , soldierStatsHealth   :: Double
@@ -152,8 +158,10 @@ instance HasSurface Stage where
       ents = EntSprite back:(baseEnts ++ sldrEnts ++ artEnts)
 
 instance HasSurface Base where
-  toSurface (Base (V3 x y _) fl sec lean) = Surface (V2 x y) idTrans 1 [baseOutline,baseCirc]
+  toSurface (Base (V3 x y _) fl sec lean wall) = Surface (V2 x y) idTrans 1 [baseWallOutline,baseOutline,baseCirc]
     where
+      wallColor = blend (fromMaybe 0 wall) backgroundColor black
+      baseWallOutline = EntSprite $ Sprite zero (Circle (baseRadius * 17/16) Filled) wallColor 1
       baseOutline = EntSprite $ Sprite zero (Circle baseRadius Filled) (blend (2/3) backgroundColor $ maybe white teamFlagColor fl) 1
       baseCirc = EntSprite $ Sprite zero (Circle (baseRadius * 15/16) Filled) col 1
       col = blend (3/4) backgroundColor $
@@ -202,8 +210,8 @@ instance HasSurface Article where
 instance Show SoldierFuncs where
   show _ = "Soldier Functions"
 
-instance Default StageData where
-  def = StageData (0,0) 0 0
+instance Default StageScore where
+  def = StageScore (0,0) 0 0
 
 instance Default Team where
   def = Team def [] [] []
@@ -217,5 +225,39 @@ instance Default SoldierScore where
 instance Default SoldierFuncs where
   def = SoldierFuncs (const False)
 
-soldierPos :: Soldier -> V3 Double
-soldierPos = posAngPos . soldierPosAng
+class HasPosAng a where
+  getPosAng :: a -> PosAng
+
+class HasPos a where
+  getPos :: a -> V3 Double
+
+instance HasPosAng Soldier where
+  getPosAng = soldierPosAng
+
+instance HasPosAng Article where
+  getPosAng = articlePosAng
+
+instance HasPos Base where
+  getPos = basePos
+
+instance HasPos PosAng where
+  getPos = posAngPos
+
+instance (HasPosAng a) => HasPos a where
+  getPos = getPos . getPosAng
+
+instance HasPos Hittable where
+  getPos (HittableSoldier s) = getPos s
+  getPos (HittableBase b) = getPos b
+
+instance HasPos (V3 Double) where
+  getPos = id
+
+hitRadius :: Double
+hitRadius = 5
+
+hittableHit :: HasPos a => Hittable -> a -> Bool
+hittableHit (HittableSoldier s) a = norm (getPos a ^-^ getPos s) < hitRadius
+hittableHit (HittableBase b) a = d < 1.1 && d > 1
+  where
+    d = norm (getPos a ^-^ getPos b) / baseRadius

@@ -9,12 +9,14 @@ module Experiment.Battlefield.Soldier
   , allClasses
   , classStats
   , classWorth
+  , normedClassWorths
   ) where
 
 import Control.Monad
 import Control.Monad.Fix
 import Control.Wire                  as W
 import Control.Wire.Unsafe.Event
+import Data.Fixed                    (mod')
 import Data.List                     (minimumBy, mapAccumL)
 import Data.Maybe                    (mapMaybe, catMaybes, fromMaybe)
 import Data.Ord                      (comparing)
@@ -26,10 +28,17 @@ import FRP.Netwire.Noise
 import Linear
 import Prelude hiding                ((.),id)
 import System.Random
-import Utils.Helpers                 (foldAcrossl)
+import Utils.Helpers                 (foldAcrossl, rotationDir)
 import Utils.Wire.Misc
 import Utils.Wire.Noise
 import Utils.Wire.Wrapped
+import qualified Data.Map.Strict     as M
+
+type SoldierWireIn = ((([Maybe Soldier],[Base]),[Hittable]), SoldierInEvents)
+type SoldierWireOut = (SoldierOutEvents,[SoldierInEvents])
+
+type SoldierWire s e m = Wire s e m SoldierWireIn SoldierWireOut
+
 
 soldierWire :: (MonadFix m, HasTime Double s, Monoid e)
     => SoldierData
@@ -52,7 +61,7 @@ soldierWire (SoldierData x0 fl cls@(SoldierClass bod weap mnt) gen) =
       health = maxHealth + recov - damage
       alive = health > 0
 
-    (posAng,newD) <- moveAndAttack maaGen -< (targets,targetBases,attackeds,alive)
+    ((pos, angleChange),newD) <- moveAndAttack maaGen -< (targets,targetBases,attackeds,alive)
 
     -- shoot!
     shot  <- shoot -< newD
@@ -73,6 +82,21 @@ soldierWire (SoldierData x0 fl cls@(SoldierClass bod weap mnt) gen) =
 
     killCount <- hold . accumE (+) 0 <|> 0 -< killE
 
+
+    rec
+      currFace <- hold <|> pure 0 -< angleChange
+      let
+        angmod = mod' ang (2 * pi)
+        currFaceMod = mod' currFace (2 * pi)
+        rotDist = abs (currFaceMod - angmod)
+        rotDir = rotationDir angmod currFaceMod
+        rotation | rotDist < 0.1 = 0
+                 | rotDir        = 1 * (rotDist / 2 * pi)
+                 | otherwise     = -1 * (rotDist / 2 * pi)
+
+      ang <- integral initAng -< angSpeed * rotation
+
+
     let
       hasAtks = not (null atks)
 
@@ -81,7 +105,7 @@ soldierWire (SoldierData x0 fl cls@(SoldierClass bod weap mnt) gen) =
       score     = SoldierScore killCount age
 
       soldier       = Soldier
-                        posAng
+                        (PosAng pos ang)
                         (health / maxHealth)
                         fl score funcs bod weap mnt
       soldier'
@@ -97,11 +121,13 @@ soldierWire (SoldierData x0 fl cls@(SoldierClass bod weap mnt) gen) =
   where
     SoldierStats _ maxHealth baseDamage speed coolDown range' classAcc = classStats cls
     (gen',accGen') = split gen
-    (dmgGen,maaGen) = split gen'
+    (dmgGen,gen'') = split gen'
+    (initAng,maaGen) = randomR (0,2*pi) gen''
     (firstAcc,accGen) = randomR (-accLimit,accLimit) accGen'
     accLimit = atan $ (hitRadius * 1.1 / classAcc / 2) / range
     range = fromMaybe 7.5 range'
     isRanged = weaponRanged weap
+    angSpeed = 2 * pi * 2.5
     accuracy
       | isRanged  = Just <$> (hold . noiseR coolDown (-accLimit,accLimit) accGen <|> pure firstAcc)
       | otherwise = pure Nothing
@@ -157,14 +183,14 @@ soldierWire (SoldierData x0 fl cls@(SoldierClass bod weap mnt) gen) =
               | norm (pa ^-^ ps) < hitRadius = (Just killed, Event [AttackedEvent dmg o])
               | otherwise                    = (Nothing, NoEvent )
                   where
-                    ps     = soldierPos sldr
+                    ps     = getPos sldr
                     killed = soldierFuncsWouldKill (soldierFuncs sldr) atk
 
     moveAndAttack g = proc (targets,targetBases,attackeds,alive) -> do
       favoriteSpot <- arr (^* (baseRadius * 0.5)) . noiseDisc 1 0 g -< ()
 
       let
-        targetsPos = map soldierPos (catMaybes targets)
+        targetsPos = map getPos (catMaybes targets)
         basesPos = map ((^+^ favoriteSpot) . basePos) targetBases
 
       attackers <- curated -< (map snd <$> attackeds, findAttacker targetsPos)
@@ -201,6 +227,7 @@ soldierWire (SoldierData x0 fl cls@(SoldierClass bod weap mnt) gen) =
             --   ([],_,True) -> basesPos
             --   (_,_,False) -> attackers ++ basesPos
             --   (_,_,True) -> attackers
+
           targetPool  | noAttackers || not isRanged = targetsPos
                       | otherwise                   = attackers
           target = guard inZone >> seek targetPool pos
@@ -210,18 +237,20 @@ soldierWire (SoldierData x0 fl cls@(SoldierClass bod weap mnt) gen) =
             | otherwise = Nothing
 
           -- move to target?
-          (dir,vel) =
+          (dirChange,vel) =
             case (target',zone') of
-              (Just (True, tDir),_) -> (Just tDir, tDir ^* speed)
-              (_,Just (False, bDir)) -> (Just bDir, bDir ^* speed)
-              _                  -> (Nothing, zero)
+              (Just (True, tDir),_) -> (Event tDir, tDir ^* speed)
+              (_,Just (False, bDir)) -> (Event bDir, bDir ^* speed)
+              _                  -> (NoEvent, zero)
 
         pos <- integral x0 -< vel
 
-      -- calculate last direction facing.  holdJust breaks FRP.
-      (V3 vx vy _) <- holdJust zero -< dir
+      let angleChange = (\(V3 vx vy _) -> atan2 vy vx) <$> dirChange
 
-      returnA -< (PosAng pos (atan2 vy vx),newD)
+      -- -- calculate last direction facing.  holdJust breaks FRP.
+      -- (V3 vx vy _) <- holdJust zero -< dir
+
+      returnA -< ((pos, angleChange),newD)
 
 swordsmanClass   :: SoldierClass
 archerClass      :: SoldierClass
@@ -264,3 +293,9 @@ classWorth = statsWorth . classStats
         statZipped = zipWith3 mul3 statArr statNorm statWeight
         mul3 a n z = (a/n)*z
 
+normedClassWorths :: M.Map SoldierClass Double
+normedClassWorths = M.fromList $ zip allClasses normed
+  where
+    worths = map classWorth allClasses
+    worthsum = sum worths
+    normed = map (/ worthsum) worths
