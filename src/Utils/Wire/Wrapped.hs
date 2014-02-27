@@ -34,14 +34,14 @@ wireBox fill = go []
                  NoEvent -> []
       return (sequence results, go (news ++ updateds))
 
-dWireMap :: (Monoid s, Monad m, Ord k, Enum k)
+dWireMap :: (Monoid s, Monad m, Ord k, Enum k, Show k)
     => a
     -> k
     -> Wire s e m (Event [Wire s e m a b], M.Map k a) (M.Map k b)
 dWireMap fill k0 = wireMap fill k0 . delay (NoEvent, M.empty)
 
 wireMap :: forall b e m a s k.
-       (Monoid s, Monad m, Ord k, Enum k)
+       (Monoid s, Monad m, Ord k, Enum k, Show k)
     => a
     -> k
     -> Wire s e m (Event [Wire s e m a b], M.Map k a) (M.Map k b)
@@ -63,11 +63,11 @@ wireMap fill k0 = go k0 M.empty
             updateds = fmap snd stepped'
             (news,k2) =
               case adds of
-                Event nws -> (newsmap,k')
+                Event nws -> (newsmap, k')
                   where
-                    nwsks = zip [k0..] nws
+                    nwsks = zip [k1..] nws
                     k' | null nws  = k1
-                      | otherwise = succ . fst $ last nwsks
+                       | otherwise = succ . fst $ last nwsks
                     newsmap = M.fromList nwsks
                 NoEvent   -> (M.empty, k1)
         return (sequence results, go k2 (updateds `M.union` news))
