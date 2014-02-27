@@ -34,10 +34,10 @@ import Utils.Wire.Noise
 import Utils.Wire.Wrapped
 import qualified Data.Map.Strict     as M
 
-type SoldierWireIn = ((([Maybe Soldier],[Base]),[Hittable]), SoldierInEvents)
-type SoldierWireOut = (SoldierOutEvents,[SoldierInEvents])
+-- type SoldierWireIn = ((([Maybe Soldier],[Base]),[Hittable]), SoldierInEvents)
+-- type SoldierWireOut = (SoldierOutEvents,[SoldierInEvents])
 
-type SoldierWire s e m = Wire s e m SoldierWireIn SoldierWireOut
+-- type SoldierWire s e m = Wire s e m SoldierWireIn SoldierWireOut
 
 
 soldierWire :: (MonadFix m, HasTime Double s, Monoid e)
@@ -70,7 +70,7 @@ soldierWire (SoldierData x0 fl cls@(SoldierClass bod weap mnt) gen) =
 
     -- manage shots
     rec
-      atks    <- dWireBox' NoEvent -< (shotW, atkDies)
+      atks    <- dWireBox NoEvent -< (shotW, atkDies)
       let
         atkHitsKills = checkAttacks atks targets
         (kills,atkHits) = unzip atkHitsKills

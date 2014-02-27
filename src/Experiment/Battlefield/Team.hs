@@ -58,7 +58,7 @@ teamWire b0s (TeamData fl gen) =
 
       attackPhase <- phaseWire . delay 0.5 -< soldierCapacity
 
-      sldrsEs <- dWireBox' (([],[]), NoEvent) -< (newSolds', zip (repeat (others, targetBases)) messSldrs)
+      sldrsEs <- dWireBox (([],[]), NoEvent) -< (newSolds', zip (repeat (others, targetBases)) messSldrs)
 
       let sldrCount     = length sldrsEs
           soldierCapacity = fromIntegral sldrCount / fromIntegral maxSoldiers
