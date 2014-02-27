@@ -5,9 +5,12 @@ module Utils.Helpers
   , foldAcrossl
   , partition3
   , rotationDir
+  , zipMapWithDefaults
   ) where
 
 import Data.List (foldl')
+import qualified Data.Map as M
+
 
 selects :: [a] -> [(a,[a])]
 selects = go []
@@ -36,3 +39,14 @@ rotationDir a1 a2 = dp < dn
             | otherwise = (a2 - a1,a1 + 2*pi - a2)
 
 
+{-# INLINE zipMapWithDefaults #-}
+zipMapWithDefaults :: (Ord k) => (a -> b -> c) -> Maybe a -> Maybe b -> M.Map k a -> M.Map k b -> M.Map k c
+zipMapWithDefaults f x0 y0 = M.mergeWithKey f' zx zy
+  where
+    f' _ x y = Just (x `f` y)
+    zx = case y0 of
+           Nothing -> const M.empty
+           Just y' -> fmap (`f` y')
+    zy = case x0 of
+           Nothing -> const M.empty
+           Just x' -> fmap (x' `f`)

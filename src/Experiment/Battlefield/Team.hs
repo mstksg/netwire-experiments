@@ -1,4 +1,6 @@
-module Experiment.Battlefield.Team (teamWire, teamWireDelayer, TeamWire, TeamWire') where
+{-# LANGUAGE TupleSections #-}
+
+module Experiment.Battlefield.Team (teamWire, teamWireDelayer, TeamWire) where
 
 -- import Control.Monad
 -- import Data.Maybe                   (mapMaybe)
@@ -19,17 +21,18 @@ import FRP.Netwire.Noise
 import Linear.V3
 import Linear.Vector
 import Prelude hiding                  ((.),id)
-import Utils.Helpers                   (foldAcrossl,partition3)
+import Utils.Helpers                   (partition3,zipMapWithDefaults)
 import Utils.Wire.Misc
 import Utils.Wire.Noise
 import Utils.Wire.Wrapped
+import qualified Data.Map.Strict       as M
 
-type TeamWireIn = ((Team,[Base]), ([BaseEvents],[SoldierInEvents]))
-type TeamWire s e m = Wire s e m TeamWireIn (Team,[SoldierInEvents])
-type TeamWire' = TeamWire (Timed Double ()) () Identity
+type TeamWireIn = ((Team,[Base]), ([BaseEvents],M.Map Int SoldierInEvents))
+type TeamWireOut = (Team,M.Map Int SoldierInEvents)
+type TeamWire s e m = Wire s e m TeamWireIn TeamWireOut
 
 teamWireDelayer :: [Base] -> TeamWireIn
-teamWireDelayer b0s = ((def,b0s),(repeat NoEvent,repeat NoEvent))
+teamWireDelayer b0s = ((def,b0s),(repeat NoEvent,M.empty))
 
 teamWire :: forall s e m. (MonadFix m, HasTime Double s, Monoid e)
     => [Base]
@@ -55,22 +58,29 @@ teamWire b0s (TeamData fl gen) =
           -- maxSoldiers          = round (fromIntegral (length ownedB) * baseSupply')
           maxSoldiers          = totalSupply
           newSolds'            = map soldierWire <$> mconcat newSolds
+          sldrs = fst . fst <$> sldrsEs
+          sldrIns = (others,targetBases) <$ sldrs
+          sldrInsMsgs = zipMapWithDefaults (,) (Just (others,targetBases)) (Just NoEvent) sldrIns messSldrs
+
 
       attackPhase <- phaseWire . delay 0.5 -< soldierCapacity
 
-      sldrsEs <- dWireBox (([],[]), NoEvent) -< (newSolds', zip (repeat (others, targetBases)) messSldrs)
+      -- sldrsEs <- dWireMap ((M.empty,[]), NoEvent) 0 -< (newSolds', zip (repeat (others, targetBases)) messSldrs)
+      sldrsEs <- dWireMap ((M.empty,[]), NoEvent) 0 -< (newSolds', sldrInsMsgs)
 
-      let sldrCount     = length sldrsEs
+      let sldrCount     = M.size sldrsEs
           soldierCapacity = fromIntegral sldrCount / fromIntegral maxSoldiers
           maxedSoldiers = sldrCount >= maxSoldiers
 
 
-    let (sldrsArts,outInEvts) = unzip sldrsEs
-        (sldrs,arts)          = unzip sldrsArts
+    let (sldrsArts,outInEvts) = unzip (M.elems sldrsEs)
+        (_,arts)              = unzip sldrsArts
         (_outEs,inEs)         = unzip outInEvts
         arts'                 = concat arts
-        inEs'                 = foldAcrossl (<>) mempty inEs
+        -- inEs'                 = foldAcrossl (<>) mempty inEs
+        inEs'                 = M.unionsWith (<>) inEs
 
+    -- returnA -< ((Team fl sldrs arts' bases),inEs')
     returnA -< ((Team fl sldrs arts' bases),inEs')
 
   where
