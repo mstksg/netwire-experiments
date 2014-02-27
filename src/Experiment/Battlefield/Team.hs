@@ -32,7 +32,7 @@ type TeamWireOut = (Team,M.Map Int SoldierInEvents)
 type TeamWire s e m = Wire s e m TeamWireIn TeamWireOut
 
 teamWireDelayer :: [Base] -> TeamWireIn
-teamWireDelayer b0s = ((def,b0s),(repeat NoEvent,M.empty))
+teamWireDelayer b0s = ((def,b0s),(repeat NoEvent,mempty))
 
 teamWire :: forall s e m. (MonadFix m, HasTime Double s, Monoid e)
     => [Base]
@@ -66,7 +66,7 @@ teamWire b0s (TeamData fl gen) =
       attackPhase <- phaseWire . delay 0.5 -< soldierCapacity
 
       -- sldrsEs <- dWireMap ((M.empty,[]), NoEvent) 0 -< (newSolds', zip (repeat (others, targetBases)) messSldrs)
-      sldrsEs <- dWireMap ((M.empty,[]), NoEvent) 0 -< (newSolds', sldrInsMsgs)
+      sldrsEs <- dWireMap ((mempty,[]), NoEvent) 0 -< (newSolds', sldrInsMsgs)
 
       let sldrCount     = M.size sldrsEs
           soldierCapacity = fromIntegral sldrCount / fromIntegral maxSoldiers
