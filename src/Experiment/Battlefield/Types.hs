@@ -3,18 +3,19 @@
 
 module Experiment.Battlefield.Types where
 
-import Render.Sprite
 import Control.Wire
-import Data.Ord
-import Prelude hiding ((.),id)
-import Data.Default
 import Data.Colour
-import Data.Maybe (fromMaybe)
 import Data.Colour.Names
 import Data.Colour.SRGB
-import Render.Surface
+import Data.Default
+import Data.Maybe                (fromMaybe)
+import Data.Ord
 import Linear
+import Prelude hiding            ((.),id)
+import Render.Sprite
+import Render.Surface
 import System.Random
+import qualified Data.Map.Strict as M
 
 type Wire' = Wire (Timed Double ()) String Identity
 
@@ -61,7 +62,7 @@ data Mount = Foot | Horse
                       deriving (Show, Ord, Eq)
 
 data Team = Team { teamFlag     :: TeamFlag
-                 , teamSoldiers :: [Maybe Soldier]
+                 , teamSoldiers :: M.Map Int (Maybe Soldier)
                  , teamArticles :: [Article]
                  , teamBases    :: [Base]
                  } deriving Show
@@ -160,7 +161,7 @@ instance HasSurface Stage where
 instance HasSurface Base where
   toSurface (Base (V3 x y _) fl sec lean wall) = Surface (V2 x y) idTrans 1 [baseWallOutline,baseOutline,baseCirc]
     where
-      wallColor = blend (fromMaybe 0 wall) backgroundColor black
+      wallColor = blend (fromMaybe 0 wall) black backgroundColor
       baseWallOutline = EntSprite $ Sprite zero (Circle (baseRadius * 17/16) Filled) wallColor 1
       baseOutline = EntSprite $ Sprite zero (Circle baseRadius Filled) (blend (2/3) backgroundColor $ maybe white teamFlagColor fl) 1
       baseCirc = EntSprite $ Sprite zero (Circle (baseRadius * 15/16) Filled) col 1
@@ -214,7 +215,7 @@ instance Default StageScore where
   def = StageScore (0,0) 0 0
 
 instance Default Team where
-  def = Team def [] [] []
+  def = Team def M.empty [] []
 
 instance Default TeamFlag where
   def = TeamFlag white

@@ -9,20 +9,21 @@ module Experiment.Battlefield.Stage
 
 import Control.Monad.Fix
 import Control.Wire                 as W
-import Data.Default
 import Control.Wire.Unsafe.Event
+import Data.Default
 import Data.Maybe                   (catMaybes, isNothing)
 import Data.Traversable
 import Experiment.Battlefield.Stats
 import Experiment.Battlefield.Team
 import Experiment.Battlefield.Types
 import FRP.Netwire.Move
-import System.Random
-import Utils.Helpers
 import Linear.Metric
 import Linear.V3
 import Linear.Vector
 import Prelude hiding               ((.),id)
+import System.Random
+import Utils.Helpers
+import qualified Data.Map.Strict    as M
 
 
 stageWireOnce :: (MonadFix m, Monoid e, HasTime Double s)
@@ -69,8 +70,8 @@ stageWireOnce' stgC dim@(w,h) t1fl t2fl gen = proc _ -> do
       (team1@(Team _ t1ss t1as _), t2ahits) <- t1w . delay (teamWireDelayer b0s) -< ((team2,bases), (t1bes, t1ahits))
       (team2@(Team _ t2ss t2as _), t1ahits) <- t2w -< ((team1,bases), (t2bes, t2ahits))
 
-      let t1ss' = catMaybes t1ss
-          t2ss' = catMaybes t2ss
+      let t1ss' = catMaybes (M.elems t1ss)
+          t2ss' = catMaybes (M.elems t2ss)
 
       (bases,(t1bes,t2bes)) <- basesWire (t1fl,t2fl) b0s . delay ([],[]) -< (t1ss',t2ss')
 

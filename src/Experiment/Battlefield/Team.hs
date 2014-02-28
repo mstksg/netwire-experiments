@@ -1,4 +1,6 @@
-module Experiment.Battlefield.Team (teamWire, teamWireDelayer, TeamWire, TeamWire') where
+{-# LANGUAGE TupleSections #-}
+
+module Experiment.Battlefield.Team (teamWire, teamWireDelayer, TeamWire) where
 
 -- import Control.Monad
 -- import Data.Maybe                   (mapMaybe)
@@ -19,17 +21,18 @@ import FRP.Netwire.Noise
 import Linear.V3
 import Linear.Vector
 import Prelude hiding                  ((.),id)
-import Utils.Helpers                   (foldAcrossl,partition3)
+import Utils.Helpers                   (partition3,zipMapWithDefaults)
 import Utils.Wire.Misc
 import Utils.Wire.Noise
 import Utils.Wire.Wrapped
+import qualified Data.Map.Strict       as M
 
-type TeamWireIn = ((Team,[Base]), ([BaseEvents],[SoldierInEvents]))
-type TeamWire s e m = Wire s e m TeamWireIn (Team,[SoldierInEvents])
-type TeamWire' = TeamWire (Timed Double ()) () Identity
+type TeamWireIn = ((Team,[Base]), ([BaseEvents],M.Map Int SoldierInEvents))
+type TeamWireOut = (Team,M.Map Int SoldierInEvents)
+type TeamWire s e m = Wire s e m TeamWireIn TeamWireOut
 
 teamWireDelayer :: [Base] -> TeamWireIn
-teamWireDelayer b0s = ((def,b0s),(repeat NoEvent,repeat NoEvent))
+teamWireDelayer b0s = ((def,b0s),(repeat NoEvent,mempty))
 
 teamWire :: forall s e m. (MonadFix m, HasTime Double s, Monoid e)
     => [Base]
@@ -43,7 +46,7 @@ teamWire b0s (TeamData fl gen) =
 
       let baseSwappers = zipWith baseSwapper' (zip bases gens) baseEvts
 
-      basesNewSolds <- zipWires (zipWith baseSwitcher b0s bgens) . delay (repeat baseDelay) --> error "base wires inhibit" -< zip (repeat juice) baseSwappers
+      basesNewSolds <- zipWires (zipWith baseSwitcher b0s bgens) . delay (repeat baseDelay) -< zip (repeat juice) baseSwappers
 
 
       let (gens,newSolds) = unzip basesNewSolds
@@ -55,30 +58,36 @@ teamWire b0s (TeamData fl gen) =
           -- maxSoldiers          = round (fromIntegral (length ownedB) * baseSupply')
           maxSoldiers          = totalSupply
           newSolds'            = map soldierWire <$> mconcat newSolds
+          sldrs = fst . fst <$> sldrsEs
+          sldrIns = (others,targetBases) <$ sldrs
+          sldrInsMsgs = zipMapWithDefaults (,) (Just (others,targetBases)) (Just NoEvent) sldrIns messSldrs
+
 
       attackPhase <- phaseWire . delay 0.5 -< soldierCapacity
 
-      sldrsEs <- dWireBox' (([],[]), NoEvent) -< (newSolds', zip (repeat (others, targetBases)) messSldrs)
+      sldrsEs <- dWireMap ((mempty,[]), NoEvent) 0 -< (newSolds', sldrInsMsgs)
 
-      let sldrCount     = length sldrsEs
+      let sldrCount       = M.size sldrsEs
           soldierCapacity = fromIntegral sldrCount / fromIntegral maxSoldiers
           maxedSoldiers = sldrCount >= maxSoldiers
 
 
-    let (sldrsArts,outInEvts) = unzip sldrsEs
-        (sldrs,arts)          = unzip sldrsArts
+    let (sldrsArts,outInEvts) = unzip (M.elems sldrsEs)
+        (_,arts)              = unzip sldrsArts
         (_outEs,inEs)         = unzip outInEvts
         arts'                 = concat arts
-        inEs'                 = foldAcrossl (<>) mempty inEs
+        -- inEs'                 = foldAcrossl (<>) mempty inEs
+        inEs'                 = M.unionsWith (<>) inEs
 
+    -- returnA -< ((Team fl sldrs arts' bases),inEs')
     returnA -< ((Team fl sldrs arts' bases),inEs')
 
   where
     totalSupply  = 20
-    juiceLimit   = 4
+    juiceLimit   = 2.5
     numBases     = length b0s
     juiceAmount  = juiceLimit / fromIntegral numBases
-    reserveJuice = 0.8
+    reserveJuice = 0.67
     (bgen,_g')   = split gen
     bgens        = map mkStdGen (randoms bgen)
     juiceStream  = (pure 12.5 . W.for 0.5) --> arr ((juiceAmount +) . (reserveJuice /) . fromIntegral . max 1 . snd)
@@ -141,7 +150,11 @@ teamWire b0s (TeamData fl gen) =
     --   g <- getSplit
     --   return $ SoldierData x0 (Just fl) (SoldierClass bod weap mnt) g
 
-baseWire :: (MonadFix m, Monoid e, HasTime Double s) => TeamFlag -> StdGen -> Base -> Wire s e m Double (StdGen, Event [SoldierData])
+baseWire :: (MonadFix m, Monoid e, HasTime Double s)
+    => TeamFlag
+    -> StdGen
+    -> Base
+    -> Wire s e m Double (StdGen, Event [SoldierData])
 baseWire fl gen b = proc juice -> do
     pooled <- couple (noisePrim genSldr) . soldierPool genPool -< juice
     let
@@ -159,7 +172,9 @@ baseWire fl gen b = proc juice -> do
         posser sldr pos = SoldierData pos (Just fl) sldr g0
 
 
-soldierPool :: (Monoid e, MonadFix m, HasTime Double s) => StdGen -> Wire s e m Double (Event [SoldierClass])
+soldierPool :: (Monoid e, MonadFix m, HasTime Double s)
+    => StdGen
+    -> Wire s e m Double (Event [SoldierClass])
 soldierPool gen = proc juice -> do
     juiceDist <- (normDist . mkStdGen <$> hold . noise 1 genDist) <|> pure initDist -< ()
     mconcat <$> zipWires poolWires -< liftA2 (*) juiceDist (pure juice)
