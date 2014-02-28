@@ -34,14 +34,14 @@ wireBox fill = go []
                  NoEvent -> []
       return (sequence results, go (news ++ updateds))
 
-dWireMap :: (Monoid s, Monad m, Ord k, Enum k, Show k)
+dWireMap :: (Monoid s, Monad m, Ord k, Enum k)
     => a
     -> k
     -> Wire s e m (Event [Wire s e m a b], M.Map k a) (M.Map k b)
 dWireMap fill k0 = wireMap fill k0 . delay (NoEvent, M.empty)
 
 wireMap :: forall b e m a s k.
-       (Monoid s, Monad m, Ord k, Enum k, Show k)
+       (Monoid s, Monad m, Ord k, Enum k)
     => a
     -> k
     -> Wire s e m (Event [Wire s e m a b], M.Map k a) (M.Map k b)
