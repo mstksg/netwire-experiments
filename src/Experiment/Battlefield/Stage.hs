@@ -68,22 +68,26 @@ stageWireOnce' stgC dim@(w,h) t1fl t2fl gen = proc _ -> do
     duration <- integral (stageScoreDuration stgC) -< 1
 
     rec
-      (team1@(Team _ t1ss t1as _), (t2ahits,t2bhits)) <- t1w . delay (teamWireDelayer b0s) -< ((team2,bases), (t1bes, t1ahits))
-      (team2@(Team _ t2ss t2as _), (t1ahits,t1bhits)) <- t2w -< ((team1,bases), (t2bes, t2ahits))
+      -- (team1@(Team _ t1ss t1as _), (t2ahits,t2bhits)) <- t1w . delay (teamWireDelayer b0s) -< ((team2,bases), (t1bes, t1ahits))
+      -- (team2@(Team _ t2ss t2as _), (t1ahits,t1bhits)) <- t2w -< ((team1,bases), (t2bes, t2ahits))
+      (team1@(Team _ t1ss _), (t1Outs,t2bhits)) <- t1w . delay (teamWireDelayer b0s) -< ((team2,bases), (t1bes, t1Ins))
+      (team2@(Team _ t2ss _), (t2Outs,t1bhits)) <- t2w -< ((team1,bases), (t2bes, t2Ins))
 
       let t1ss' = catMaybes (M.elems t1ss)
           t2ss' = catMaybes (M.elems t2ss)
+          t1Ins = M.empty
+          t2Ins = M.empty
 
       (bases,(t1bes,t2bes)) <- basesWire (t1fl,t2fl) b0s . delay (([],[]),repeat NoEvent) -< ((t1ss',t2ss'),zipWith (<>) t2bhits t1bhits)
 
     let sldrs = t1ss' ++ t2ss'
-        arts  = t1as  ++ t2as
+        -- arts  = t1as  ++ t2as
 
     victory <- never . W.when isNothing --> now -< winner bases
 
     let newData = processVictory duration <$> victory
 
-    returnA -< (Stage dim (stgC { stageScoreDuration = duration }) sldrs arts bases, newData)
+    returnA -< (Stage dim (stgC { stageScoreDuration = duration }) sldrs [] bases, newData)
 
   where
     -- t1fl = teamDataFlag t1fl

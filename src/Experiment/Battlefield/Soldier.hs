@@ -37,7 +37,7 @@ import Utils.Wire.Wrapped
 import qualified Data.Map.Strict     as M
 
 type SoldierWireIn k = ((M.Map k (Maybe Soldier),[Base]), SoldierInEvents)
-type SoldierWireOut k = ((Maybe Soldier,[Article]), (SoldierOutEvents,M.Map k SoldierInEvents))
+type SoldierWireOut k = (Maybe Soldier, SoldierOutEvents)
 
 type SoldierWire s e m k = Wire s e m (SoldierWireIn k) (SoldierWireOut k)
 
@@ -65,28 +65,30 @@ soldierWire (SoldierData x0 fl cls@(SoldierClass bod weap mnt) gen) =
 
     -- shoot!
     shot  <- shoot -< newD
-    let shotW = map attackWire <$> shot
+    -- let shotW = map attackWire <$> shot
 
     -- manage shots
-    rec
-      atks    <- dWireBox NoEvent -< (shotW, atkDies)
-      let atkHitsKills = checkAttacks atks targets
-          (kills,atkHits) = unzip atkHitsKills
-          kills' = (length . filter (fromMaybe False)) kills
-          killE | kills' > 0 = Event kills'
-                | otherwise  = NoEvent
-          atkDies = map (fold . fmap (() <$)) atkHits
-          -- atkOuts = foldAcrossl (<>) mempty atkHits
-          atkOuts = M.unionsWith (<>) atkHits
+    -- rec
+    --   atks    <- dWireBox NoEvent -< (shotW, atkDies)
+    --   let atkHitsKills = checkAttacks atks targets
+    --       (kills,atkHits) = unzip atkHitsKills
+    --       kills' = (length . filter (fromMaybe False)) kills
+    --       killE | kills' > 0 = Event kills'
+    --             | otherwise  = NoEvent
+    --       atkDies = map (fold . fmap (() <$)) atkHits
+    --       -- atkOuts = foldAcrossl (<>) mempty atkHits
+    --       atkOuts = M.unionsWith (<>) atkHits
 
-    killCount <- hold . accumE (+) 0 <|> 0 -< killE
+    -- killCount <- hold . accumE (+) 0 <|> 0 -< killE
 
 
-    let hasAtks = not (null atks)
+    let hasAtks = False
+        -- hasAtks = not (null atks)
 
         wouldKill = (>= health) . attackDamage
         funcs     = SoldierFuncs wouldKill
-        score     = SoldierScore killCount age
+        -- score     = SoldierScore killCount age
+        score     = SoldierScore 0 age
 
         soldier       = Soldier
                           posAng
@@ -100,7 +102,7 @@ soldierWire (SoldierData x0 fl cls@(SoldierClass bod weap mnt) gen) =
     W.when (uncurry (||)) -< (alive, hasAtks)
 
     outE <- never -< ()
-    returnA -< ((soldier',atks),(outE,atkOuts))
+    returnA -< (soldier', outE)
 
   where
     SoldierStats _ maxHealth baseDamage speed coolDown range' classAcc = classStats cls

@@ -28,7 +28,7 @@ import Utils.Wire.Wrapped
 import qualified Data.Map.Strict       as M
 
 type TeamWireIn = ((Team,[Base]), ([BaseEvents],M.Map UUID SoldierInEvents))
-type TeamWireOut = (Team,(M.Map UUID SoldierInEvents,[Event [Attack]]))
+type TeamWireOut = (Team,(M.Map UUID SoldierOutEvents,[Event [Attack]]))
 type TeamWire s e m = Wire s e m TeamWireIn TeamWireOut
 
 teamWireDelayer :: [Base] -> TeamWireIn
@@ -39,7 +39,7 @@ teamWire :: forall s e m. (MonadFix m, HasTime Double s, Monoid e)
     -> TeamData
     -> TeamWire s e m
 teamWire b0s (TeamData fl gen) =
-  proc ((Team _ others _ _,bases), (baseEvts,messSldrs)) -> do
+  proc ((Team _ others _,bases), (baseEvts,messSldrs)) -> do
 
     rec
       juice <- (juiceStream . W.when (not . fst) <|> pure 0) . delay (False, numBases) -< (maxedSoldiers, length ownedB)
@@ -58,7 +58,7 @@ teamWire b0s (TeamData fl gen) =
           -- maxSoldiers          = round (fromIntegral (length ownedB) * baseSupply')
           maxSoldiers          = totalSupply
           newSolds'            = map soldierWire <$> mconcat newSolds
-          sldrs = fst . fst <$> sldrsEs
+          sldrs = fst <$> sldrsEs
           sldrIns = (others,targetBases) <$ sldrs
           sldrInsMsgs = zipMapWithDefaults (,) (Just (others,targetBases)) (Just NoEvent) sldrIns messSldrs
 
@@ -69,17 +69,19 @@ teamWire b0s (TeamData fl gen) =
 
       let sldrCount       = M.size sldrsEs
           soldierCapacity = fromIntegral sldrCount / fromIntegral maxSoldiers
-          maxedSoldiers = sldrCount >= maxSoldiers
+          maxedSoldiers   = sldrCount >= maxSoldiers
 
 
-    let (sldrsArts,outInEvts) = unzip (M.elems sldrsEs)
-        (_,arts)              = unzip sldrsArts
-        (_outEs,inEs)         = unzip outInEvts
-        arts'                 = concat arts
-        -- inEs'                 = foldAcrossl (<>) mempty inEs
-        inEs'                 = M.unionsWith (<>) inEs
+    let outEvts = snd <$> sldrsEs
 
-    returnA -< ((Team fl sldrs arts' bases),(inEs',repeat NoEvent))
+    -- let (sldrsArts,outInEvts) = unzip (M.elems sldrsEs)
+    --     (_,arts)              = unzip sldrsArts
+    --     (_outEs,inEs)         = unzip outInEvts
+    --     arts'                 = concat arts
+    --     -- inEs'                 = foldAcrossl (<>) mempty inEs
+    --     inEs'                 = M.unionsWith (<>) inEs
+
+    returnA -< ((Team fl sldrs bases),(outEvts,repeat NoEvent))
 
   where
     totalSupply  = 20

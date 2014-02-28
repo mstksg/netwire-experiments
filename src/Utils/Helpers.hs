@@ -6,12 +6,16 @@ module Utils.Helpers
   , partition3
   , rotationDir
   , zipMapWithDefaults
+  , isRight
   ) where
 
 import Data.List (foldl')
 import qualified Data.Map as M
+import Data.Foldable (foldr)
+import Prelude hiding (foldr)
 
 
+{-# INLINE selects #-}
 selects :: [a] -> [(a,[a])]
 selects = go []
   where
@@ -21,6 +25,7 @@ selects = go []
 wee :: IO ()
 wee = mapM_ (putStrLn . flip replicate '.' . (6-) . abs) [-5..5]
 
+{-# INLINE foldAcrossl #-}
 foldAcrossl :: (a -> b -> a) -> a -> [[b]] -> [a]
 foldAcrossl f x = foldl' (zipWith f) (repeat x)
 
@@ -38,8 +43,7 @@ rotationDir a1 a2 = dp < dn
     (dp,dn) | a1 > a2   = (a2 + 2*pi - a1,a1 - a2)
             | otherwise = (a2 - a1,a1 + 2*pi - a2)
 
-
-{-# INLINE zipMapWithDefaults #-}
+-- {-# INLINE zipMapWithDefaults #-}
 zipMapWithDefaults :: (Ord k) => (a -> b -> c) -> Maybe a -> Maybe b -> M.Map k a -> M.Map k b -> M.Map k c
 zipMapWithDefaults f x0 y0 = M.mergeWithKey f' zx zy
   where
@@ -50,3 +54,13 @@ zipMapWithDefaults f x0 y0 = M.mergeWithKey f' zx zy
     zy = case x0 of
            Nothing -> const M.empty
            Just x' -> fmap (x' `f`)
+
+-- unzipMap :: (Ord k) => M.Map k (a, b) -> (M.Map k a, M.Map k b)
+-- unzipMap = M.foldrWithKey f (M.empty, M.empty)
+--   where
+--     f k (x,y) (mx,my) = (M.insert k x mx, M.insert k x my)
+
+{-# INLINE isRight #-}
+isRight :: Either b a -> Bool
+isRight (Right _) = True
+isRight _ = False

@@ -1,5 +1,6 @@
 {-# OPTIONS -fno-warn-orphans #-}
 {-# LANGUAGE OverlappingInstances #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
 module Experiment.Battlefield.Types where
 
@@ -19,11 +20,7 @@ import qualified Data.Map.Strict as M
 
 type Wire' = Wire (Timed Double ()) String Identity
 
-newtype UUID = UUID Int deriving (Show, Ord, Eq)
-
-instance Enum UUID where
-    toEnum            = UUID
-    fromEnum (UUID i) = i
+newtype UUID = UUID { getUUID :: Int } deriving (Show, Ord, Eq, Enum)
 
 uuid0 :: UUID
 uuid0 = UUID 0
@@ -72,7 +69,6 @@ data Mount = Foot | Horse
 
 data Team = Team { teamFlag     :: TeamFlag
                  , teamSoldiers :: M.Map UUID (Maybe Soldier)
-                 , teamArticles :: [Article]
                  , teamBases    :: [Base]
                  } deriving Show
 
@@ -224,7 +220,7 @@ instance Default StageScore where
   def = StageScore (0,0) 0 0
 
 instance Default Team where
-  def = Team def M.empty [] []
+  def = Team def M.empty []
 
 instance Default TeamFlag where
   def = TeamFlag white
