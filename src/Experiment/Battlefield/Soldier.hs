@@ -231,7 +231,7 @@ soldierWire (SoldierData x0 fl cls@(SoldierClass bod weap mnt) gen) =
       -- calculate last direction facing.  holdJust breaks FRP.
       (V3 vx vy _) <- holdJust zero -< dir
 
-      returnA -< (PosAng pos (atan2 vx vy),newD)
+      returnA -< (PosAng pos (atan2 vy vx),newD)
 
 swordsmanClass   :: SoldierClass
 archerClass      :: SoldierClass

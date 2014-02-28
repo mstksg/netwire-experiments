@@ -27,8 +27,8 @@ import Utils.Wire.Noise
 import Utils.Wire.Wrapped
 import qualified Data.Map.Strict       as M
 
-type TeamWireIn = ((Team,[Base]), ([BaseEvents],M.Map Int SoldierInEvents))
-type TeamWireOut = (Team,M.Map Int SoldierInEvents)
+type TeamWireIn = ((Team,[Base]), ([BaseEvents],M.Map UUID SoldierInEvents))
+type TeamWireOut = (Team,(M.Map UUID SoldierInEvents,[Event [Attack]]))
 type TeamWire s e m = Wire s e m TeamWireIn TeamWireOut
 
 teamWireDelayer :: [Base] -> TeamWireIn
@@ -65,7 +65,7 @@ teamWire b0s (TeamData fl gen) =
 
       attackPhase <- phaseWire . delay 0.5 -< soldierCapacity
 
-      sldrsEs <- dWireMap ((mempty,[]), NoEvent) 0 -< (newSolds', sldrInsMsgs)
+      sldrsEs <- dWireMap ((mempty,[]), NoEvent) uuid0 -< (newSolds', sldrInsMsgs)
 
       let sldrCount       = M.size sldrsEs
           soldierCapacity = fromIntegral sldrCount / fromIntegral maxSoldiers
@@ -79,18 +79,17 @@ teamWire b0s (TeamData fl gen) =
         -- inEs'                 = foldAcrossl (<>) mempty inEs
         inEs'                 = M.unionsWith (<>) inEs
 
-    -- returnA -< ((Team fl sldrs arts' bases),inEs')
-    returnA -< ((Team fl sldrs arts' bases),inEs')
+    returnA -< ((Team fl sldrs arts' bases),(inEs',repeat NoEvent))
 
   where
     totalSupply  = 20
     juiceLimit   = 2.5
     numBases     = length b0s
     juiceAmount  = juiceLimit / fromIntegral numBases
-    reserveJuice = 0.67
+    reserveJuice = 0.7
     (bgen,_g')   = split gen
     bgens        = map mkStdGen (randoms bgen)
-    juiceStream  = (pure 12.5 . W.for 0.5) --> arr ((juiceAmount +) . (reserveJuice /) . fromIntegral . max 1 . snd)
+    juiceStream  = (pure 25 . W.for 0.5) --> arr ((juiceAmount +) . (reserveJuice /) . fromIntegral . max 1 . snd)
     -- baseSupply' = fromIntegral totalSupply / fromIntegral (length b0s)
     -- selectBases = fmap (== fl) . baseTeamFlag
     selectBases (Base _ Nothing _ _ _) = Nothing

@@ -19,6 +19,15 @@ import qualified Data.Map.Strict as M
 
 type Wire' = Wire (Timed Double ()) String Identity
 
+newtype UUID = UUID Int deriving (Show, Ord, Eq)
+
+instance Enum UUID where
+    toEnum            = UUID
+    fromEnum (UUID i) = i
+
+uuid0 :: UUID
+uuid0 = UUID 0
+
 data Stage = Stage { stageDimensions :: (Double,Double)
                    , stageScore      :: StageScore
                    , stageSoldiers   :: [Soldier]
@@ -62,7 +71,7 @@ data Mount = Foot | Horse
                       deriving (Show, Ord, Eq)
 
 data Team = Team { teamFlag     :: TeamFlag
-                 , teamSoldiers :: M.Map Int (Maybe Soldier)
+                 , teamSoldiers :: M.Map UUID (Maybe Soldier)
                  , teamArticles :: [Article]
                  , teamBases    :: [Base]
                  } deriving Show

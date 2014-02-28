@@ -7,12 +7,12 @@ module Experiment.Battlefield.Stage
   , stageWireLoop'
   ) where
 
+-- import Data.Traversable
 import Control.Monad.Fix
 import Control.Wire                 as W
 import Control.Wire.Unsafe.Event
 import Data.Default
 import Data.Maybe                   (catMaybes, isNothing)
-import Data.Traversable
 import Experiment.Battlefield.Stats
 import Experiment.Battlefield.Team
 import Experiment.Battlefield.Types
@@ -23,6 +23,7 @@ import Linear.Vector
 import Prelude hiding               ((.),id)
 import System.Random
 import Utils.Helpers
+import Utils.Wire.Misc
 import qualified Data.Map.Strict    as M
 
 
@@ -67,13 +68,13 @@ stageWireOnce' stgC dim@(w,h) t1fl t2fl gen = proc _ -> do
     duration <- integral (stageScoreDuration stgC) -< 1
 
     rec
-      (team1@(Team _ t1ss t1as _), t2ahits) <- t1w . delay (teamWireDelayer b0s) -< ((team2,bases), (t1bes, t1ahits))
-      (team2@(Team _ t2ss t2as _), t1ahits) <- t2w -< ((team1,bases), (t2bes, t2ahits))
+      (team1@(Team _ t1ss t1as _), (t2ahits,t2bhits)) <- t1w . delay (teamWireDelayer b0s) -< ((team2,bases), (t1bes, t1ahits))
+      (team2@(Team _ t2ss t2as _), (t1ahits,t1bhits)) <- t2w -< ((team1,bases), (t2bes, t2ahits))
 
       let t1ss' = catMaybes (M.elems t1ss)
           t2ss' = catMaybes (M.elems t2ss)
 
-      (bases,(t1bes,t2bes)) <- basesWire (t1fl,t2fl) b0s . delay ([],[]) -< (t1ss',t2ss')
+      (bases,(t1bes,t2bes)) <- basesWire (t1fl,t2fl) b0s . delay (([],[]),repeat NoEvent) -< ((t1ss',t2ss'),zipWith (<>) t2bhits t1bhits)
 
     let sldrs = t1ss' ++ t2ss'
         arts  = t1as  ++ t2as
@@ -93,6 +94,7 @@ stageWireOnce' stgC dim@(w,h) t1fl t2fl gen = proc _ -> do
     t2w = teamWire b0s $ TeamData t2fl t2gen
     -- b1s = makeBase t1fl <$> [V3 (w/6) (h/6) 0, V3 (w/6) (5*h/6) 0]
     -- b2s = makeBase t2fl <$> [V3 (5*w/6) (h/6) 0, V3 (5*w/6) (5*h/6) 0]
+    -- bns = []
     -- b1s = makeBase (Just t1fl) <$> [V3 (w/6) (h/6) 0, V3 (5*w/6) (5*h/6) 0]
     -- b2s = makeBase (Just t2fl) <$> [V3 (5*w/6) (h/6) 0, V3 (w/6) (5*h/6) 0]
     -- b1s = makeBase (Just t1fl) <$> [V3 (w/6) (h/6) 0, V3 (5*w/6) (h/6) 0]
@@ -142,10 +144,10 @@ stageWireOnce' stgC dim@(w,h) t1fl t2fl gen = proc _ -> do
 basesWire :: (MonadFix m, Monoid e, HasTime Double s)
   => (TeamFlag, TeamFlag)
   -> [Base]
-  -> Wire s e m ([Soldier],[Soldier]) ([Base],([BaseEvents],[BaseEvents]))
-basesWire fls@(t1fl,_t2fl) b0s = proc inp -> do
+  -> Wire s e m (([Soldier],[Soldier]),[Event [Attack]]) ([Base],([BaseEvents],[BaseEvents]))
+basesWire fls@(t1fl,_t2fl) b0s = proc (inp,atks) -> do
 
-  bEvts <- sequenceA (map (baseWire fls) b0s) -< inp
+  bEvts <- zipWires (map (baseWire fls) b0s) -< zip (repeat inp) atks
 
   let
     (bases,swaps) = unzip bEvts
@@ -163,8 +165,8 @@ basesWire fls@(t1fl,_t2fl) b0s = proc inp -> do
 baseWire :: forall m e s. (MonadFix m, Monoid e, HasTime Double s)
   => (TeamFlag, TeamFlag)
   -> Base
-  -> Wire s e m ([Soldier],[Soldier]) (Base,Event (Maybe TeamFlag))
-baseWire (t1fl,t2fl) b0@(Base pb fl0 _ _ _) = proc (t1s,t2s) -> do
+  -> Wire s e m (([Soldier],[Soldier]), Event [Attack]) (Base,Event (Maybe TeamFlag))
+baseWire (t1fl,t2fl) b0@(Base pb fl0 _ _ _) = proc ((t1s,t2s),atks) -> do
   let
     t1b = length $ filter inBase t1s
     t2b = length $ filter inBase t2s
@@ -174,7 +176,7 @@ baseWire (t1fl,t2fl) b0@(Base pb fl0 _ _ _) = proc (t1s,t2s) -> do
 
   rec
     let newWire = ntBase <$> teamChange
-    ((security, leaning), teamChange) <- drSwitch (ntBase fl0) -< (influence, newWire)
+    ((security, leaning), teamChange) <- drSwitch (ntBase fl0) -< ((influence, atks), newWire)
 
   owner <- hold <|> pure fl0 -< teamChange
 
@@ -187,10 +189,10 @@ baseWire (t1fl,t2fl) b0@(Base pb fl0 _ _ _) = proc (t1s,t2s) -> do
 
   where
     inBase = (< baseRadius) . norm . (^-^ pb) . getPos
-    ntBase :: Maybe TeamFlag -> Wire s e m (Maybe TeamFlag) ((Double, Maybe TeamFlag), Event (Maybe TeamFlag))
+    ntBase :: Maybe TeamFlag -> Wire s e m (Maybe TeamFlag, Event [Attack]) ((Double, Maybe TeamFlag), Event (Maybe TeamFlag))
     ntBase = maybe neutralBase teamBase
-    neutralBase :: Wire s e m (Maybe TeamFlag) ((Double, Maybe TeamFlag), Event (Maybe TeamFlag))
-    neutralBase = proc infl -> do
+    neutralBase :: Wire s e m (Maybe TeamFlag, Event [Attack]) ((Double, Maybe TeamFlag), Event (Maybe TeamFlag))
+    neutralBase = proc (infl,_) -> do
       rec
         let push =
               case infl of
@@ -206,8 +208,8 @@ baseWire (t1fl,t2fl) b0@(Base pb fl0 _ _ _) = proc (t1s,t2s) -> do
       swap <- never . W.when ((< baseThreshold) . abs) --> now -< sec
 
       returnA -< ((1 - (abs sec / baseThreshold),leaning),leaning <$ swap)
-    teamBase :: TeamFlag -> Wire s e m (Maybe TeamFlag) ((Double, Maybe TeamFlag), Event (Maybe TeamFlag))
-    teamBase fl = proc infl -> do
+    teamBase :: TeamFlag -> Wire s e m (Maybe TeamFlag, Event [Attack]) ((Double, Maybe TeamFlag), Event (Maybe TeamFlag))
+    teamBase fl = proc (infl,atks) -> do
       rec
         let push =
               case infl of
