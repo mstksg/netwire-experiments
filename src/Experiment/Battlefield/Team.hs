@@ -65,7 +65,6 @@ teamWire b0s (TeamData fl gen) =
 
       attackPhase <- phaseWire . delay 0.5 -< soldierCapacity
 
-      -- sldrsEs <- dWireMap ((M.empty,[]), NoEvent) 0 -< (newSolds', zip (repeat (others, targetBases)) messSldrs)
       sldrsEs <- dWireMap ((mempty,[]), NoEvent) 0 -< (newSolds', sldrInsMsgs)
 
       let sldrCount       = M.size sldrsEs
@@ -85,10 +84,10 @@ teamWire b0s (TeamData fl gen) =
 
   where
     totalSupply  = 20
-    juiceLimit   = 3
+    juiceLimit   = 2.5
     numBases     = length b0s
     juiceAmount  = juiceLimit / fromIntegral numBases
-    reserveJuice = 0.7
+    reserveJuice = 0.67
     (bgen,_g')   = split gen
     bgens        = map mkStdGen (randoms bgen)
     juiceStream  = (pure 12.5 . W.for 0.5) --> arr ((juiceAmount +) . (reserveJuice /) . fromIntegral . max 1 . snd)
