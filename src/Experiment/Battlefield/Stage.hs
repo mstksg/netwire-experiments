@@ -13,7 +13,7 @@ import Control.Monad.Fix
 import Control.Wire                 as W
 import Control.Wire.Unsafe.Event
 import Data.Default
-import Data.Maybe                   (isNothing)
+import Data.Maybe                   (isNothing, catMaybes)
 import Experiment.Battlefield.Stats
 import Experiment.Battlefield.Team
 import Experiment.Battlefield.Types
@@ -28,6 +28,10 @@ import Utils.Helpers
 import Utils.Wire.Misc
 import Utils.Wire.Wrapped
 import qualified Data.Map.Strict    as M
+import Data.Map.Strict (Map)
+
+type ArticleID = UUID
+type SoldierID = UUID
 
 
 stageWireOnce :: (MonadFix m, Monoid e, HasTime Double s)
@@ -73,8 +77,8 @@ stageWireOnce' stgC dim@(w,h) t1fl t2fl gen = proc _ -> do
     rec
       -- (team1@(Team _ t1ss t1as _), (t2ahits,t2bhits)) <- t1w . delay (teamWireDelayer b0s) -< ((team2,bases), (t1bes, t1ahits))
       -- (team2@(Team _ t2ss t2as _), (t1ahits,t1bhits)) <- t2w -< ((team1,bases), (t2bes, t2ahits))
-      (team1@(Team _ t1ss _), (t1Outs,t2bhits)) <- t1w . delay (teamWireDelayer b0s) -< ((team2,bases), (t1bes, t1Ins))
-      (team2@(Team _ t2ss _), (t2Outs,t1bhits)) <- t2w -< ((team1,bases), (t2bes, t2Ins))
+      (team1@(Team _ t1ss _), (t1Outs,t2bhits)) <- t1w . delay (teamWireDelayer b0s) -< ((team2,bases), (t1bes, t1InAll))
+      (team2@(Team _ t2ss _), (t2Outs,t1bhits)) <- t2w -< ((team1,bases), (t2bes, t2InAll))
 
       let t1ss' = M.elems t1ss
           t2ss' = M.elems t2ss
@@ -84,10 +88,12 @@ stageWireOnce' stgC dim@(w,h) t1fl t2fl gen = proc _ -> do
       t1as <- dWireMap NoEvent uuid0 -< (t1asn,t1aIns)
       t2as <- dWireMap NoEvent uuid0 -< (t2asn,t2aIns)
 
-      let (t1Ins,t1aIns) = findHits t1as t2ss'
-          (t2Ins,t2aIns) = findHits t2as t1ss'
+      let ((t1Ins,t1aIns),t2hIns) = findHits t1as t2ss
+          ((t2Ins,t2aIns),t1hIns) = findHits t2as t1ss
           arts = map snd (M.elems t1as ++ M.elems t2as)
-      
+          t1InAll = M.unionWith (<>) t1Ins t1hIns
+          t2InAll = M.unionWith (<>) t2Ins t2hIns
+
       (bases,(t1bes,t2bes)) <- basesWire (t1fl,t2fl) b0s . delay (([],[]),repeat NoEvent) -< ((t1ss',t2ss'),zipWith (<>) t2bhits t1bhits)
 
     let sldrs = t1ss' ++ t2ss'
@@ -103,7 +109,50 @@ stageWireOnce' stgC dim@(w,h) t1fl t2fl gen = proc _ -> do
       where
         atkDatas = [ atkData | AttackEvent atkData <- es ]
     makeAttackWire _ = []
-    findHits as ss = undefined
+    findHits :: Map UUID (UUID, Article) -> Map UUID Soldier -> ((Map UUID SoldierInEvents,Map UUID (Event ())), Map UUID SoldierInEvents)
+    findHits as ss = ((sldrKillsEs, artHitEs), sldrHitEs)
+    -- M.mapAccum f (M.empty,M.empty) ss
+      where
+        sldrHitEs :: Map UUID SoldierInEvents
+        sldrHitEs = M.unionsWith (<>) . map snd $ M.elems atks
+        sldrKillsEs :: Map UUID SoldierInEvents
+        sldrKillsEs = M.fromList . catMaybes . map fst $ M.elems atks
+        artHitEs :: M.Map UUID (Event ())
+        artHitEs = fmap ((() <$) . maybe NoEvent Event . fst) atks
+        atks :: Map ArticleID (Maybe (SoldierID,SoldierInEvents), Map SoldierID SoldierInEvents)
+        atks = fmap makeKill as
+        makeKill :: (SoldierID, Article) -> (Maybe (SoldierID, SoldierInEvents), Map SoldierID SoldierInEvents)
+        makeKill (sId,art) = M.mapAccum f Nothing ss
+          where
+            f :: Maybe (SoldierID, SoldierInEvents) -> Soldier -> (Maybe (SoldierID, SoldierInEvents), SoldierInEvents)
+            f ht@(Just _) _                  = (ht, NoEvent)
+            f Nothing     sldr
+              | norm (pa ^-^ ps) < hitRadius = (Just (sId, killedEvt), Event [AttackedEvent dmg o])
+              | otherwise                    = (Nothing, NoEvent)
+                  where
+                    ps = getPos sldr
+                    pa = getPos art
+                    killedEvt
+                      | soldierFuncsWouldKill (soldierFuncs sldr) atk = Event [GotKillEvent]
+                      | otherwise = NoEvent
+                    ArticleAttack atk@(Attack _ dmg o) = articleType art
+        -- f _ s = undefined
+    -- checkAttacks :: [Article] -> Map k (Maybe Soldier) -> [(Maybe Bool,Map k SoldierInEvents)]
+    -- checkAttacks atks sldrs = map makeKill atks
+    --   where
+    --     makeKill :: Article -> (Maybe Bool, Map k SoldierInEvents)
+    --     makeKill (Article (PosAng pa _)
+    --              (ArticleAttack atk@(Attack _ dmg o)))
+    --                 = (second (M.filter occurred)) $ mapAccumL f Nothing sldrs
+    --       where
+    --         f b          Nothing             = (b          , NoEvent)
+    --         f b@(Just _) _                   = (b          , NoEvent)
+    --         f Nothing    (Just sldr)
+    --           | norm (pa ^-^ ps) < hitRadius = (Just killed, Event [AttackedEvent dmg o])
+    --           | otherwise                    = (Nothing    , NoEvent)
+    --               where
+    --                 ps     = getPos sldr
+    --                 killed = soldierFuncsWouldKill (soldierFuncs sldr) atk
     -- t1fl = teamDataFlag t1fl
     -- t2fl = teamDataFlag t2fl
     (t1gen,t2gen) = split gen

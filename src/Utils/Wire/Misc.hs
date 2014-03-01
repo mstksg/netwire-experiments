@@ -2,10 +2,12 @@
 
 module Utils.Wire.Misc where
 
-import Data.Maybe (isJust, fromJust)
-import Prelude hiding ((.),id)
+-- import Utils.Helpers             (zipMapWithDefaults)
+-- import qualified Data.Map.Strict as M
 import Control.Wire
 import Control.Wire.Unsafe.Event
+import Data.Maybe                   (isJust, fromJust)
+import Prelude hiding               ((.),id)
 
 -- might break FRP.
 --
@@ -93,3 +95,7 @@ zipEvents ws = mconcat <$> zipWires ws
 
 delayM :: Monoid a => Wire s e m a a
 delayM = delay mempty
+
+
+-- mergeEventMap :: (Ord k, Semigroup a) => M.Map k (Event a) -> M.Map k (Event a) -> M.Map k (Event a)
+-- mergeEventMap = zipMapWithDefaults (<>) (Just NoEvent) (Just NoEvent)

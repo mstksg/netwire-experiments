@@ -48,4 +48,4 @@ maybeAttack (AttackEvent atk) = Just atk
 
 maybeAttacked :: SoldierInEvent -> Maybe (Double, V3 Double)
 maybeAttacked (AttackedEvent dmg org) = Just (dmg, org)
--- maybeAttacked _                   = Nothing
+maybeAttacked _                   = Nothing

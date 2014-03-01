@@ -6,12 +6,14 @@ module Utils.Helpers
   , partition3
   , rotationDir
   , zipMapWithDefaults
+  , unzipMap
   , isRight
   ) where
 
 import Data.List (foldl')
 import qualified Data.Map as M
 import Data.Foldable (foldr)
+import Control.Arrow ((&&&))
 import Prelude hiding (foldr)
 
 
@@ -55,10 +57,8 @@ zipMapWithDefaults f x0 y0 = M.mergeWithKey f' zx zy
            Nothing -> const M.empty
            Just x' -> fmap (x' `f`)
 
--- unzipMap :: (Ord k) => M.Map k (a, b) -> (M.Map k a, M.Map k b)
--- unzipMap = M.foldrWithKey f (M.empty, M.empty)
---   where
---     f k (x,y) (mx,my) = (M.insert k x mx, M.insert k x my)
+unzipMap :: (Ord k) => M.Map k (a, b) -> (M.Map k a, M.Map k b)
+unzipMap = fmap fst &&& fmap snd
 
 {-# INLINE isRight #-}
 isRight :: Either b a -> Bool

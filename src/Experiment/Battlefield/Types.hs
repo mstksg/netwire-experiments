@@ -105,7 +105,9 @@ type SoldierOutEvents = Event [SoldierOutEvent]
 
 data SoldierInEvent = AttackedEvent { attackedEventDamage :: Double
                                     , attackedEventOrigin :: V3 Double
-                                    } deriving Show
+                                    }
+                    | GotKillEvent
+                    deriving Show
 
 type SoldierInEvents = Event [SoldierInEvent]
 
