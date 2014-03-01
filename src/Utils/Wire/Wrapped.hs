@@ -65,6 +65,11 @@ wireMap fill k0 = go k0 M.empty
               NoEvent   -> (M.empty, k1)
       return (results, go k2 (updateds `M.union` news))
 
+dWireMapK :: forall b e m a s k. (Monoid s, Monad m, Ord k)
+    => a
+    -> Wire s e m (Event (Map k (Wire s e m a b)), Map k a) (Map k b)
+dWireMapK fill = wireMapK fill . delay (NoEvent, M.empty)
+
 wireMapK :: forall b e m a s k. (Monoid s, Monad m, Ord k)
     => a
     -> Wire s e m (Event (Map k (Wire s e m a b)), Map k a) (Map k b)

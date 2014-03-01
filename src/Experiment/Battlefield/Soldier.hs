@@ -12,17 +12,18 @@ module Experiment.Battlefield.Soldier
   , normedClassWorths
   ) where
 
+-- import Control.Wire.Unsafe.Event
 -- import Data.Fixed                 (mod')
+-- import Data.Foldable              (fold)
+-- import Data.Traversable           (mapAccumL)
 -- import Utils.Helpers              (rotationDir)
+-- import Utils.Wire.Wrapped
 import Control.Monad
 import Control.Monad.Fix
 import Control.Wire                  as W
-import Control.Wire.Unsafe.Event
-import Data.Foldable                 (fold)
 import Data.List                     (minimumBy)
-import Data.Maybe                    (mapMaybe, catMaybes, fromMaybe)
+import Data.Maybe                    (mapMaybe, fromMaybe)
 import Data.Ord                      (comparing)
-import Data.Traversable              (mapAccumL)
 import Experiment.Battlefield.Attack
 import Experiment.Battlefield.Stats
 import Experiment.Battlefield.Types
@@ -33,11 +34,10 @@ import Prelude hiding                ((.),id)
 import System.Random
 import Utils.Wire.Misc
 import Utils.Wire.Noise
-import Utils.Wire.Wrapped
 import qualified Data.Map.Strict     as M
 
-type SoldierWireIn k = ((M.Map k (Maybe Soldier),[Base]), SoldierInEvents)
-type SoldierWireOut k = (Maybe Soldier, SoldierOutEvents)
+type SoldierWireIn k = ((M.Map k Soldier,[Base]), SoldierInEvents)
+type SoldierWireOut k = (Soldier, SoldierOutEvents)
 
 type SoldierWire s e m k = Wire s e m (SoldierWireIn k) (SoldierWireOut k)
 
@@ -82,8 +82,7 @@ soldierWire (SoldierData x0 fl cls@(SoldierClass bod weap mnt) gen) =
     -- killCount <- hold . accumE (+) 0 <|> 0 -< killE
 
 
-    let hasAtks = False
-        -- hasAtks = not (null atks)
+    let -- hasAtks = not (null atks)
 
         wouldKill = (>= health) . attackDamage
         funcs     = SoldierFuncs wouldKill
@@ -94,15 +93,12 @@ soldierWire (SoldierData x0 fl cls@(SoldierClass bod weap mnt) gen) =
                           posAng
                           (health / maxHealth)
                           fl score funcs bod weap mnt
-        soldier'
-          | alive     = Just soldier
-          | otherwise = Nothing
 
-    -- inhibit when dead and no more attacks
-    W.when (uncurry (||)) -< (alive, hasAtks)
+    -- inhibit when dead
+    W.when id -< alive
 
-    outE <- never -< ()
-    returnA -< (soldier', outE)
+    -- outE <- never -< ()
+    returnA -< (soldier, map AttackEvent <$> shot)
 
   where
     SoldierStats _ maxHealth baseDamage speed coolDown range' classAcc = classStats cls
@@ -154,28 +150,28 @@ soldierWire (SoldierData x0 fl cls@(SoldierClass bod weap mnt) gen) =
           ) --> oneShot
         coupleRandom = couple (noisePrimR (1/damageVariance,damageVariance) dmgGen)
         applyRandom (atk,r) = [atk (r * baseDamage)]
-    checkAttacks :: [Article] -> M.Map k (Maybe Soldier) -> [(Maybe Bool,M.Map k SoldierInEvents)]
-    checkAttacks atks sldrs = map makeKill atks
-      where
-        makeKill :: Article -> (Maybe Bool, M.Map k SoldierInEvents)
-        makeKill (Article (PosAng pa _)
-                 (ArticleAttack atk@(Attack _ dmg o)))
-                    = (second (M.filter occurred)) $ mapAccumL f Nothing sldrs
-          where
-            f b          Nothing             = (b          , NoEvent)
-            f b@(Just _) _                   = (b          , NoEvent)
-            f Nothing    (Just sldr)
-              | norm (pa ^-^ ps) < hitRadius = (Just killed, Event [AttackedEvent dmg o])
-              | otherwise                    = (Nothing    , NoEvent)
-                  where
-                    ps     = getPos sldr
-                    killed = soldierFuncsWouldKill (soldierFuncs sldr) atk
+    -- checkAttacks :: [Article] -> M.Map k (Maybe Soldier) -> [(Maybe Bool,M.Map k SoldierInEvents)]
+    -- checkAttacks atks sldrs = map makeKill atks
+    --   where
+    --     makeKill :: Article -> (Maybe Bool, M.Map k SoldierInEvents)
+    --     makeKill (Article (PosAng pa _)
+    --              (ArticleAttack atk@(Attack _ dmg o)))
+    --                 = (second (M.filter occurred)) $ mapAccumL f Nothing sldrs
+    --       where
+    --         f b          Nothing             = (b          , NoEvent)
+    --         f b@(Just _) _                   = (b          , NoEvent)
+    --         f Nothing    (Just sldr)
+    --           | norm (pa ^-^ ps) < hitRadius = (Just killed, Event [AttackedEvent dmg o])
+    --           | otherwise                    = (Nothing    , NoEvent)
+    --               where
+    --                 ps     = getPos sldr
+    --                 killed = soldierFuncsWouldKill (soldierFuncs sldr) atk
 
     moveAndAttack g = proc (targets,targetBases,attackeds,alive) -> do
       favoriteSpot <- arr (^* (baseRadius * 0.5)) . noiseDisc 1 0 g -< ()
 
       let
-        targetsPos = map getPos (catMaybes (M.elems targets))
+        targetsPos = map getPos (M.elems targets)
         basesPos = map ((^+^ favoriteSpot) . basePos) targetBases
 
       attackers <- curated -< (map snd <$> attackeds, findAttacker targetsPos)

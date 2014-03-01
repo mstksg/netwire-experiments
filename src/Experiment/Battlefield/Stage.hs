@@ -8,22 +8,25 @@ module Experiment.Battlefield.Stage
   ) where
 
 -- import Data.Traversable
+-- import Data.Foldable (foldl)
 import Control.Monad.Fix
 import Control.Wire                 as W
 import Control.Wire.Unsafe.Event
 import Data.Default
-import Data.Maybe                   (catMaybes, isNothing)
+import Data.Maybe                   (isNothing)
 import Experiment.Battlefield.Stats
 import Experiment.Battlefield.Team
 import Experiment.Battlefield.Types
 import FRP.Netwire.Move
+import Experiment.Battlefield.Attack
 import Linear.Metric
 import Linear.V3
 import Linear.Vector
-import Prelude hiding               ((.),id)
+import Prelude hiding               ((.),id,foldl)
 import System.Random
 import Utils.Helpers
 import Utils.Wire.Misc
+import Utils.Wire.Wrapped
 import qualified Data.Map.Strict    as M
 
 
@@ -73,23 +76,34 @@ stageWireOnce' stgC dim@(w,h) t1fl t2fl gen = proc _ -> do
       (team1@(Team _ t1ss _), (t1Outs,t2bhits)) <- t1w . delay (teamWireDelayer b0s) -< ((team2,bases), (t1bes, t1Ins))
       (team2@(Team _ t2ss _), (t2Outs,t1bhits)) <- t2w -< ((team1,bases), (t2bes, t2Ins))
 
-      let t1ss' = catMaybes (M.elems t1ss)
-          t2ss' = catMaybes (M.elems t2ss)
-          t1Ins = M.empty
-          t2Ins = M.empty
+      let t1ss' = M.elems t1ss
+          t2ss' = M.elems t2ss
+          t1asn = Event $ concatMap makeAttackWire (M.toList t1Outs)
+          t2asn = Event $ concatMap makeAttackWire (M.toList t2Outs)
 
+      t1as <- dWireMap NoEvent uuid0 -< (t1asn,t1aIns)
+      t2as <- dWireMap NoEvent uuid0 -< (t2asn,t2aIns)
+
+      let (t1Ins,t1aIns) = findHits t1as t2ss'
+          (t2Ins,t2aIns) = findHits t2as t1ss'
+          arts = map snd (M.elems t1as ++ M.elems t2as)
+      
       (bases,(t1bes,t2bes)) <- basesWire (t1fl,t2fl) b0s . delay (([],[]),repeat NoEvent) -< ((t1ss',t2ss'),zipWith (<>) t2bhits t1bhits)
 
     let sldrs = t1ss' ++ t2ss'
-        -- arts  = t1as  ++ t2as
 
     victory <- never . W.when isNothing --> now -< winner bases
 
     let newData = processVictory duration <$> victory
 
-    returnA -< (Stage dim (stgC { stageScoreDuration = duration }) sldrs [] bases, newData)
+    returnA -< (Stage dim (stgC { stageScoreDuration = duration }) sldrs arts bases, newData)
 
   where
+    makeAttackWire (sId,Event es) = map (\d -> (sId,) <$> attackWire d) atkDatas
+      where
+        atkDatas = [ atkData | AttackEvent atkData <- es ]
+    makeAttackWire _ = []
+    findHits as ss = undefined
     -- t1fl = teamDataFlag t1fl
     -- t2fl = teamDataFlag t2fl
     (t1gen,t2gen) = split gen
@@ -162,7 +176,7 @@ basesWire fls@(t1fl,_t2fl) b0s = proc (inp,atks) -> do
     sortEvts swaps (t1bes,t2bes) =
         case swaps of
           Event j@(Just fl) | fl == t1fl -> ( Event [GetBase]  : t1bes, Event [LoseBase j]          : t2bes )
-                          | otherwise  -> ( Event [LoseBase j]          : t1bes, Event [GetBase]  : t2bes )
+                            | otherwise  -> ( Event [LoseBase j]          : t1bes, Event [GetBase]  : t2bes )
           Event _                      -> ( Event [LoseBase Nothing] : t1bes, Event [LoseBase Nothing] : t2bes )
           NoEvent                      -> ( NoEvent          : t1bes, NoEvent          : t2bes )
 
@@ -213,7 +227,7 @@ baseWire (t1fl,t2fl) b0@(Base pb fl0 _ _ _) = proc ((t1s,t2s),atks) -> do
 
       returnA -< ((1 - (abs sec / baseThreshold),leaning),leaning <$ swap)
     teamBase :: TeamFlag -> Wire s e m (Maybe TeamFlag, Event [Attack]) ((Double, Maybe TeamFlag), Event (Maybe TeamFlag))
-    teamBase fl = proc (infl,atks) -> do
+    teamBase fl = proc (infl,_atks) -> do
       rec
         let push =
               case infl of

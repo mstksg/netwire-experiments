@@ -68,7 +68,7 @@ data Mount = Foot | Horse
                       deriving (Show, Ord, Eq)
 
 data Team = Team { teamFlag     :: TeamFlag
-                 , teamSoldiers :: M.Map UUID (Maybe Soldier)
+                 , teamSoldiers :: M.Map UUID Soldier
                  , teamBases    :: [Base]
                  } deriving Show
 
