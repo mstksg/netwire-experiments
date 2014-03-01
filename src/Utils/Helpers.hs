@@ -8,6 +8,7 @@ module Utils.Helpers
   , zipMapWithDefaults
   , unzipMap
   , isRight
+  , zipTake
   ) where
 
 import Data.List (foldl')
@@ -64,3 +65,10 @@ unzipMap = fmap fst &&& fmap snd
 isRight :: Either b a -> Bool
 isRight (Right _) = True
 isRight _ = False
+
+zipTake :: [a] -> [b] -> ([(a,b)],([a],[b]))
+zipTake [] ys = ([],([],ys))
+zipTake xs [] = ([],(xs,[]))
+zipTake (x:xs) (y:ys) = ((x,y):zs, (xs',ys'))
+  where
+    (zs,(xs',ys')) = zipTake xs ys

@@ -66,19 +66,6 @@ soldierWire (SoldierData x0 fl cls@(SoldierClass bod weap mnt) gen) =
 
     -- shoot!
     shot  <- shoot -< newD
-    -- let shotW = map attackWire <$> shot
-
-    -- manage shots
-    -- rec
-    --   atks    <- dWireBox NoEvent -< (shotW, atkDies)
-    --   let atkHitsKills = checkAttacks atks targets
-    --       (kills,atkHits) = unzip atkHitsKills
-    --       kills' = (length . filter (fromMaybe False)) kills
-    --       killE | kills' > 0 = Event kills'
-    --             | otherwise  = NoEvent
-    --       atkDies = map (fold . fmap (() <$)) atkHits
-    --       -- atkOuts = foldAcrossl (<>) mempty atkHits
-    --       atkOuts = M.unionsWith (<>) atkHits
 
     killCount <- hold . accumE (+) 0 <|> 0 -< gotKill
 
@@ -150,22 +137,6 @@ soldierWire (SoldierData x0 fl cls@(SoldierClass bod weap mnt) gen) =
           ) --> oneShot
         coupleRandom = couple (noisePrimR (1/damageVariance,damageVariance) dmgGen)
         applyRandom (atk,r) = [atk (r * baseDamage)]
-    -- checkAttacks :: [Article] -> M.Map k (Maybe Soldier) -> [(Maybe Bool,M.Map k SoldierInEvents)]
-    -- checkAttacks atks sldrs = map makeKill atks
-    --   where
-    --     makeKill :: Article -> (Maybe Bool, M.Map k SoldierInEvents)
-    --     makeKill (Article (PosAng pa _)
-    --              (ArticleAttack atk@(Attack _ dmg o)))
-    --                 = (second (M.filter occurred)) $ mapAccumL f Nothing sldrs
-    --       where
-    --         f b          Nothing             = (b          , NoEvent)
-    --         f b@(Just _) _                   = (b          , NoEvent)
-    --         f Nothing    (Just sldr)
-    --           | norm (pa ^-^ ps) < hitRadius = (Just killed, Event [AttackedEvent dmg o])
-    --           | otherwise                    = (Nothing    , NoEvent)
-    --               where
-    --                 ps     = getPos sldr
-    --                 killed = soldierFuncsWouldKill (soldierFuncs sldr) atk
 
     moveAndAttack g = proc (targets,targetBases,attackeds,alive) -> do
       favoriteSpot <- arr (^* (baseRadius * 0.5)) . noiseDisc 1 0 g -< ()

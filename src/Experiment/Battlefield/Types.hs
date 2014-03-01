@@ -22,8 +22,8 @@ type Wire' = Wire (Timed Double ()) String Identity
 
 newtype UUID = UUID { getUUID :: Int } deriving (Show, Ord, Eq, Enum)
 
-uuid0 :: UUID
-uuid0 = UUID 0
+uuids :: [UUID]
+uuids = [(UUID 0)..]
 
 data Stage = Stage { stageDimensions :: (Double,Double)
                    , stageScore      :: StageScore

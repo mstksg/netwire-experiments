@@ -7,7 +7,7 @@ import Control.Wire.Unsafe.Event
 import Data.Map.Strict           (Map)
 import Data.Traversable          (sequence)
 import Prelude hiding            ((.),id,sequence)
-import Utils.Helpers             (zipMapWithDefaults, isRight)
+import Utils.Helpers             (zipMapWithDefaults, isRight, zipTake)
 import qualified Data.Map.Strict as M
 
 
@@ -37,49 +37,47 @@ wireBox fill = go []
 
 dWireMap :: (Monoid s, Monad m, Ord k, Enum k)
     => a
-    -> k
+    -> [k]
     -> Wire s e m (Event [Wire s e m a b], Map k a) (Map k b)
-dWireMap fill k0 = wireMap fill k0 . delay (NoEvent, M.empty)
+dWireMap fill ks = wireMap fill ks . delay (NoEvent, M.empty)
 
 wireMap :: forall b e m a s k.
-       (Monoid s, Monad m, Ord k, Enum k)
+       (Monoid s, Monad m, Ord k)
     => a
-    -> k
+    -> [k]
     -> Wire s e m (Event [Wire s e m a b], Map k a) (Map k b)
-wireMap fill k0 = go k0 M.empty
+wireMap fill ks0 = go ks0 M.empty
   where
     go ::
-         k
+         [k]
       -> Map k (Wire s e m a b)
       -> Wire s e m (Event [Wire s e m a b], Map k a) (Map k b)
-    go k1 ws' = mkGen $ \ds (adds,as) -> do
+    go ks' ws' = mkGen $ \ds (adds,as) -> do
       (results, updateds) <- zipAndStep fill ds ws' as
-      let (news,k2) =
+      let (news,ks) =
             case adds of
-              Event nws -> (newsmap, k')
+              Event nws -> (newsmap, ksnew)
                 where
-                  nwsks = zip [k1..] nws
-                  k' | null nws  = k1
-                     | otherwise = succ . fst $ last nwsks
+                  (nwsks,(ksnew,_)) = zipTake ks' nws
                   newsmap = M.fromList nwsks
-              NoEvent   -> (M.empty, k1)
-      return (results, go k2 (updateds `M.union` news))
+              NoEvent   -> (M.empty, ks')
+      return (results, go ks (updateds `M.union` news))
 
-dWireMapK :: forall b e m a s k. (Monoid s, Monad m, Ord k)
-    => a
-    -> Wire s e m (Event (Map k (Wire s e m a b)), Map k a) (Map k b)
-dWireMapK fill = wireMapK fill . delay (NoEvent, M.empty)
+-- dWireMapK :: forall b e m a s k. (Monoid s, Monad m, Ord k)
+--     => a
+--     -> Wire s e m (Event (Map k (Wire s e m a b)), Map k a) (Map k b)
+-- dWireMapK fill = wireMapK fill . delay (NoEvent, M.empty)
 
-wireMapK :: forall b e m a s k. (Monoid s, Monad m, Ord k)
-    => a
-    -> Wire s e m (Event (Map k (Wire s e m a b)), Map k a) (Map k b)
-wireMapK fill = go M.empty
-  where
-    go :: Map k (Wire s e m a b) -> Wire s e m (Event (Map k (Wire s e m a b)), Map k a) (Map k b)
-    go ws' = mkGen $ \ds (adds,as) -> do
-      (results, updateds) <- zipAndStep fill ds ws' as
-      let news = event M.empty id adds
-      return (results, go (updateds `M.union` news))
+-- wireMapK :: forall b e m a s k. (Monoid s, Monad m, Ord k)
+--     => a
+--     -> Wire s e m (Event (Map k (Wire s e m a b)), Map k a) (Map k b)
+-- wireMapK fill = go M.empty
+--   where
+--     go :: Map k (Wire s e m a b) -> Wire s e m (Event (Map k (Wire s e m a b)), Map k a) (Map k b)
+--     go ws' = mkGen $ \ds (adds,as) -> do
+--       (results, updateds) <- zipAndStep fill ds ws' as
+--       let news = event M.empty id adds
+--       return (results, go (updateds `M.union` news))
 
 -- {-# INLINE zipAndStep #-}
 zipAndStep :: (Ord k, Monad m)

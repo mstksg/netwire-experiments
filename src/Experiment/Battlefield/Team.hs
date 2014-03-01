@@ -65,7 +65,7 @@ teamWire b0s (TeamData fl gen) =
 
       attackPhase <- phaseWire . delay 0.5 -< soldierCapacity
 
-      sldrsEs <- dWireMap ((mempty,[]), NoEvent) uuid0 -< (newSolds', sldrInsMsgs)
+      sldrsEs <- dWireMap ((mempty,[]), NoEvent) uuids -< (newSolds', sldrInsMsgs)
 
       let sldrCount       = M.size sldrsEs
           soldierCapacity = fromIntegral sldrCount / fromIntegral maxSoldiers

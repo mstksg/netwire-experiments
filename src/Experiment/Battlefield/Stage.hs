@@ -75,8 +75,6 @@ stageWireOnce' stgC dim@(w,h) t1fl t2fl gen = proc _ -> do
     duration <- integral (stageScoreDuration stgC) -< 1
 
     rec
-      -- (team1@(Team _ t1ss t1as _), (t2ahits,t2bhits)) <- t1w . delay (teamWireDelayer b0s) -< ((team2,bases), (t1bes, t1ahits))
-      -- (team2@(Team _ t2ss t2as _), (t1ahits,t1bhits)) <- t2w -< ((team1,bases), (t2bes, t2ahits))
       (team1@(Team _ t1ss _), (t1Outs,t2bhits)) <- t1w . delay (teamWireDelayer b0s) -< ((team2,bases), (t1bes, t1InAll))
       (team2@(Team _ t2ss _), (t2Outs,t1bhits)) <- t2w -< ((team1,bases), (t2bes, t2InAll))
 
@@ -85,8 +83,8 @@ stageWireOnce' stgC dim@(w,h) t1fl t2fl gen = proc _ -> do
           t1asn = Event $ concatMap makeAttackWire (M.toList t1Outs)
           t2asn = Event $ concatMap makeAttackWire (M.toList t2Outs)
 
-      t1as <- dWireMap NoEvent uuid0 -< (t1asn,t1aIns)
-      t2as <- dWireMap NoEvent uuid0 -< (t2asn,t2aIns)
+      t1as <- dWireMap NoEvent uuids -< (t1asn,t1aIns)
+      t2as <- dWireMap NoEvent uuids -< (t2asn,t2aIns)
 
       let ((t1Ins,t1aIns),t2hIns) = findHits t1as t2ss
           ((t2Ins,t2aIns),t1hIns) = findHits t2as t1ss
@@ -111,12 +109,12 @@ stageWireOnce' stgC dim@(w,h) t1fl t2fl gen = proc _ -> do
     makeAttackWire _ = []
     findHits :: Map UUID (UUID, Article) -> Map UUID Soldier -> ((Map UUID SoldierInEvents,Map UUID (Event ())), Map UUID SoldierInEvents)
     findHits as ss = ((sldrKillsEs, artHitEs), sldrHitEs)
-    -- M.mapAccum f (M.empty,M.empty) ss
       where
+        (sldrKillsElms,sldrHitElms) = unzip (M.elems atks)
         sldrHitEs :: Map UUID SoldierInEvents
-        sldrHitEs = M.unionsWith (<>) . map snd $ M.elems atks
+        sldrHitEs = M.unionsWith (<>) sldrHitElms
         sldrKillsEs :: Map UUID SoldierInEvents
-        sldrKillsEs = M.fromList . catMaybes . map fst $ M.elems atks
+        sldrKillsEs = M.fromList (catMaybes sldrKillsElms)
         artHitEs :: M.Map UUID (Event ())
         artHitEs = fmap ((() <$) . maybe NoEvent Event . fst) atks
         atks :: Map ArticleID (Maybe (SoldierID,SoldierInEvents), Map SoldierID SoldierInEvents)
@@ -136,25 +134,7 @@ stageWireOnce' stgC dim@(w,h) t1fl t2fl gen = proc _ -> do
                       | soldierFuncsWouldKill (soldierFuncs sldr) atk = Event [GotKillEvent sldr]
                       | otherwise = NoEvent
                     ArticleAttack atk@(Attack _ dmg o) = articleType art
-        -- f _ s = undefined
-    -- checkAttacks :: [Article] -> Map k (Maybe Soldier) -> [(Maybe Bool,Map k SoldierInEvents)]
-    -- checkAttacks atks sldrs = map makeKill atks
-    --   where
-    --     makeKill :: Article -> (Maybe Bool, Map k SoldierInEvents)
-    --     makeKill (Article (PosAng pa _)
-    --              (ArticleAttack atk@(Attack _ dmg o)))
-    --                 = (second (M.filter occurred)) $ mapAccumL f Nothing sldrs
-    --       where
-    --         f b          Nothing             = (b          , NoEvent)
-    --         f b@(Just _) _                   = (b          , NoEvent)
-    --         f Nothing    (Just sldr)
-    --           | norm (pa ^-^ ps) < hitRadius = (Just killed, Event [AttackedEvent dmg o])
-    --           | otherwise                    = (Nothing    , NoEvent)
-    --               where
-    --                 ps     = getPos sldr
-    --                 killed = soldierFuncsWouldKill (soldierFuncs sldr) atk
-    -- t1fl = teamDataFlag t1fl
-    -- t2fl = teamDataFlag t2fl
+
     (t1gen,t2gen) = split gen
 
     t1w = teamWire b0s $ TeamData t1fl t1gen
