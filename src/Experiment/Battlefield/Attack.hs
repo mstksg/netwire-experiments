@@ -1,4 +1,4 @@
-module Experiment.Battlefield.Attack (maybeAttacked, maybeAttack, attackWire) where
+module Experiment.Battlefield.Attack (maybeAttacked, maybeAttack, attackWire, maybeGotKill) where
 
 import Control.Wire                 as W
 import Data.Maybe                   (fromMaybe)
@@ -49,3 +49,7 @@ maybeAttack (AttackEvent atk) = Just atk
 maybeAttacked :: SoldierInEvent -> Maybe (Double, V3 Double)
 maybeAttacked (AttackedEvent dmg org) = Just (dmg, org)
 maybeAttacked _                   = Nothing
+
+maybeGotKill :: SoldierInEvent -> Maybe Soldier
+maybeGotKill (GotKillEvent sldr) = Just sldr
+maybeGotKill _ = Nothing

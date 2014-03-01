@@ -54,6 +54,7 @@ soldierWire (SoldierData x0 fl cls@(SoldierClass bod weap mnt) gen) =
     -- calculate damage from hits
     let hit = sum . map fst <$> attackeds
         attackeds = mapMaybe maybeAttacked <$> mess
+        gotKill = sum . mapMaybe (fmap (const 1) . maybeGotKill) <$> mess
     damage <- hold . accumE (+) 0 <|> pure 0 -< hit
 
     -- calculate health, plus recovery
@@ -79,15 +80,14 @@ soldierWire (SoldierData x0 fl cls@(SoldierClass bod weap mnt) gen) =
     --       -- atkOuts = foldAcrossl (<>) mempty atkHits
     --       atkOuts = M.unionsWith (<>) atkHits
 
-    -- killCount <- hold . accumE (+) 0 <|> 0 -< killE
+    killCount <- hold . accumE (+) 0 <|> 0 -< gotKill
 
 
     let -- hasAtks = not (null atks)
 
         wouldKill = (>= health) . attackDamage
         funcs     = SoldierFuncs wouldKill
-        -- score     = SoldierScore killCount age
-        score     = SoldierScore 0 age
+        score     = SoldierScore killCount age
 
         soldier       = Soldier
                           posAng

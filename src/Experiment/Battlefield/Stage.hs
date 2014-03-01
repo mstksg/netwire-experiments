@@ -133,7 +133,7 @@ stageWireOnce' stgC dim@(w,h) t1fl t2fl gen = proc _ -> do
                     ps = getPos sldr
                     pa = getPos art
                     killedEvt
-                      | soldierFuncsWouldKill (soldierFuncs sldr) atk = Event [GotKillEvent]
+                      | soldierFuncsWouldKill (soldierFuncs sldr) atk = Event [GotKillEvent sldr]
                       | otherwise = NoEvent
                     ArticleAttack atk@(Attack _ dmg o) = articleType art
         -- f _ s = undefined
