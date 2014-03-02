@@ -74,13 +74,6 @@ teamWire b0s (TeamData fl gen) =
 
     let outEvts = snd <$> sldrsEs
 
-    -- let (sldrsArts,outInEvts) = unzip (M.elems sldrsEs)
-    --     (_,arts)              = unzip sldrsArts
-    --     (_outEs,inEs)         = unzip outInEvts
-    --     arts'                 = concat arts
-    --     -- inEs'                 = foldAcrossl (<>) mempty inEs
-    --     inEs'                 = M.unionsWith (<>) inEs
-
     returnA -< ((Team fl sldrs bases),(outEvts,repeat NoEvent))
 
   where

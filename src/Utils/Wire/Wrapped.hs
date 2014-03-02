@@ -63,21 +63,21 @@ wireMap fill ks0 = go ks0 M.empty
               NoEvent   -> (M.empty, ks')
       return (results, go ks (updateds `M.union` news))
 
--- dWireMapK :: forall b e m a s k. (Monoid s, Monad m, Ord k)
---     => a
---     -> Wire s e m (Event (Map k (Wire s e m a b)), Map k a) (Map k b)
--- dWireMapK fill = wireMapK fill . delay (NoEvent, M.empty)
+dWireMapK :: forall b e m a s k. (Monoid s, Monad m, Ord k)
+    => a
+    -> Wire s e m (Event (Map k (Wire s e m a b)), Map k a) (Map k b)
+dWireMapK fill = wireMapK fill . delay (NoEvent, M.empty)
 
--- wireMapK :: forall b e m a s k. (Monoid s, Monad m, Ord k)
---     => a
---     -> Wire s e m (Event (Map k (Wire s e m a b)), Map k a) (Map k b)
--- wireMapK fill = go M.empty
---   where
---     go :: Map k (Wire s e m a b) -> Wire s e m (Event (Map k (Wire s e m a b)), Map k a) (Map k b)
---     go ws' = mkGen $ \ds (adds,as) -> do
---       (results, updateds) <- zipAndStep fill ds ws' as
---       let news = event M.empty id adds
---       return (results, go (updateds `M.union` news))
+wireMapK :: forall b e m a s k. (Monoid s, Monad m, Ord k)
+    => a
+    -> Wire s e m (Event (Map k (Wire s e m a b)), Map k a) (Map k b)
+wireMapK fill = go M.empty
+  where
+    go :: Map k (Wire s e m a b) -> Wire s e m (Event (Map k (Wire s e m a b)), Map k a) (Map k b)
+    go ws' = mkGen $ \ds (adds,as) -> do
+      (results, updateds) <- zipAndStep fill ds ws' as
+      let news = event M.empty id adds
+      return (results, go (updateds `M.union` news))
 
 -- {-# INLINE zipAndStep #-}
 zipAndStep :: (Ord k, Monad m)

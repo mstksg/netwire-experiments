@@ -223,22 +223,23 @@ baseWire (t1fl,t2fl) b0@(Base pb fl0 _ _ _) = proc ((t1s,t2s),atks) -> do
 
   rec
     let newWire = ntBase <$> teamChange
-    ((security, leaning), teamChange) <- drSwitch (ntBase fl0) -< ((influence, atks), newWire)
+    (((security, leaning),wall), teamChange) <- drSwitch (ntBase fl0) -< ((influence, atks), newWire)
 
   owner <- hold <|> pure fl0 -< teamChange
 
   let newBase = b0 { baseTeamFlag = owner
                    , baseSecurity = security
                    , baseLeaning  = leaning
+                   , baseWall = wall
                    }
 
   returnA -< (newBase, teamChange)
 
   where
     inBase = (< baseRadius) . norm . (^-^ pb) . getPos
-    ntBase :: Maybe TeamFlag -> Wire s e m (Maybe TeamFlag, Event [Attack]) ((Double, Maybe TeamFlag), Event (Maybe TeamFlag))
+    ntBase :: Maybe TeamFlag -> Wire s e m (Maybe TeamFlag, Event [Attack]) (((Double, Maybe TeamFlag), Maybe Double), Event (Maybe TeamFlag))
     ntBase = maybe neutralBase teamBase
-    neutralBase :: Wire s e m (Maybe TeamFlag, Event [Attack]) ((Double, Maybe TeamFlag), Event (Maybe TeamFlag))
+    neutralBase :: Wire s e m (Maybe TeamFlag, Event [Attack]) (((Double, Maybe TeamFlag), Maybe Double), Event (Maybe TeamFlag))
     neutralBase = proc (infl,_) -> do
       rec
         let push =
@@ -254,9 +255,9 @@ baseWire (t1fl,t2fl) b0@(Base pb fl0 _ _ _) = proc ((t1s,t2s),atks) -> do
 
       swap <- never . W.when ((< baseThreshold) . abs) --> now -< sec
 
-      returnA -< ((1 - (abs sec / baseThreshold),leaning),leaning <$ swap)
-    teamBase :: TeamFlag -> Wire s e m (Maybe TeamFlag, Event [Attack]) ((Double, Maybe TeamFlag), Event (Maybe TeamFlag))
-    teamBase fl = proc (infl,_atks) -> do
+      returnA -< (((1 - (abs sec / baseThreshold),leaning), Nothing),leaning <$ swap)
+    teamBase :: TeamFlag -> Wire s e m (Maybe TeamFlag, Event [Attack]) (((Double, Maybe TeamFlag), Maybe Double), Event (Maybe TeamFlag))
+    teamBase fl = proc (infl,atks) -> do
       rec
         let push =
               case infl of
@@ -267,5 +268,23 @@ baseWire (t1fl,t2fl) b0@(Base pb fl0 _ _ _) = proc ((t1s,t2s),atks) -> do
 
       swap <- never . W.when (> 0) --> now -< sec
 
-      returnA -< ((sec / baseThreshold,Nothing),Nothing <$ swap)
+      wallDamage   <- (hold . accumE (+) 0) <|> pure 0 -< sum . map attackDamage <$> atks
+
+      rec
+        let wallHealth = max (wallGrowth - wallDamage) (-5)
+        wallGrowth <- integral (-5) . (pure 1 . W.when (< 100) <|> pure 0) . delay 0 -< wallHealth
+
+      let wallStrength | wallGrowth < 0 = Nothing
+                       | otherwise      = Just (wallGrowth / 100)
+      -- recov <- integralWith (\d a -> min d a) 0 -< (recovery, damage)
+      -- let health = maxHealth + recov - damage
+      --     alive = health > 0
+
+      -- wallDamage   <- (hold . accumE (+) 0) <|> pure 0 -< sum . map attackDamage <$> atks
+      -- wallBuilding <- pure 0 . holdFor 5 <|> pure 1 -< atks
+      -- wallBuilt <- pure 0 . W.for 5 --> integralWith (\_ b -> max (min b 100) 0 ) 0 -< (wallBuilding, ())
+      -- let wallStrength = Just (wallBuilt - wallDamage)
+
+
+      returnA -< (((sec / baseThreshold,Nothing), wallStrength),Nothing <$ swap)
 

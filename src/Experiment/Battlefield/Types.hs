@@ -9,7 +9,6 @@ import Data.Colour
 import Data.Colour.Names
 import Data.Colour.SRGB
 import Data.Default
-import Data.Maybe                (fromMaybe)
 import Data.Ord
 import Linear
 import Prelude hiding            ((.),id)
@@ -168,7 +167,7 @@ instance HasSurface Stage where
 instance HasSurface Base where
   toSurface (Base (V3 x y _) fl sec lean wall) = Surface (V2 x y) idTrans 1 [baseWallOutline,baseOutline,baseCirc]
     where
-      wallColor = blend (fromMaybe 0 wall) black backgroundColor
+      wallColor = blend (maybe 0 ((+ 1/3) . (* (2/3))) wall) black backgroundColor
       baseWallOutline = EntSprite $ Sprite zero (Circle (baseRadius * 17/16) Filled) wallColor 1
       baseOutline = EntSprite $ Sprite zero (Circle baseRadius Filled) (blend (2/3) backgroundColor $ maybe white teamFlagColor fl) 1
       baseCirc = EntSprite $ Sprite zero (Circle (baseRadius * 15/16) Filled) col 1
