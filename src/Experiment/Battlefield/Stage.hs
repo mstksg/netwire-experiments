@@ -92,7 +92,7 @@ stageWireOnce' stgC dim@(w,h) t1fl t2fl gen = proc _ -> do
           t1InAll = M.unionWith (<>) t1Ins t1hIns
           t2InAll = M.unionWith (<>) t2Ins t2hIns
 
-      (bases,(t1bes,t2bes)) <- basesWire (t1fl,t2fl) b0s . delay (([],[]),repeat NoEvent) -< ((t1ss',t2ss'),zipWith (<>) t2bhits t1bhits)
+      (bases,(t1bes,t2bes)) <- basesWire (t1fl,t2fl) b0s . delay ([],[]) -< (t1ss',t2ss') 
 
     let sldrs = t1ss' ++ t2ss'
 
@@ -192,10 +192,10 @@ stageWireOnce' stgC dim@(w,h) t1fl t2fl gen = proc _ -> do
 basesWire :: (MonadFix m, Monoid e, HasTime Double s)
   => (TeamFlag, TeamFlag)
   -> [Base]
-  -> Wire s e m (([Soldier],[Soldier]),[Event [Attack]]) ([Base],([BaseEvents],[BaseEvents]))
-basesWire fls@(t1fl,_t2fl) b0s = proc (inp,atks) -> do
+  -> Wire s e m ([Soldier],[Soldier]) ([Base],([BaseEvents],[BaseEvents]))
+basesWire fls@(t1fl,_t2fl) b0s = proc inp -> do
 
-  bEvts <- zipWires (map (baseWire fls) b0s) -< zip (repeat inp) atks
+  bEvts <- zipWires (map (baseWire fls) b0s) -< repeat inp
 
   let
     (bases,swaps) = unzip bEvts
@@ -213,8 +213,8 @@ basesWire fls@(t1fl,_t2fl) b0s = proc (inp,atks) -> do
 baseWire :: forall m e s. (MonadFix m, Monoid e, HasTime Double s)
   => (TeamFlag, TeamFlag)
   -> Base
-  -> Wire s e m (([Soldier],[Soldier]), Event [Attack]) (Base,Event (Maybe TeamFlag))
-baseWire (t1fl,t2fl) b0@(Base pb fl0 _ _ _) = proc ((t1s,t2s),atks) -> do
+  -> Wire s e m ([Soldier],[Soldier]) (Base,Event (Maybe TeamFlag))
+baseWire (t1fl,t2fl) b0@(Base pb fl0 _ _ _) = proc (t1s,t2s) -> do
   let
     t1b = length $ filter inBase t1s
     t2b = length $ filter inBase t2s
@@ -224,24 +224,23 @@ baseWire (t1fl,t2fl) b0@(Base pb fl0 _ _ _) = proc ((t1s,t2s),atks) -> do
 
   rec
     let newWire = ntBase <$> teamChange
-    (((security, leaning),wall), teamChange) <- drSwitch (ntBase fl0) -< ((influence, atks), newWire)
+    ((security, leaning), teamChange) <- drSwitch (ntBase fl0) -< (influence, newWire)
 
   owner <- hold <|> pure fl0 -< teamChange
 
   let newBase = b0 { baseTeamFlag = owner
                    , baseSecurity = security
                    , baseLeaning  = leaning
-                   , baseWall = wall
                    }
 
   returnA -< (newBase, teamChange)
 
   where
     inBase = (< baseRadius) . norm . (^-^ pb) . getPos
-    ntBase :: Maybe TeamFlag -> Wire s e m (Maybe TeamFlag, Event [Attack]) (((Double, Maybe TeamFlag), Maybe Double), Event (Maybe TeamFlag))
+    ntBase :: Maybe TeamFlag -> Wire s e m (Maybe TeamFlag) ((Double, Maybe TeamFlag), Event (Maybe TeamFlag))
     ntBase = maybe neutralBase teamBase
-    neutralBase :: Wire s e m (Maybe TeamFlag, Event [Attack]) (((Double, Maybe TeamFlag), Maybe Double), Event (Maybe TeamFlag))
-    neutralBase = proc (infl,_) -> do
+    neutralBase :: Wire s e m (Maybe TeamFlag) ((Double, Maybe TeamFlag), Event (Maybe TeamFlag))
+    neutralBase = proc infl -> do
       rec
         let push =
               case infl of
@@ -256,9 +255,9 @@ baseWire (t1fl,t2fl) b0@(Base pb fl0 _ _ _) = proc ((t1s,t2s),atks) -> do
 
       swap <- never . W.when ((< baseThreshold) . abs) --> now -< sec
 
-      returnA -< (((1 - (abs sec / baseThreshold),leaning), Nothing),leaning <$ swap)
-    teamBase :: TeamFlag -> Wire s e m (Maybe TeamFlag, Event [Attack]) (((Double, Maybe TeamFlag), Maybe Double), Event (Maybe TeamFlag))
-    teamBase fl = proc (infl,atks) -> do
+      returnA -< ((1 - (abs sec / baseThreshold),leaning),leaning <$ swap)
+    teamBase :: TeamFlag -> Wire s e m (Maybe TeamFlag) ((Double, Maybe TeamFlag), Event (Maybe TeamFlag))
+    teamBase fl = proc infl -> do
       rec
         let push =
               case infl of
@@ -269,23 +268,14 @@ baseWire (t1fl,t2fl) b0@(Base pb fl0 _ _ _) = proc ((t1s,t2s),atks) -> do
 
       swap <- never . W.when (> 0) --> now -< sec
 
-      wallDamage   <- (hold . accumE (+) 0) <|> pure 0 -< sum . map attackDamage <$> atks
-
-      rec
-        let wallHealth = max (wallGrowth - wallDamage) (-5)
-        wallGrowth <- integral (-5) . (pure 1 . W.when (< 100) <|> pure 0) . delay 0 -< wallHealth
-
-      let wallStrength | wallGrowth < 0 = Nothing
-                       | otherwise      = Just (wallGrowth / 100)
-      -- recov <- integralWith (\d a -> min d a) 0 -< (recovery, damage)
-      -- let health = maxHealth + recov - damage
-      --     alive = health > 0
-
       -- wallDamage   <- (hold . accumE (+) 0) <|> pure 0 -< sum . map attackDamage <$> atks
-      -- wallBuilding <- pure 0 . holdFor 5 <|> pure 1 -< atks
-      -- wallBuilt <- pure 0 . W.for 5 --> integralWith (\_ b -> max (min b 100) 0 ) 0 -< (wallBuilding, ())
-      -- let wallStrength = Just (wallBuilt - wallDamage)
 
+      -- rec
+      --   let wallHealth = max (wallGrowth - wallDamage) (-5)
+      --   wallGrowth <- integral (-5) . (pure 1 . W.when (< 100) <|> pure 0) . delay 0 -< wallHealth
 
-      returnA -< (((sec / baseThreshold,Nothing), wallStrength),Nothing <$ swap)
+      -- let wallStrength | wallGrowth < 0 = Nothing
+      --                  | otherwise      = Just (wallGrowth / 100)
+
+      returnA -< ((sec / baseThreshold,Nothing),Nothing <$ swap)
 

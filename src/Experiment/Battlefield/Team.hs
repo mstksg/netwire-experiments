@@ -49,7 +49,8 @@ teamWire b0s (TeamData fl gen) =
       basesNewSolds <- zipWires (zipWith baseSwitcher b0s bgens) . delay (repeat baseDelay) -< zip (repeat juice) baseSwappers
 
 
-      let (gens,newSolds) = unzip basesNewSolds
+      let (gens,baseBuildingsNewSolds) = unzip basesNewSolds
+          (baseBuildings,newSolds) = unzip baseBuildingsNewSolds
           ((ownedB,enemyB),neutB) = partition3 selectBases bases
           -- targetBases | null neutB = enemyB
           --             | otherwise  = neutB
@@ -67,10 +68,12 @@ teamWire b0s (TeamData fl gen) =
 
       sldrsEs <- dWireMap ((mempty,[]), NoEvent) uuids -< (newSolds', sldrInsMsgs)
 
+      -- buildings <- dWireMap undefined uuids -< (newBuildings, buildingMessages)
+
       let sldrCount       = M.size sldrsEs
           soldierCapacity = fromIntegral sldrCount / fromIntegral maxSoldiers
           maxedSoldiers   = sldrCount >= maxSoldiers
-          buildings       = undefined
+          buildings       = M.mapMaybe id $ M.fromList (zip uuids baseBuildings)
 
 
     let outEvts = snd <$> sldrsEs
@@ -92,7 +95,7 @@ teamWire b0s (TeamData fl gen) =
     selectBases (Base _ (Just bfl) sec _ _) | bfl /= fl = Just False
                                             | sec < 0.8 = Nothing
                                             | otherwise = Just True
-    baseSwapper' :: (Base,StdGen) -> BaseEvents -> Event (Wire s e m  Double (StdGen, Event [SoldierData]))
+    baseSwapper' :: (Base,StdGen) -> BaseEvents -> Event (Wire s e m  Double (StdGen, (Maybe Building, Event [SoldierData])))
     baseSwapper' bg (Event xs@(_:_)) = Event $ baseSwapper bg (last xs)
     baseSwapper' bg (Event []) = Event $ baseSwapper bg (LoseBase Nothing)
     baseSwapper' _ NoEvent = NoEvent
@@ -100,8 +103,12 @@ teamWire b0s (TeamData fl gen) =
     baseDelay = (0,NoEvent)
 
     baseSwapper (base,g) GetBase = baseWire fl g base
-    baseSwapper (_,g) (LoseBase _) = pure (g, NoEvent)
+    baseSwapper (_,g) (LoseBase _) = pure (g, (Nothing, NoEvent))
 
+    baseSwitcher ::
+           Base
+        -> StdGen
+        -> Wire s e m (Double, Event (Wire s e m Double (StdGen, (Maybe Building, Event [SoldierData])))) (StdGen, (Maybe Building, Event [SoldierData]))
     baseSwitcher base g = drSwitch w0
       where
         bfl = baseTeamFlag base
@@ -149,15 +156,16 @@ baseWire :: (MonadFix m, Monoid e, HasTime Double s)
     => TeamFlag
     -> StdGen
     -> Base
-    -> Wire s e m Double (StdGen, Event [SoldierData])
+    -> Wire s e m Double (StdGen, (Maybe Building, Event [SoldierData]))
 baseWire fl gen b = proc juice -> do
     pooled <- couple (noisePrim genSldr) . soldierPool genPool -< juice
     let
       newSolds = processPool <$> pooled
-    returnA -< (g11,newSolds)
+    returnA -< (g11,(building,newSolds))
   where
     (g00,genSldr) = split gen
     (genPool,g11) = split g00
+    building = Just undefined
     processPool (sldrs,g) = zipWith posser sldrs posses
       where
         (g0,g') = split (mkStdGen g)
