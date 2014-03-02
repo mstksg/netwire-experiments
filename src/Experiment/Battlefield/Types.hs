@@ -27,8 +27,8 @@ uuids = [(UUID 0)..]
 data Stage = Stage { stageDimensions :: (Double,Double)
                    , stageScore      :: StageScore
                    , stageSoldiers   :: [Soldier]
+                   , stageBuildings  :: [Building]
                    , stageArticles   :: [Article]
-                   , stageBases      :: [Base]
                    } deriving Show
 
 data StageScore = StageScore { stageScoreScores    :: (Int,Int)
@@ -37,7 +37,7 @@ data StageScore = StageScore { stageScoreScores    :: (Int,Int)
                              } deriving Show
 
 data Hittable = HittableSoldier Soldier
-              | HittableBase Base
+              | HittableBuilding Building
 
 data Soldier = Soldier  { soldierPosAng :: PosAng
                         , soldierHealth :: Double
@@ -66,9 +66,9 @@ data Weapon = Sword | Axe | Bow | Longbow
 data Mount = Foot | Horse
                       deriving (Show, Ord, Eq)
 
-data Team = Team { teamFlag     :: TeamFlag
-                 , teamSoldiers :: M.Map UUID Soldier
-                 , teamBases    :: [Base]
+data Team = Team { teamFlag      :: TeamFlag
+                 , teamSoldiers  :: M.Map UUID Soldier
+                 , teamBuildings :: M.Map UUID Building
                  } deriving Show
 
 data TeamFlag = TeamFlag  { teamFlagColor :: Color
@@ -77,6 +77,14 @@ data TeamFlag = TeamFlag  { teamFlagColor :: Color
 data TeamData = TeamData { teamDataFlag :: TeamFlag
                          , teamDataGen  :: StdGen
                          } deriving Show
+
+data Building = Building { buildingPos    :: V3 Double
+                         , buildingFlag   :: Maybe TeamFlag
+                         , buildingHealth :: Maybe Double
+                         , buildingData   :: BuildingData
+                         } deriving Show
+
+data BuildingData = BuildingBase Base deriving Show
 
 data Article = Article { articlePosAng :: PosAng
                        , articleType   :: ArticleType
@@ -156,16 +164,49 @@ instance Ord a => Ord (RGB a) where
   compare (RGB r1 g1 b1) (RGB r2 g2 b2) = compare (r1,g1,b1) (r2,g2,b2)
 
 instance HasSurface Stage where
-  toSurface (Stage (w,h) _ sldrs arts bases) = Surface zero idTrans 1 ents
+  toSurface (Stage (w,h) _ sldrs buildings arts) = Surface zero idTrans 1 ents
     where
       back  = Sprite (V2 (w/2) (h/2)) (Rectangle (V2 w h) Filled) backgroundColor 1
-      baseEnts = map (EntSurface . toSurface) bases
+      -- baseEnts = map (EntSurface . toSurface) bases
+      buildingEnts = map (EntSurface . toSurface) buildings
       sldrEnts = map (EntSurface . toSurface) sldrs
       artEnts = map (EntSurface . toSurface) arts
-      ents = EntSprite back:(baseEnts ++ sldrEnts ++ artEnts)
+      ents = EntSprite back:(buildingEnts ++ sldrEnts ++ artEnts)
+
+instance HasSurface Building where
+  toSurface (Building (V3 x y _) _ _ dta) = Surface (V2 x y) idTrans 1 bldEnts
+    where
+      bldEnts =
+        case dta of
+          BuildingBase b -> [EntSurface $ toSurface b]
+          -- BuildingBase (Base sec lean wall) -> [baseWallOutline, baseOutline, baseCirc]
+          --   where
+          --     wallColor = blend (maybe 0 ((+ 1/3) . (* (2/3))) wall) black backgroundColor
+          --     baseWallOutline = EntSprite $ Sprite zero (Circle (baseRadius * 17/16) Filled) wallColor 1
+          --     baseOutline = EntSprite $ Sprite zero (Circle baseRadius Filled) (blend (2/3) backgroundColor $ maybe white teamFlagColor fl) 1
+          --     baseCirc = EntSprite $ Sprite zero (Circle (baseRadius * 15/16) Filled) col 1
+          --     col = blend (3/4) backgroundColor $
+          --       case (fl,lean) of
+          --         (Just c,_)  ->
+          --           sec `darken` teamFlagColor c
+          --         (_,Nothing) ->
+          --           white
+          --         (_,Just c)  ->
+          --           blend sec white (teamFlagColor c)
+
+-- data Building = Building { buildingPos    :: V3 Double
+--                          , buildingHealth :: Double
+--                          , buildingFlag   :: Maybe TeamFlag
+--                          , buildingData   :: BuildingData
+--                          } deriving Show
+-- data BuildingData = BuildingBase Base deriving Show
+-- data Base = Base { baseSecurity :: Double
+--                  , baseLeaning  :: Maybe TeamFlag
+--                  , baseWall     :: Maybe Double
+--                  } deriving Show
 
 instance HasSurface Base where
-  toSurface (Base (V3 x y _) fl sec lean wall) = Surface (V2 x y) idTrans 1 [baseWallOutline,baseOutline,baseCirc]
+  toSurface (Base _ fl sec lean wall) = Surface zero idTrans 1 [baseWallOutline,baseOutline,baseCirc]
     where
       wallColor = blend (maybe 0 ((+ 1/3) . (* (2/3))) wall) black backgroundColor
       baseWallOutline = EntSprite $ Sprite zero (Circle (baseRadius * 17/16) Filled) wallColor 1
@@ -221,7 +262,7 @@ instance Default StageScore where
   def = StageScore (0,0) 0 0
 
 instance Default Team where
-  def = Team def M.empty []
+  def = Team def M.empty M.empty
 
 instance Default TeamFlag where
   def = TeamFlag white
@@ -247,6 +288,9 @@ instance HasPosAng Article where
 instance HasPos Base where
   getPos = basePos
 
+instance HasPos Building where
+  getPos = buildingPos
+
 instance HasPos PosAng where
   getPos = posAngPos
 
@@ -255,7 +299,7 @@ instance (HasPosAng a) => HasPos a where
 
 instance HasPos Hittable where
   getPos (HittableSoldier s) = getPos s
-  getPos (HittableBase b) = getPos b
+  getPos (HittableBuilding b) = getPos b
 
 instance HasPos (V3 Double) where
   getPos = id
@@ -265,6 +309,6 @@ hitRadius = 5
 
 hittableHit :: HasPos a => Hittable -> a -> Bool
 hittableHit (HittableSoldier s) a = norm (getPos a ^-^ getPos s) < hitRadius
-hittableHit (HittableBase b) a = d < 1.1 && d > 1
+hittableHit (HittableBuilding b) a = d < 1.1 && d > 1
   where
     d = norm (getPos a ^-^ getPos b) / baseRadius

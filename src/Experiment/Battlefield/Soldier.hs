@@ -36,7 +36,7 @@ import Utils.Wire.Misc
 import Utils.Wire.Noise
 import qualified Data.Map.Strict     as M
 
-type SoldierWireIn k = ((M.Map k Soldier,[Base]), SoldierInEvents)
+type SoldierWireIn k = ((M.Map k Soldier, [Base]), SoldierInEvents)
 type SoldierWireOut k = (Soldier, SoldierOutEvents)
 
 type SoldierWire s e m k = Wire s e m (SoldierWireIn k) (SoldierWireOut k)
@@ -143,7 +143,7 @@ soldierWire (SoldierData x0 fl cls@(SoldierClass bod weap mnt) gen) =
 
       let
         targetsPos = map getPos (M.elems targets)
-        basesPos = map ((^+^ favoriteSpot) . basePos) targetBases
+        basesPos = map ((^+^ favoriteSpot) . getPos) targetBases
 
       attackers <- curated -< (map snd <$> attackeds, findAttacker targetsPos)
 

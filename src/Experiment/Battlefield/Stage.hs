@@ -99,8 +99,9 @@ stageWireOnce' stgC dim@(w,h) t1fl t2fl gen = proc _ -> do
     victory <- never . W.when isNothing --> now -< winner bases
 
     let newData = processVictory duration <$> victory
+        stgC' = stgC { stageScoreDuration = duration }
 
-    returnA -< (Stage dim (stgC { stageScoreDuration = duration }) sldrs arts bases, newData)
+    returnA -< (Stage dim stgC' sldrs [] arts, newData)
 
   where
     makeAttackWire (sId,Event es) = map (\d -> (sId,) <$> attackWire d) atkDatas

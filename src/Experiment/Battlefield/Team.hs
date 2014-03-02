@@ -70,11 +70,12 @@ teamWire b0s (TeamData fl gen) =
       let sldrCount       = M.size sldrsEs
           soldierCapacity = fromIntegral sldrCount / fromIntegral maxSoldiers
           maxedSoldiers   = sldrCount >= maxSoldiers
+          buildings       = undefined
 
 
     let outEvts = snd <$> sldrsEs
 
-    returnA -< ((Team fl sldrs bases),(outEvts,repeat NoEvent))
+    returnA -< ((Team fl sldrs buildings),(outEvts,repeat NoEvent))
 
   where
     totalSupply  = 20
