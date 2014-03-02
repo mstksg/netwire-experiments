@@ -24,37 +24,37 @@ newtype UUID = UUID { getUUID :: Int } deriving (Show, Ord, Eq, Enum)
 uuids :: [UUID]
 uuids = [(UUID 0)..]
 
-data Stage = Stage { stageDimensions :: (Double,Double)
-                   , stageScore      :: StageScore
-                   , stageSoldiers   :: [Soldier]
-                   , stageBuildings  :: [Building]
-                   , stageArticles   :: [Article]
+data Stage = Stage { stageDimensions :: !(Double,Double)
+                   , stageScore      :: !StageScore
+                   , stageSoldiers   :: ![Soldier]
+                   , stageBuildings  :: ![Building]
+                   , stageArticles   :: ![Article]
                    } deriving Show
 
-data StageScore = StageScore { stageScoreScores    :: (Int,Int)
-                             , stageScoreGameCount :: Int
-                             , stageScoreDuration  :: Double
+data StageScore = StageScore { stageScoreScores    :: !(Int,Int)
+                             , stageScoreGameCount :: !Int
+                             , stageScoreDuration  :: !Double
                              } deriving Show
 
-data Hittable = HittableSoldier Soldier
-              | HittableBuilding Building
+data Hittable = HittableSoldier  !Soldier
+              | HittableBuilding !Building
 
-data Soldier = Soldier  { soldierPosAng :: PosAng
-                        , soldierHealth :: Double
-                        , soldierFlag   :: Maybe TeamFlag
-                        , soldierScore  :: SoldierScore
-                        , soldierFuncs  :: SoldierFuncs
-                        , soldierBody   :: SoldierBody
-                        , soldierWeapon :: Weapon
-                        , soldierMount  :: Mount
+data Soldier = Soldier  { soldierPosAng :: !PosAng
+                        , soldierHealth :: !Double
+                        , soldierFlag   :: !(Maybe TeamFlag)
+                        , soldierScore  :: !SoldierScore
+                        , soldierFuncs  :: !SoldierFuncs
+                        , soldierBody   :: !SoldierBody
+                        , soldierWeapon :: !Weapon
+                        , soldierMount  :: !Mount
                         } deriving Show
 
 
-data SoldierScore = SoldierScore { soldierScoreKillCount :: Int
-                                 , soldierScoreAge       :: Double
+data SoldierScore = SoldierScore { soldierScoreKillCount :: !Int
+                                 , soldierScoreAge       :: !Double
                                  } deriving Show
 
-data SoldierFuncs = SoldierFuncs { soldierFuncsWouldKill :: Attack -> Bool
+data SoldierFuncs = SoldierFuncs { soldierFuncsWouldKill :: !(Attack -> Bool)
                                  }
 
 data SoldierBody = MeleeBody | TankBody | RangedBody
@@ -66,92 +66,92 @@ data Weapon = Sword | Axe | Bow | Longbow
 data Mount = Foot | Horse
                       deriving (Show, Ord, Eq)
 
-data Team = Team { teamFlag      :: TeamFlag
-                 , teamSoldiers  :: M.Map UUID Soldier
-                 , teamBuildings :: M.Map UUID Building
+data Team = Team { teamFlag      :: !TeamFlag
+                 , teamSoldiers  :: !(M.Map UUID Soldier)
+                 , teamBuildings :: !(M.Map UUID Building)
                  } deriving Show
 
-data TeamFlag = TeamFlag  { teamFlagColor :: Color
+data TeamFlag = TeamFlag  { teamFlagColor :: !Color
                           } deriving (Show, Eq, Ord)
 
-data TeamData = TeamData { teamDataFlag :: TeamFlag
-                         , teamDataGen  :: StdGen
+data TeamData = TeamData { teamDataFlag :: !TeamFlag
+                         , teamDataGen  :: !StdGen
                          } deriving Show
 
-data Building = Building { buildingPos    :: V3 Double
-                         , buildingFlag   :: Maybe TeamFlag
-                         , buildingHealth :: Maybe Double
-                         , buildingData   :: BuildingData
+data Building = Building { buildingPos    :: !(V3 Double)
+                         , buildingFlag   :: !(Maybe TeamFlag)
+                         , buildingHealth :: !(Maybe Double)
+                         , buildingData   :: !BuildingData
                          } deriving Show
 
-data BuildingData = BuildingBase Base deriving Show
+data BuildingData = BuildingBase !Base deriving Show
 
-data Article = Article { articlePosAng :: PosAng
-                       , articleType   :: ArticleType
+data Article = Article { articlePosAng :: !PosAng
+                       , articleType   :: !ArticleType
                        } deriving Show
 
-data ArticleType = ArticleAttack Attack deriving Show
+data ArticleType = ArticleAttack !Attack deriving Show
 
-data PosAng = PosAng { posAngPos :: V3 Double
-                     , posAngAng :: Double
+data PosAng = PosAng { posAngPos :: !(V3 Double)
+                     , posAngAng :: !Double
                      } deriving Show
 
-data SoldierOutEvent = AttackEvent AttackData
+data SoldierOutEvent = AttackEvent !AttackData
 
-data Attack = Attack { attackWeapon :: Weapon
-                     , attackDamage :: Double
-                     , attackOrigin :: V3 Double
+data Attack = Attack { attackWeapon :: !Weapon
+                     , attackDamage :: !Double
+                     , attackOrigin :: !(V3 Double)
                      } deriving Show
 
-data AttackData = AttackData { attackDataX0     :: V3 Double
-                             , attackDataDir    :: V3 Double
-                             , attackDataAttack :: Attack
+data AttackData = AttackData { attackDataX0     :: !(V3 Double)
+                             , attackDataDir    :: !(V3 Double)
+                             , attackDataAttack :: !Attack
                              } deriving Show
 
 type SoldierOutEvents = Event [SoldierOutEvent]
 
-data SoldierInEvent = AttackedEvent { attackedEventDamage :: Double
-                                    , attackedEventOrigin :: V3 Double
+data SoldierInEvent = AttackedEvent { attackedEventDamage :: !Double
+                                    , attackedEventOrigin :: !(V3 Double)
                                     }
-                    | GotKillEvent Soldier
+                    | GotKillEvent !Soldier
                     deriving Show
 
 type SoldierInEvents = Event [SoldierInEvent]
 
 data TeamInEvent
 
-data BaseEvent = GetBase | LoseBase (Maybe TeamFlag)
+data BaseEvent = GetBase | LoseBase !(Maybe TeamFlag)
 
 type BaseEvents = Event [BaseEvent]
 
-data Base = Base { basePos      :: V3 Double
-                 , baseTeamFlag :: Maybe TeamFlag
-                 , baseSecurity :: Double
-                 , baseLeaning  :: Maybe TeamFlag
-                 , baseWall     :: Maybe Double
+data Base = Base { basePos      :: !(V3 Double)
+                 , baseTeamFlag :: !(Maybe TeamFlag)
+                 , baseSecurity :: !Double
+                 , baseLeaning  :: !(Maybe TeamFlag)
+                 , baseWall     :: !(Maybe Double)
                  } deriving Show
 
 baseRadius :: Double
 baseRadius = 25
 
-data SoldierData = SoldierData { soldierDataX0     :: V3 Double
-                               , soldierDataFlag   :: Maybe TeamFlag
-                               , soldierDataClass  :: SoldierClass
-                               , soldierDataGen    :: StdGen
+data SoldierData = SoldierData { soldierDataX0     :: !(V3 Double)
+                               , soldierDataFlag   :: !(Maybe TeamFlag)
+                               , soldierDataClass  :: !SoldierClass
+                               , soldierDataGen    :: !StdGen
                                } deriving Show
 
-data SoldierClass = SoldierClass { soldierClassBody   :: SoldierBody
-                                 , soldierClassWeapon :: Weapon
-                                 , soldierClassMount  :: Mount
+data SoldierClass = SoldierClass { soldierClassBody   :: !SoldierBody
+                                 , soldierClassWeapon :: !Weapon
+                                 , soldierClassMount  :: !Mount
                                  } deriving (Show, Ord, Eq)
 
-data SoldierStats = SoldierStats { soldierStatsDPS      :: Double
-                                 , soldierStatsHealth   :: Double
-                                 , soldierStatsDamage   :: Double
-                                 , soldierStatsSpeed    :: Double
-                                 , soldierStatsCooldown :: Double
-                                 , soldierStatsRange    :: Maybe Double
-                                 , soldierStatsAccuracy :: Double
+data SoldierStats = SoldierStats { soldierStatsDPS      :: !Double
+                                 , soldierStatsHealth   :: !Double
+                                 , soldierStatsDamage   :: !Double
+                                 , soldierStatsSpeed    :: !Double
+                                 , soldierStatsCooldown :: !Double
+                                 , soldierStatsRange    :: !(Maybe Double)
+                                 , soldierStatsAccuracy :: !Double
                                  }
 
 backgroundColor :: Color
