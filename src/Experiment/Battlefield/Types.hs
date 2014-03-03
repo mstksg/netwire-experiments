@@ -36,8 +36,8 @@ data StageScore = StageScore { stageScoreScores    :: !(Int,Int)
                              , stageScoreDuration  :: !Double
                              } deriving Show
 
-data Hittable = HittableSoldier !Soldier
-              | HittableBase !Base
+-- data Hittable = HittableSoldier !Soldier
+--               | HittableBase !Base
 
 data Soldier = Soldier  { soldierPosAng :: !PosAng
                         , soldierHealth :: !Double
@@ -238,6 +238,9 @@ class HasPosAng a where
 class HasPos a where
   getPos :: a -> V3 Double
 
+class Hittable a where
+  hittableHit :: (HasPos b) => a -> b -> Bool
+
 instance HasPosAng Soldier where
   getPosAng = soldierPosAng
 
@@ -253,9 +256,9 @@ instance HasPos PosAng where
 instance (HasPosAng a) => HasPos a where
   getPos = getPos . getPosAng
 
-instance HasPos Hittable where
-  getPos (HittableSoldier s) = getPos s
-  getPos (HittableBase b) = getPos b
+-- instance HasPos Hittable where
+--   getPos (HittableSoldier s) = getPos s
+--   getPos (HittableBase b) = getPos b
 
 instance HasPos (V3 Double) where
   getPos = id
@@ -263,8 +266,17 @@ instance HasPos (V3 Double) where
 hitRadius :: Double
 hitRadius = 5
 
-hittableHit :: HasPos a => Hittable -> a -> Bool
-hittableHit (HittableSoldier s) a = norm (getPos a ^-^ getPos s) < hitRadius
-hittableHit (HittableBase b) a = d < 1.1 && d > 1
-  where
-    d = norm (getPos a ^-^ getPos b) / baseRadius
+instance Hittable Soldier where
+  hittableHit s a = norm (getPos a ^-^ getPos s) < hitRadius
+
+instance Hittable Base where
+  hittableHit b a = d < 1.1 && d > 1
+    where
+      d = norm (getPos a ^-^ getPos b) / baseRadius
+
+
+-- hittableHit :: HasPos a => Hittable -> a -> Bool
+-- hittableHit (HittableSoldier s) a = norm (getPos a ^-^ getPos s) < hitRadius
+-- hittableHit (HittableBase b) a = d < 1.1 && d > 1
+--   where
+--     d = norm (getPos a ^-^ getPos b) / baseRadius

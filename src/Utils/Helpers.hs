@@ -11,9 +11,8 @@ module Utils.Helpers
   , zipTake
   ) where
 
-import Data.List (foldl')
 import qualified Data.Map as M
-import Data.Foldable (foldr)
+import Data.Foldable (foldr, foldl', Foldable)
 import Control.Arrow ((&&&))
 import Prelude hiding (foldr)
 
@@ -29,7 +28,7 @@ wee :: IO ()
 wee = mapM_ (putStrLn . flip replicate '.' . (6-) . abs) [-5..5]
 
 {-# INLINE foldAcrossl #-}
-foldAcrossl :: (a -> b -> a) -> a -> [[b]] -> [a]
+foldAcrossl :: Foldable t => (a -> b -> a) -> a -> t [b] -> [a]
 foldAcrossl f x = foldl' (zipWith f) (repeat x)
 
 partition3 :: (a -> Maybe Bool) -> [a] -> (([a],[a]),[a])

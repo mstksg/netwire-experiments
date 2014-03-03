@@ -1,4 +1,5 @@
 {-# LANGUAGE TupleSections #-}
+{-# LANGUAGE StandaloneDeriving #-}
 
 module Experiment.Battlefield.Stage
   ( stageWireOnce
@@ -7,10 +8,12 @@ module Experiment.Battlefield.Stage
   , stageWireLoop'
   ) where
 
--- import Data.Traversable
+import Data.Traversable (mapAccumL)
 -- import Data.Foldable (foldl)
+import Debug.Trace
 import Control.Monad.Fix
 import Control.Wire                 as W
+import Utils.Wire.Debug
 import Control.Wire.Unsafe.Event
 import Data.Default
 import Data.Maybe                   (isNothing, catMaybes)
@@ -33,6 +36,7 @@ import Data.Map.Strict (Map)
 type ArticleID = UUID
 type SoldierID = UUID
 
+deriving instance Show a => Show (Event a)
 
 stageWireOnce :: (MonadFix m, Monoid e, HasTime Double s)
   => (Double,Double)
@@ -75,19 +79,23 @@ stageWireOnce' stgC dim@(w,h) t1fl t2fl gen = proc _ -> do
     duration <- integral (stageScoreDuration stgC) -< 1
 
     rec
-      (team1@(Team _ t1ss _), (t1Outs,t2bhits)) <- t1w . delay (teamWireDelayer b0s) -< ((team2,bases), (t1bes, t1InAll))
-      (team2@(Team _ t2ss _), (t2Outs,t1bhits)) <- t2w -< ((team1,bases), (t2bes, t2InAll))
+      -- manage teams
+      (team1@(Team _ t1ss _), t1Outs) <- t1w . delay (teamWireDelayer b0s) -< ((team2,bases), (t1bes, t1InAll))
+      (team2@(Team _ t2ss _), t2Outs) <- t2w . delay (teamWireDelayer b0s) -< ((team1,bases), (t2bes, t2InAll))
 
       let t1ss' = M.elems t1ss
           t2ss' = M.elems t2ss
           t1asn = Event $ concatMap makeAttackWire (M.toList t1Outs)
           t2asn = Event $ concatMap makeAttackWire (M.toList t2Outs)
 
+      -- manage arrows
       t1as <- dWireMap NoEvent uuids -< (t1asn,t1aIns)
       t2as <- dWireMap NoEvent uuids -< (t2asn,t2aIns)
 
-      let ((t1Ins,t1aIns),t2hIns) = findHits t1as t2ss
-          ((t2Ins,t2aIns),t1hIns) = findHits t2as t1ss
+      let (t1as',t2bhits)         = findWallHits t1as (Just t1fl) bases
+          (t2as',t1bhits)         = findWallHits t2as (Just t2fl) bases
+          ((t1Ins,t1aIns),t2hIns) = findHits t1as' t2ss
+          ((t2Ins,t2aIns),t1hIns) = findHits t2as' t1ss
           arts = map snd (M.elems t1as ++ M.elems t2as)
           t1InAll = M.unionWith (<>) t1Ins t1hIns
           t2InAll = M.unionWith (<>) t2Ins t2hIns
@@ -107,6 +115,22 @@ stageWireOnce' stgC dim@(w,h) t1fl t2fl gen = proc _ -> do
       where
         atkDatas = [ atkData | AttackEvent atkData <- es ]
     makeAttackWire _ = []
+    findWallHits :: Map UUID (UUID, Article) -> Maybe TeamFlag -> [Base] -> (Map UUID (UUID, Article),[Event [Attack]])
+    -- findWallHits as fl bs = if M.size bAtks > 0 then (M.elemAt 0 bAtks `traceShow` (leftoverArts, evts)) else (leftoverArts, evts)
+    findWallHits as fl bs = (leftoverArts, evts)
+      where
+        atks = fmap makeHit as
+        leftoverArts = fst <$> M.filter (not . fst . snd) atks
+        evts = foldAcrossl (<>) NoEvent (snd . snd <$> atks)
+        makeHit ua@(_, art) = (ua, mapAccumL f False bs)
+          where
+            f :: Bool -> Base -> (Bool, Event [Attack])
+            f True _ = (True, NoEvent)
+            f False b
+              | baseTeamFlag b == fl && hittableHit b art = "hey" `trace` (True, Event [atk])
+              | otherwise                                 = (False, NoEvent)
+              where
+                ArticleAttack atk = articleType art
     findHits :: Map UUID (UUID, Article) -> Map UUID Soldier -> ((Map UUID SoldierInEvents,Map UUID (Event ())), Map UUID SoldierInEvents)
     findHits as ss = ((sldrKillsEs, artHitEs), sldrHitEs)
       where
@@ -256,6 +280,8 @@ baseWire (t1fl,t2fl) b0@(Base pb fl0 _ _ _) = proc ((t1s,t2s),atks) -> do
       swap <- never . W.when ((< baseThreshold) . abs) --> now -< sec
 
       returnA -< (((1 - (abs sec / baseThreshold),leaning), Nothing),leaning <$ swap)
+    wallMax = 1
+    wallRate = 1
     teamBase :: TeamFlag -> Wire s e m (Maybe TeamFlag, Event [Attack]) (((Double, Maybe TeamFlag), Maybe Double), Event (Maybe TeamFlag))
     teamBase fl = proc (infl,atks) -> do
       rec
@@ -271,11 +297,11 @@ baseWire (t1fl,t2fl) b0@(Base pb fl0 _ _ _) = proc ((t1s,t2s),atks) -> do
       wallDamage   <- (hold . accumE (+) 0) <|> pure 0 -< sum . map attackDamage <$> atks
 
       rec
-        let wallHealth = max (wallGrowth - wallDamage) (-5)
-        wallGrowth <- integral (-5) . (pure 1 . W.when (< 100) <|> pure 0) . delay 0 -< wallHealth
+        let wallHealth = max (wallGrowth - wallDamage) (-5 * wallRate)
+        wallGrowth <- integral (-1 * wallRate) . (pure wallRate . W.when (< wallMax) <|> pure 0) . delay 0 -< wallHealth
 
       let wallStrength | wallGrowth < 0 = Nothing
-                       | otherwise      = Just (wallGrowth / 100)
+                       | otherwise      = Just (wallGrowth / wallMax)
       -- recov <- integralWith (\d a -> min d a) 0 -< (recovery, damage)
       -- let health = maxHealth + recov - damage
       --     alive = health > 0
@@ -286,5 +312,5 @@ baseWire (t1fl,t2fl) b0@(Base pb fl0 _ _ _) = proc ((t1s,t2s),atks) -> do
       -- let wallStrength = Just (wallBuilt - wallDamage)
 
 
-      returnA -< (((sec / baseThreshold,Nothing), wallStrength),Nothing <$ swap)
+      returnA -< atks `traceEvent'` (((sec / baseThreshold,Nothing), wallStrength),Nothing <$ swap)
 

@@ -28,7 +28,7 @@ import Utils.Wire.Wrapped
 import qualified Data.Map.Strict       as M
 
 type TeamWireIn = ((Team,[Base]), ([BaseEvents],M.Map UUID SoldierInEvents))
-type TeamWireOut = (Team,(M.Map UUID SoldierOutEvents,[Event [Attack]]))
+type TeamWireOut = (Team,M.Map UUID SoldierOutEvents)
 type TeamWire s e m = Wire s e m TeamWireIn TeamWireOut
 
 teamWireDelayer :: [Base] -> TeamWireIn
@@ -74,7 +74,7 @@ teamWire b0s (TeamData fl gen) =
 
     let outEvts = snd <$> sldrsEs
 
-    returnA -< ((Team fl sldrs bases),(outEvts,repeat NoEvent))
+    returnA -< (Team fl sldrs bases,outEvts)
 
   where
     totalSupply  = 20
