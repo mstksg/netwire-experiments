@@ -271,13 +271,6 @@ instance Hittable Soldier where
   hittableHit s a = norm (getPos a ^-^ getPos s) < hitRadius
 
 instance Hittable Base where
-  hittableHit b a = d < 1.2 && d > 0.8 && isJust (baseWall b)
+  hittableHit b a = isJust (baseWall b) && d < 1.2 && d > 0.8
     where
       d = norm (getPos a ^-^ getPos b) / baseRadius
-
-
--- hittableHit :: HasPos a => Hittable -> a -> Bool
--- hittableHit (HittableSoldier s) a = norm (getPos a ^-^ getPos s) < hitRadius
--- hittableHit (HittableBase b) a = d < 1.1 && d > 1
---   where
---     d = norm (getPos a ^-^ getPos b) / baseRadius
