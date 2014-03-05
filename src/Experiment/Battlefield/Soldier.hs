@@ -139,7 +139,7 @@ soldierWire (SoldierData x0 fl cls@(SoldierClass bod weap mnt) gen) =
         applyRandom (atk,r) = [atk (r * baseDamage)]
 
     moveAndAttack g = proc (targets,targetBases,attackeds,alive) -> do
-      favoriteSpot <- arr (^* (baseRadius * 0.5)) . noiseDisc 1 0 g -< ()
+      favoriteSpot <- arr (^* (baseRadius * 0.25)) . noiseDisc 1 0 g -< ()
 
       let
         targetsPos = map getPos (M.elems targets)

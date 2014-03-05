@@ -9,6 +9,7 @@ import Data.Colour
 import Data.Colour.Names
 import Data.Colour.SRGB
 import Data.Default
+import Data.Maybe                (isJust)
 import Data.Ord
 import Linear
 import Prelude hiding            ((.),id)
@@ -124,7 +125,7 @@ data Base = Base { basePos      :: !(V3 Double)
                  } deriving Show
 
 baseRadius :: Double
-baseRadius = 25
+baseRadius = 30
 
 data SoldierData = SoldierData { soldierDataX0     :: !(V3 Double)
                                , soldierDataFlag   :: !(Maybe TeamFlag)
@@ -270,7 +271,7 @@ instance Hittable Soldier where
   hittableHit s a = norm (getPos a ^-^ getPos s) < hitRadius
 
 instance Hittable Base where
-  hittableHit b a = d < 1.1 && d > 1
+  hittableHit b a = d < 1.2 && d > 0.8 && isJust (baseWall b)
     where
       d = norm (getPos a ^-^ getPos b) / baseRadius
 
