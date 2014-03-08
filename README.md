@@ -3,10 +3,12 @@ Netwire Experiments
 
 Experiments with netwire and FRP in general.
 
-Will hopefully post some detailed writeups at [http://jle.im].
+Will hopefully post some detailed writeups at http://jle.im .
 
-Experiment.Planets
-------------------
+Experiments
+-----------
+
+### Experiment.Planets
 
 An N-body simulation with gravity.  Simulates the planets rotating around our
 solar system; uses verlet integration for motion.  Every planet attracts every
@@ -15,23 +17,20 @@ other planet, just like in real life.
 To test the input event mechanisms, there is a UFO rotating just outside of
 Mars's orbit that exerts a gigantic pull when the mouse is held down.
 
-Experiment.Room
----------------
+### Experiment.Room
 
 Attempting to apply the same physics engine to a ball bouncing in a room.  Was
 not too interesting so did not go past just making the ball bounce a few
 times and plotting the results using gnuplot.
 
-Experiment.Archers
-------------------
+### Experiment.Archers
 
 Initial attempt at a battlefield-like simulation, where a bunch of archers are
 spawned on different teams and they all try to fight eachother until the last
 surviving team wins.  Basically got my feet wet with dynamic wires and
 interactions.
 
-Experiment.Battlefield
-----------------------
+### Experiment.Battlefield
 
 Like archers, but also with swordsmen, axemen, longbowmen, horsemen, horse
 archers.  Basically a medieval battle simulator.  Added battlefield-like
