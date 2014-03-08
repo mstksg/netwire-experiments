@@ -9,14 +9,20 @@ module Experiment.Battlefield.Soldier
   , allClasses
   , classStats
   , classWorth
+  , normedClassWorths
   ) where
 
+-- import Control.Wire.Unsafe.Event
+-- import Data.Fixed                 (mod')
+-- import Data.Foldable              (fold)
+-- import Data.Traversable           (mapAccumL)
+-- import Utils.Helpers              (rotationDir)
+-- import Utils.Wire.Wrapped
 import Control.Monad
 import Control.Monad.Fix
 import Control.Wire                  as W
-import Control.Wire.Unsafe.Event
-import Data.List                     (minimumBy, mapAccumL)
-import Data.Maybe                    (mapMaybe, catMaybes, fromMaybe)
+import Data.List                     (minimumBy)
+import Data.Maybe                    (mapMaybe, fromMaybe)
 import Data.Ord                      (comparing)
 import Experiment.Battlefield.Attack
 import Experiment.Battlefield.Stats
@@ -26,14 +32,19 @@ import FRP.Netwire.Noise
 import Linear
 import Prelude hiding                ((.),id)
 import System.Random
-import Utils.Helpers                 (foldAcrossl)
 import Utils.Wire.Misc
 import Utils.Wire.Noise
-import Utils.Wire.Wrapped
+import qualified Data.Map.Strict     as M
 
-soldierWire :: (MonadFix m, HasTime Double s, Monoid e)
+type SoldierWireIn k = ((M.Map k Soldier,[Base]), SoldierInEvents)
+type SoldierWireOut k = (Soldier, SoldierOutEvents)
+
+type SoldierWire s e m k = Wire s e m (SoldierWireIn k) (SoldierWireOut k)
+
+
+soldierWire :: forall s e m k. (MonadFix m, HasTime Double s, Monoid e, Ord k)
     => SoldierData
-    -> Wire s e m (([Maybe Soldier],[Base]), SoldierInEvents) ((Maybe Soldier,[Article]), (SoldierOutEvents,[SoldierInEvents]))
+    -> SoldierWire s e m k
 soldierWire (SoldierData x0 fl cls@(SoldierClass bod weap mnt) gen) =
   proc ((targets,targetBases),mess) -> do
 
@@ -41,58 +52,40 @@ soldierWire (SoldierData x0 fl cls@(SoldierClass bod weap mnt) gen) =
     age <- integral 0 -< 1
 
     -- calculate damage from hits
-    let
-      hit = sum . map fst <$> attackeds
-      attackeds = mapMaybe maybeAttacked <$> mess
+    let hit = sum . map fst <$> attackeds
+        attackeds = mapMaybe maybeAttacked <$> mess
+        gotKill = sum . mapMaybe (fmap (const 1) . maybeGotKill) <$> mess
     damage <- hold . accumE (+) 0 <|> pure 0 -< hit
 
     -- calculate health, plus recovery
     recov <- integralWith (\d a -> min d a) 0 -< (recovery, damage)
-    let
-      health = maxHealth + recov - damage
-      alive = health > 0
+    let health = maxHealth + recov - damage
+        alive = health > 0
 
     (posAng,newD) <- moveAndAttack maaGen -< (targets,targetBases,attackeds,alive)
 
     -- shoot!
     shot  <- shoot -< newD
-    let
-      shotW = map attackWire <$> shot
 
-    -- manage shots
-    rec
-      atks    <- dWireBox' NoEvent -< (shotW, atkDies)
-      let
-        atkHitsKills = checkAttacks atks targets
-        (kills,atkHits) = unzip atkHitsKills
-        kills' = (length . filter id) kills
-        killE | kills' > 0 = Event kills'
-              | otherwise  = NoEvent
-        atkDies = map (mconcat . map (() <$)) atkHits
-        atkOuts = foldAcrossl (<>) mempty atkHits
+    killCount <- hold . accumE (+) 0 <|> 0 -< gotKill
 
-    killCount <- hold . accumE (+) 0 <|> 0 -< killE
 
-    let
-      hasAtks = not (null atks)
+    let -- hasAtks = not (null atks)
 
-      wouldKill = (>= health) . attackDamage
-      funcs     = SoldierFuncs wouldKill
-      score     = SoldierScore killCount age
+        wouldKill = (>= health) . attackDamage
+        funcs     = SoldierFuncs wouldKill
+        score     = SoldierScore killCount age
 
-      soldier       = Soldier
-                        posAng
-                        (health / maxHealth)
-                        fl score funcs bod weap mnt
-      soldier'
-        | alive     = Just soldier
-        | otherwise = Nothing
+        soldier       = Soldier
+                          posAng
+                          (health / maxHealth)
+                          fl score funcs bod weap mnt
 
-    -- inhibit when dead and no more attacks
-    W.when (uncurry (||)) -< (alive, hasAtks)
+    -- inhibit when dead
+    W.when id -< alive
 
-    outE <- never -< ()
-    returnA -< ((soldier',atks),(outE,atkOuts))
+    -- outE <- never -< ()
+    returnA -< (soldier, map AttackEvent <$> shot)
 
   where
     SoldierStats _ maxHealth baseDamage speed coolDown range' classAcc = classStats cls
@@ -102,6 +95,7 @@ soldierWire (SoldierData x0 fl cls@(SoldierClass bod weap mnt) gen) =
     accLimit = atan $ (hitRadius * 1.1 / classAcc / 2) / range
     range = fromMaybe 7.5 range'
     isRanged = weaponRanged weap
+    -- angSpeed = 2 * pi * 2.5
     accuracy
       | isRanged  = Just <$> (hold . noiseR coolDown (-accLimit,accLimit) accGen <|> pure firstAcc)
       | otherwise = pure Nothing
@@ -143,28 +137,12 @@ soldierWire (SoldierData x0 fl cls@(SoldierClass bod weap mnt) gen) =
           ) --> oneShot
         coupleRandom = couple (noisePrimR (1/damageVariance,damageVariance) dmgGen)
         applyRandom (atk,r) = [atk (r * baseDamage)]
-    checkAttacks :: [Article] -> [Maybe Soldier] -> [(Bool,[SoldierInEvents])]
-    checkAttacks atks sldrs = map makeKill atks
-      where
-        makeKill :: Article -> (Bool, [SoldierInEvents])
-        makeKill (Article (PosAng pa _)
-                 (ArticleAttack atk@(Attack _ dmg o)))
-                    = first (fromMaybe False) $ mapAccumL f Nothing sldrs
-          where
-            f b      Nothing         = (b    , NoEvent)
-            f b@(Just _)   _               = (b, NoEvent)
-            f Nothing (Just sldr)
-              | norm (pa ^-^ ps) < hitRadius = (Just killed, Event [AttackedEvent dmg o])
-              | otherwise                    = (Nothing, NoEvent )
-                  where
-                    ps     = soldierPos sldr
-                    killed = soldierFuncsWouldKill (soldierFuncs sldr) atk
 
     moveAndAttack g = proc (targets,targetBases,attackeds,alive) -> do
-      favoriteSpot <- arr (^* (baseRadius * 0.5)) . noiseDisc 2.5 0 g -< ()
+      favoriteSpot <- arr (^* (baseRadius * 0.25)) . noiseDisc 1 0 g -< ()
 
       let
-        targetsPos = map soldierPos (catMaybes targets)
+        targetsPos = map getPos (M.elems targets)
         basesPos = map ((^+^ favoriteSpot) . basePos) targetBases
 
       attackers <- curated -< (map snd <$> attackeds, findAttacker targetsPos)
@@ -177,7 +155,7 @@ soldierWire (SoldierData x0 fl cls@(SoldierClass bod weap mnt) gen) =
           zone | null basesPos = Nothing
                | otherwise     = fst <$> findClosest basesPos pos
 
-          zone' = (first ((if noAttackers then id else const True) . (< (range + baseRadius * 0.8)))) <$> zone
+          zone' = (first ((if noAttackers then id else const True) . (< (range + baseRadius * 0.5)))) <$> zone
 
           noAttackers = null attackers
 
@@ -201,6 +179,7 @@ soldierWire (SoldierData x0 fl cls@(SoldierClass bod weap mnt) gen) =
             --   ([],_,True) -> basesPos
             --   (_,_,False) -> attackers ++ basesPos
             --   (_,_,True) -> attackers
+
           targetPool  | noAttackers || not isRanged = targetsPos
                       | otherwise                   = attackers
           target = guard inZone >> seek targetPool pos
@@ -264,3 +243,9 @@ classWorth = statsWorth . classStats
         statZipped = zipWith3 mul3 statArr statNorm statWeight
         mul3 a n z = (a/n)*z
 
+normedClassWorths :: M.Map SoldierClass Double
+normedClassWorths = M.fromList $ zip allClasses normed
+  where
+    worths = map classWorth allClasses
+    worthsum = sum worths
+    normed = map (/ worthsum) worths

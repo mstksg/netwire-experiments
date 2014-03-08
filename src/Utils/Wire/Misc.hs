@@ -2,10 +2,12 @@
 
 module Utils.Wire.Misc where
 
-import Data.Maybe (isJust, fromJust)
-import Prelude hiding ((.),id)
+-- import Utils.Helpers             (zipMapWithDefaults)
+-- import qualified Data.Map.Strict as M
 import Control.Wire
 import Control.Wire.Unsafe.Event
+import Data.Maybe                   (isJust, fromJust)
+import Prelude hiding               ((.),id)
 
 -- might break FRP.
 --
@@ -68,6 +70,24 @@ zipWires = go
         [] -> do
           returnA -< error "zipped wire with no input"
 
+zipWiresWithDefault :: (Monad m, Monoid e)
+    => [Wire s e m a b]
+    -> a
+    -> Wire s e m [a] [b]
+zipWiresWithDefault w0s x0 = go w0s
+  where
+    go [] = pure []
+    go (w:ws) = proc inputs -> do
+      case inputs of
+        (x:xs) -> do
+          w' <- w -< x
+          ws' <- go ws -< xs
+          returnA -< w':ws'
+        [] -> do
+          w' <- w -< x0
+          ws' <- go ws -< repeat x0
+          returnA -< w':ws'
+
 zipEvents :: (Monad m, Monoid e, Semigroup b)
     => [Wire s e m a (Event b)]
     -> Wire s e m [a] (Event b)
@@ -75,3 +95,7 @@ zipEvents ws = mconcat <$> zipWires ws
 
 delayM :: Monoid a => Wire s e m a a
 delayM = delay mempty
+
+
+-- mergeEventMap :: (Ord k, Semigroup a) => M.Map k (Event a) -> M.Map k (Event a) -> M.Map k (Event a)
+-- mergeEventMap = zipMapWithDefaults (<>) (Just NoEvent) (Just NoEvent)

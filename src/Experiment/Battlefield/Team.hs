@@ -1,81 +1,96 @@
-module Experiment.Battlefield.Team (teamWire, teamWireDelayer, TeamWire, TeamWire') where
+{-# LANGUAGE TupleSections #-}
+
+module Experiment.Battlefield.Team (teamWire, teamWireDelayer, TeamWire) where
 
 -- import Control.Monad
--- import Data.Maybe                  (mapMaybe)
+-- import Data.Maybe                   (mapMaybe)
 -- import Data.Traversable
 -- import Debug.Trace
+-- import Experiment.Battlefield.Stats
 -- import Utils.Wire.Debug
 import Control.Monad.Fix
 import Control.Monad.Random
-import Control.Wire                   as W
+import Control.Wire                    as W
 import Control.Wire.Unsafe.Event
 import Data.Default
+import Data.Map.Strict                 ((!))
 import Experiment.Battlefield.Soldier
-import Experiment.Battlefield.Stats
 import Experiment.Battlefield.Types
 import FRP.Netwire.Move
 import FRP.Netwire.Noise
 import Linear.V3
 import Linear.Vector
-import Prelude hiding                 ((.),id)
-import Utils.Helpers                  (foldAcrossl,partition3)
+import Prelude hiding                  ((.),id)
+import Utils.Helpers                   (partition3,zipMapWithDefaults)
 import Utils.Wire.Misc
 import Utils.Wire.Noise
 import Utils.Wire.Wrapped
+import qualified Data.Map.Strict       as M
 
-type TeamWireIn = ((Team,[Base]), ([BaseEvents],[SoldierInEvents]))
-type TeamWire s e m = Wire s e m TeamWireIn (Team,[SoldierInEvents])
-type TeamWire' = TeamWire (Timed Double ()) () Identity
+type TeamWireIn = ((Team,[Base]), ([BaseEvents],M.Map UUID SoldierInEvents))
+type TeamWireOut = (Team,M.Map UUID SoldierOutEvents)
+type TeamWire s e m = Wire s e m TeamWireIn TeamWireOut
 
 teamWireDelayer :: [Base] -> TeamWireIn
-teamWireDelayer b0s = ((def,b0s),(repeat NoEvent,repeat NoEvent))
+teamWireDelayer b0s = ((def,b0s),(repeat NoEvent,mempty))
 
 teamWire :: forall s e m. (MonadFix m, HasTime Double s, Monoid e)
     => [Base]
     -> TeamData
     -> TeamWire s e m
 teamWire b0s (TeamData fl gen) =
-  proc ((Team _ others _ _,bases), (baseEvts,messSldrs)) -> do
+  proc ((Team _ others _,bases), (baseEvts,messSldrs)) -> do
 
     rec
-      juice <- (juiceStream . W.when not <|> pure 0) . delay False -< maxedSoldiers
+      juice <- (juiceStream . W.when (not . fst) <|> pure 0) . delay (False, numBases) -< (maxedSoldiers, length ownedB)
 
       let baseSwappers = zipWith baseSwapper' (zip bases gens) baseEvts
 
-      basesNewSolds <- zipWires (zipWith baseSwitcher b0s bgens) . delay (repeat baseDelay) --> error "base wires inhibit" -< zip (repeat juice) baseSwappers
+      basesNewSolds <- zipWires (zipWith baseSwitcher b0s bgens) . delay (repeat baseDelay) -< zip (repeat juice) baseSwappers
+
 
       let (gens,newSolds) = unzip basesNewSolds
-          -- bases                = map fst basesGens
           ((ownedB,enemyB),neutB) = partition3 selectBases bases
           -- targetBases | null neutB = enemyB
           --             | otherwise  = neutB
-          targetBases = neutB ++ enemyB
-          maxSoldiers          = length ownedB * baseSupply
+          targetBases | attackPhase = neutB ++ enemyB
+                      | otherwise   = neutB ++ enemyB ++ ownedB
+          -- maxSoldiers          = round (fromIntegral (length ownedB) * baseSupply')
+          maxSoldiers          = totalSupply
           newSolds'            = map soldierWire <$> mconcat newSolds
-
-      sldrsEs <- dWireBox' (([],[]), NoEvent) -< (newSolds', zip (repeat (others, targetBases)) messSldrs)
-
-      let sldrCount     = length sldrsEs
-          maxedSoldiers = sldrCount >= maxSoldiers
+          sldrs = fst <$> sldrsEs
+          sldrIns = (others,targetBases) <$ sldrs
+          sldrInsMsgs = zipMapWithDefaults (,) (Just (others,targetBases)) (Just NoEvent) sldrIns messSldrs
 
 
-    let (sldrsArts,outInEvts) = unzip sldrsEs
-        (sldrs,arts)          = unzip sldrsArts
-        (_outEs,inEs)         = unzip outInEvts
-        arts'                 = concat arts
-        inEs'                 = foldAcrossl (<>) mempty inEs
+      attackPhase <- phaseWire . delay 0.5 -< soldierCapacity
 
-    returnA -< ((Team fl sldrs arts' bases),inEs')
+      sldrsEs <- dWireMap ((mempty,[]), NoEvent) uuids -< (newSolds', sldrInsMsgs)
+
+      let sldrCount       = M.size sldrsEs
+          soldierCapacity = fromIntegral sldrCount / fromIntegral maxSoldiers
+          maxedSoldiers   = sldrCount >= maxSoldiers
+
+
+    let outEvts = snd <$> sldrsEs
+
+    returnA -< (Team fl sldrs bases,outEvts)
 
   where
-    (bgen,_g') = split gen
-    bgens = map mkStdGen (randoms bgen)
-    juiceStream = (pure 50 . W.for 1) --> pure 2.5
+    totalSupply  = 20
+    juiceLimit   = 2.5
+    numBases     = length b0s
+    juiceAmount  = juiceLimit / fromIntegral numBases
+    reserveJuice = 0.7
+    (bgen,_g')   = split gen
+    bgens        = map mkStdGen (randoms bgen)
+    juiceStream  = (pure 25 . W.for 0.5) --> arr ((juiceAmount +) . (reserveJuice /) . fromIntegral . max 1 . snd)
+    -- baseSupply' = fromIntegral totalSupply / fromIntegral (length b0s)
     -- selectBases = fmap (== fl) . baseTeamFlag
-    selectBases (Base _ Nothing _ _) = Nothing
-    selectBases (Base _ (Just bfl) sec _) | bfl /= fl = Just False
-                                          | sec < 0.8 = Just False
-                                          | otherwise = Just True
+    selectBases (Base _ Nothing _ _ _) = Nothing
+    selectBases (Base _ (Just bfl) sec _ _) | bfl /= fl = Just False
+                                            | sec < 0.8 = Nothing
+                                            | otherwise = Just True
     baseSwapper' :: (Base,StdGen) -> BaseEvents -> Event (Wire s e m  Double (StdGen, Event [SoldierData]))
     baseSwapper' bg (Event xs@(_:_)) = Event $ baseSwapper bg (last xs)
     baseSwapper' bg (Event []) = Event $ baseSwapper bg (LoseBase Nothing)
@@ -93,6 +108,17 @@ teamWire b0s (TeamData fl gen) =
           case bfl of
             Just bfl' | bfl' == fl -> baseSwapper (base,g) GetBase
             _                      -> baseSwapper (base,g) (LoseBase bfl)
+
+    phaseWire :: Wire s e m Double Bool
+    phaseWire = initialPhase --> phaseLoop
+      where
+        phaseLoop = buildPhase --> attackPhase --> phaseLoop
+        initialPhase = pure True . W.for 30
+        buildPhase  = pure False . W.when (< 0.95)
+        attackPhase = pure True . W.when (> 0.85)
+        -- attackPhase = pure True . W.for 15
+        -- attackPhase = pure True . (W.for 15 <|> W.when (> 0.85))
+
     -- newBaseEs (evts,g) = zipWith (baseWire fl) gens (mapMaybe getBase evts)
     --   where
     --     gens :: [StdGen]
@@ -118,7 +144,11 @@ teamWire b0s (TeamData fl gen) =
     --   g <- getSplit
     --   return $ SoldierData x0 (Just fl) (SoldierClass bod weap mnt) g
 
-baseWire :: (MonadFix m, Monoid e, HasTime Double s) => TeamFlag -> StdGen -> Base -> Wire s e m Double (StdGen, Event [SoldierData])
+baseWire :: (MonadFix m, Monoid e, HasTime Double s)
+    => TeamFlag
+    -> StdGen
+    -> Base
+    -> Wire s e m Double (StdGen, Event [SoldierData])
 baseWire fl gen b = proc juice -> do
     pooled <- couple (noisePrim genSldr) . soldierPool genPool -< juice
     let
@@ -132,11 +162,13 @@ baseWire fl gen b = proc juice -> do
         (g0,g') = split (mkStdGen g)
         (g1,g2) = split g'
         posses = zipWith pickDisk (randomRs (0,1) g1) (randomRs (0,2*pi) g2)
-        pickDisk r th = (basePos b) ^+^ (baseRadius *^ V3 (sqrt r * cos th) (sqrt r * sin th) 0)
+        pickDisk r th = (basePos b) ^+^ ((baseRadius * 1.25) *^ V3 (sqrt r * cos th) (sqrt r * sin th) 0)
         posser sldr pos = SoldierData pos (Just fl) sldr g0
 
 
-soldierPool :: (Monoid e, MonadFix m, HasTime Double s) => StdGen -> Wire s e m Double (Event [SoldierClass])
+soldierPool :: (Monoid e, MonadFix m, HasTime Double s)
+    => StdGen
+    -> Wire s e m Double (Event [SoldierClass])
 soldierPool gen = proc juice -> do
     juiceDist <- (normDist . mkStdGen <$> hold . noise 1 genDist) <|> pure initDist -< ()
     mconcat <$> zipWires poolWires -< liftA2 (*) juiceDist (pure juice)
@@ -162,5 +194,5 @@ soldierPool gen = proc juice -> do
       returnA -< popped
       where
         watchDeplete lim = (never . W.when (< lim) --> now . W.for 0.1) --> watchDeplete lim
-        score = classWorth cls
+        score = (normedClassWorths ! cls) * 10
 

@@ -18,12 +18,12 @@ mountSpeed Horse  = 75
 
 bodySpeedMod :: SoldierBody -> Double
 bodySpeedMod MeleeBody  = 1
-bodySpeedMod TankBody   = 0.5
+bodySpeedMod TankBody   = 0.4
 bodySpeedMod RangedBody = 1.2
 
 weaponDPS :: Weapon -> Double
 weaponDPS Sword   = 7.5
-weaponDPS Axe     = 12.0
+weaponDPS Axe     = 12.5
 weaponDPS Bow     = 2.75
 weaponDPS Longbow = 4
 
@@ -58,12 +58,6 @@ maximumRange = 2.0
 rangedAccuracy :: Double
 rangedAccuracy = 0.85
 
-hitRadius :: Double
-hitRadius = 5
-
-baseSupply :: Int
-baseSupply = 5
-
 baseThreshold :: Double
-baseThreshold = 7.5
+baseThreshold = 10
 

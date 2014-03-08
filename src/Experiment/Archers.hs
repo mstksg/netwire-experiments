@@ -111,12 +111,12 @@ teamWire :: (MonadFix m, Monoid e, HasTime t s)
   -> Wire s e m (Team, ([Event Messages],[Event ()])) Team
 teamWire f a0s = proc (Team _ others _, (messAs,messDs)) -> do
     starta0s <- now -< map archerWire aDatas
-    asnds <- dWireBox' ([], NoEvent) -< (starta0s,zip (repeat others) messAs)
+    asnds <- dWireBox ([], NoEvent) -< (starta0s,zip (repeat others) messAs)
     let
       newDarts = mconcat (map snd asnds)
       newDartWires = map (uncurry . uncurry $ dartWire) <$> newDarts
       as = map fst asnds
-    ds    <- dWireBox' NoEvent -< (newDartWires,messDs)
+    ds    <- dWireBox NoEvent -< (newDartWires,messDs)
     returnA -< Team f as ds
   where
     aDatas = map (\(x0,gen) -> ArcherData x0 gen (Just f)) a0s
@@ -138,8 +138,8 @@ simpleStage3 w h a0s _ = proc _ -> do
       newDarts = mconcat (map snd asnds)
       newDartWires = map (uncurry . uncurry $ dartWire) <$> newDarts
     starta0s <- now -< map archerWire aDatas
-    asnds <- dWireBox' ([], NoEvent) -< (starta0s,zip (unDupSelf as) hitas)
-    ds    <- dWireBox' NoEvent -< (newDartWires,allds)
+    asnds <- dWireBox ([], NoEvent) -< (starta0s,zip (unDupSelf as) hitas)
+    ds    <- dWireBox NoEvent -< (newDartWires,allds)
   returnA -< Stage w h as ds
   where
     aDatas = map (\(x0,gen) -> ArcherData x0 gen Nothing) a0s
@@ -296,6 +296,6 @@ testStage w =
 #else
   runBackend
     (sdlBackend (1/30) 30 (600,600) (50,50,50))
-    (const . return . return $ ())
+    (const . const . return . return $ ())
     (w . pure ())
 #endif
