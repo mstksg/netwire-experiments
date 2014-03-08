@@ -1,18 +1,19 @@
 {-# OPTIONS -fno-warn-orphans #-}
 
-module Experiment.Archers.Instances.GLUT where
+module Experiment.Battlefield.Instances.GLUT where
 
 import Render.Backend.GLUT
-import Experiment.Archers.Types
+import Experiment.Battlefield.Types
 import Linear.V2
 import Render.Surface
 import Graphics.UI.GLUT
 
 instance GLUTRenderable Stage where
-  renderGLUT stg@(Stage w h _ _) = do
+  renderGLUT stg = do
     Size ww wh <- get windowSize
 
     let
+      (w, h)     = stageDimensions stg
       (ww', wh') = (fromIntegral ww, fromIntegral wh)
       ratio = ww' / wh'
       ratio' = w / h

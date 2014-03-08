@@ -1,14 +1,16 @@
 module Render.Sprite where
 
 import Linear.V2
-import Data.Word
+-- import Data.Word
 import Control.Applicative (pure, (<*>), (<$>))
 import Linear.Vector
 import Linear.Matrix
+import Data.Colour
 
-data Sprite = Sprite { spritePos   :: V2 Double
-                     , spriteShape :: SpriteShape
-                     , spriteColor :: Color
+data Sprite = Sprite { spritePos     :: V2 Double
+                     , spriteShape   :: SpriteShape
+                     , spriteColor   :: Color
+                     , spriteOpacity :: Double
                      }
 
 data SpriteShape = Circle Double Filling
@@ -16,7 +18,8 @@ data SpriteShape = Circle Double Filling
                  | Rectangle (V2 Double) Filling
                  | Polygon [V2 Double] Filling
                  | Line (V2 Double) (V2 Double)
-type Color = (Word8,Word8,Word8)
+
+type Color = Colour Double
 
 data Filling = Unfilled | Filled
 
@@ -24,10 +27,15 @@ class HasSprite s where
   toSprite :: s -> Sprite
 
 transSprite :: V2 Double -> M22 Double -> Sprite -> Sprite
-transSprite p t (Sprite pspr sh c) = Sprite p' sh' c
+transSprite p t (Sprite pspr sh c o) = Sprite p' sh' c o
   where
     p' = (t !* pspr) ^+^ p
     sh' = transShape t sh
+
+dimSprite :: Double -> Sprite -> Sprite
+dimSprite x s = s { spriteOpacity = o * x }
+  where
+    o = spriteOpacity s
 
 transShape :: M22 Double -> SpriteShape -> SpriteShape
 transShape t c@(Circle r f) =

@@ -3,27 +3,33 @@ module Render.Backend.SDL where
 import Control.Monad
 import Control.Wire
 import Control.Wire.Unsafe.Event
-import Prelude hiding ((.),id)
 import Data.Bits
+import Data.Colour.SRGB
 import Data.Maybe                           (mapMaybe)
 import Data.Word
 import Linear.V2
+import Prelude hiding                       ((.),id)
 import Render.Render
 import Render.Sprite
 import Render.Surface
+import qualified Data.Map.Strict            as M
 import qualified Graphics.UI.SDL            as SDL
 import qualified Graphics.UI.SDL.Framerate  as Framerate
 import qualified Graphics.UI.SDL.Primitives as SDL
+import qualified Graphics.UI.SDL.TTF        as SDLTTF
 
-sdlBackend :: SDLRenderable a
-    => Int
+data RenderFont = FontKA1 deriving (Show, Eq, Ord)
+
+type RenderFontMap = M.Map RenderFont SDLTTF.Font
+
+sdlBackend :: (SDLRenderable a, Show e)
+    => Double
     -> Int
+    -> (Int,Int)
     -> (Word8, Word8, Word8)
-    -> Backend (Timed Double ()) e IO (SDL.Surface -> IO ()) a
-sdlBackend ht wd (cr,cg,cb) = Backend runSdl
+    -> Backend (Timed Double ()) e Identity (SDL.Surface -> RenderFontMap -> IO ()) a
+sdlBackend simDt fr (ht,wd) (cr,cg,cb) = Backend runSdl
   where
-    fr = 30
-    simDt = 1/30
     runSdl r wr = SDL.withInit [SDL.InitEverything] $ do
       screen <- SDL.setVideoMode ht wd 32 [SDL.SWSurface]--, SDL.Fullscreen]
 
@@ -31,11 +37,16 @@ sdlBackend ht wd (cr,cg,cb) = Backend runSdl
       Framerate.init frameRate
       Framerate.set frameRate fr
 
+      SDLTTF.init
+      ka1 <- SDLTTF.openFont "assets/ka1.ttf" 10
+
+      let fontMap = M.fromList [(FontKA1,ka1)]
+
       -- go screen clockSession_ wr frameRate
-      go screen (countSession_ simDt) wr frameRate
+      go screen fontMap (countSession simDt <*> pure ()) wr frameRate
 
       where
-        go screen s' w' frameRate = do
+        go screen fontMap s' w' frameRate = do
 
           renderEvent <- processSDLEvent <$> SDL.pollEvent
 
@@ -43,8 +54,12 @@ sdlBackend ht wd (cr,cg,cb) = Backend runSdl
           --   NoEvent -> return ()
           --   Event e -> print e
 
-          (ds, s) <- stepSession s'
-          (mx, w) <- stepWire w' ds (Right renderEvent)
+          let
+            (ds, s) = runIdentity (stepSession s')
+            (mx, w) = runIdentity (stepWire w' ds (Right renderEvent))
+
+          -- (ds, s) <- runIdentitystepSession s'
+          -- (mx, w) <- stepWire w' ds (Right renderEvent)
 
           case mx of
             Right mx' -> do
@@ -54,27 +69,28 @@ sdlBackend ht wd (cr,cg,cb) = Backend runSdl
               pix <- SDL.mapRGB (SDL.surfaceGetPixelFormat screen) cr cg cb
               SDL.fillRect screen Nothing pix
 
-              r mx' screen
-              renderSDL screen mx'
+              r mx' screen fontMap
+              renderSDL screen fontMap mx'
 
               SDL.flip screen
 
-              go screen s w frameRate
+              go screen fontMap s w frameRate
 
-            Left _ -> return ()
+            Left e -> error (show e)
 
 class SDLRenderable a where
   renderSDL ::
          SDL.Surface  -- surface
+      -> M.Map RenderFont SDLTTF.Font
       -> a            -- item to render
       -> IO ()
 
 
 instance SDLRenderable Surface where
-  renderSDL scr = mapM_ (renderSDL scr) . toSpriteList'
+  renderSDL scr fm = mapM_ (renderSDL scr fm) . toSpriteList'
 
 instance SDLRenderable Sprite where
-  renderSDL scr (Sprite (V2 x y) sh (cr,cg,cb)) = void (drawer col)
+  renderSDL scr _ (Sprite (V2 x y) sh colour _) = void (drawer col)
     where
       drawer = case sh of
         Circle r f ->
@@ -104,6 +120,7 @@ instance SDLRenderable Sprite where
               SDL.line scr
                 (round (x+x0)) (round (y+y0))
                 (round (x+x1)) (round (y+y1))
+      RGB cr cg cb = toSRGB24 colour
       col = rgbColor cr cg cb
 
 rgbColor :: Word8 -> Word8 -> Word8 -> SDL.Pixel

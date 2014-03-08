@@ -21,7 +21,9 @@ import Utils.Wire.Interval
 
 -- | Represents a point with mass and position
 --
-data Body = Body Double !V3D
+data Body = Body { bodyMass :: Double
+                 , bodyPos :: !V3D
+                 }
   deriving (Show, Eq)
 
 instance GNUPlottable Body where
