@@ -59,5 +59,5 @@ rangedAccuracy :: Double
 rangedAccuracy = 0.85
 
 baseThreshold :: Double
-baseThreshold = 8.5
+baseThreshold = 10
 

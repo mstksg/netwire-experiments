@@ -281,8 +281,8 @@ baseWire (t1fl,t2fl) b0@(Base pb fl0 _ _ _) = proc ((t1s,t2s),atks) -> do
       swap <- never . W.when ((< baseThreshold) . abs) --> now -< sec
 
       returnA -< (((1 - (abs sec / baseThreshold),leaning), Nothing),leaning <$ swap)
-    wallMax = 500
-    wallRate = 7.5
+    wallMax = 1000
+    wallRates = [5,10,20,40,80]
     teamBase :: TeamFlag -> Wire s e m (Maybe TeamFlag, Event [Attack]) (((Double, Maybe TeamFlag), Maybe Double), Event (Maybe TeamFlag))
     teamBase fl = proc (infl,atks) -> do
       rec
@@ -304,27 +304,19 @@ baseWire (t1fl,t2fl) b0@(Base pb fl0 _ _ _) = proc ((t1s,t2s),atks) -> do
       -- returnA -< atks `traceEvent'` (((sec / baseThreshold,Nothing), wallStrength),Nothing <$ swap)
       where
         wallPreparing :: Wire s e m (Event Double) (Maybe Double, Event (Wire s e m (Event Double) (Maybe Double)))
-        wallPreparing = proc atk -> do
-          restart <- never . W.until --> now -< (dSwitch wallPreparing, atk)
-          survived <- W.at 5 -< dSwitch wallBuilding
-          let nextPhase = mergeL (fst <$> restart) survived
-          returnA -< (Nothing, nextPhase)
+        wallPreparing = proc _ -> do
+          survived <- W.at 10 -< dSwitch wallBuilding
+          returnA -< (Nothing, survived)
         wallBuilding :: Wire s e m (Event Double) (Maybe Double, Event (Wire s e m (Event Double) (Maybe Double)))
         wallBuilding = proc atk -> do
+
+          buildingRate <- hold . periodicList 20 wallRates -< ()
+
           damaged <- hold . accumE (+) 0 <|> pure 0 -< atk
-          building <- integralWith (\d b -> min b d) 0 -< (wallRate, wallMax + damaged)
+          building <- integralWith (\d b -> min b d) 0 -< (buildingRate, wallMax + damaged)
 
           let wallHealth = building - damaged
           crumbled <- never . W.unless (< 0) --> now -< wallHealth
 
           let nextPhase = dSwitch wallPreparing <$ crumbled
           returnA -< (Just (wallHealth / wallMax), nextPhase)
-
-        -- wallStall :: Double -> Wire s e m (Event Double) (Maybe Double, Event (Wire s e m (Event Double) (Maybe Double)))
-        -- wallStall start = proc atk -> do
-        --   damage <- hold . accumE (+) 0 <|> pure 0 -< atk
-        --   let health = start - damage
-        --   restart <- never . W.unless (< 0) --> now -< health
-        --   survived <- W.at 2 -< dSwitch (wallBuilding health)
-        --   let nextPhase = mergeL (switch wallPreparing <$ restart) survived
-        --   returnA -< (Just (health / wallMax), nextPhase)
